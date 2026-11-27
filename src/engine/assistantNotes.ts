@@ -593,16 +593,17 @@ function scorePlayerFitnessForSlot(pl: Player, slot: { sp: SubRole; pos: Positio
   const fit = clamp(pl.fit ?? 100, 0, 100);
   const unavailPenalty = pl.inj > 0 || (pl.sus || 0) > 0 ? -5000 : 0;
 
+  const penLvl = playerPen(pl, slot.sp);
+
   if (slot.pos === 'GK') {
-    const gkRoleBonus = pl.pos === 'GK' ? 600 : -600;
+    const gkRoleBonus = pl.pos === 'GK' ? 600 : penLvl === 0 ? 480 : -600;
     return unavailPenalty + gkRoleBonus + fit * 10 + pl.ov * 0.15;
   }
 
-  if (pl.pos === 'GK') {
+  if (pl.pos === 'GK' && penLvl > 0) {
     return unavailPenalty - 600 + fit * 10 + pl.ov * 0.1;
   }
 
-  const penLvl = playerPen(pl, slot.sp);
   const roleBonus = penLvl === 0 ? 80 : penLvl === 1 ? 40 : -80;
   return unavailPenalty + roleBonus + fit * 10 + pl.ov * 0.2;
 }
@@ -628,9 +629,7 @@ export function pickFittestLineupForFormation(team: Team, formName: string): str
   // Assign GK first, then outfield positions in scarcity order (fewest natural candidates first)
   const slotOrder = slots
     .map((sl, idx) => {
-      const naturalCount = pool.filter((q) =>
-        sl.pos === 'GK' ? q.pos === 'GK' : q.pos !== 'GK' && playerPen(q, sl.sp) === 0
-      ).length;
+      const naturalCount = pool.filter((q) => playerPen(q, sl.sp) === 0).length;
       return { idx, isGk: sl.pos === 'GK' ? 0 : 1, naturalCount };
     })
     .sort((a, b) => a.isGk - b.isGk || a.naturalCount - b.naturalCount)

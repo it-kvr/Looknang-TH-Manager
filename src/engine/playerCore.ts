@@ -1280,11 +1280,17 @@ export function xi(t: Team): Player[] {
         o[i] = q;
       });
     });
-    // Fallback: if injuries/formation changes leave any slot empty, assign best fit available player out-of-position
+    // Fallback: if injuries/formation changes leave any slot empty, assign best fit available player
     sl.forEach((slot, i) => {
       if (o[i]) return;
       const cand = t.sq
-        .filter((q) => !uq.has(q) && (slot.pos === 'GK' ? true : q.pos !== 'GK'))
+        .filter(
+          (q) =>
+            !uq.has(q) &&
+            (slot.pos === 'GK'
+              ? true
+              : q.pos !== 'GK' || (q.altRoles?.some((r) => LINE[r] !== 'GK') ?? false))
+        )
         .sort(
           (a, b) =>
             ef(b) * rotationReadiness(b) * PM[playerPen(b, slot.sp)] -
@@ -1307,9 +1313,11 @@ export function xi(t: Team): Player[] {
   const used = new Set(x);
   return x.map((q, i) => {
     if (!(q.inj > 0 || (q.sus || 0) > 0)) return q;
+    const slotSp = sl[i]?.sp || q.ro;
     const slotPos = sl[i]?.pos || q.pos;
     const avail = t.sq.filter((z) => !used.has(z) && !(z.inj > 0 || (z.sus || 0) > 0));
     const s =
+      avail.filter((z) => playerPen(z, slotSp) === 0).sort((a, b) => ef(b) - ef(a))[0] ||
       avail.filter((z) => z.pos === slotPos).sort((a, b) => ef(b) - ef(a))[0] ||
       avail.sort((a, b) => ef(b) - ef(a))[0];
     if (s) {
@@ -2340,9 +2348,6 @@ export function setCareerRoleTrainTarget(d: GameState, role: SubRole | null): { 
   }
   if (role === d.p.sp) return { ok: false, msg: `${role} เป็นตำแหน่งหลักของคุณอยู่แล้ว` };
   if (d.p.altRoles?.includes(role)) return { ok: false, msg: `คุณปลดล็อกตำแหน่ง ${role} แล้ว` };
-  if ((d.p.pos === 'GK') !== (LINE[role] === 'GK')) {
-    return { ok: false, msg: 'ไม่สามารถฝึกสลับระหว่างตำแหน่งผู้รักษาประตูกับเอาต์ฟิลด์ได้' };
-  }
   d.p.roleTrain = role;
   syncMe(d);
   return { ok: true, msg: `🎯 ตั้งเป้าหมายฝึกเล่นตำแหน่ง "${role}" รายสัปดาห์แล้ว!` };

@@ -11189,14 +11189,16 @@ export const MatchModal = React.memo<{
     const slotSp = outPick.slot?.sp || outPl.ro;
     const slotPos = outPick.slot?.pos || outPl.pos;
     const posMatchedPool = availBench.filter((b) =>
-      slotPos === 'GK' ? b.pos === 'GK' : b.pos === slotPos || playerPen(b, slotSp) <= 1
+      slotPos === 'GK'
+        ? b.pos === 'GK' || playerPen(b, 'GK') === 0
+        : b.pos === slotPos || playerPen(b, slotSp) <= 1
     );
     const candidatePool =
       posMatchedPool.length > 0
         ? posMatchedPool
         : slotPos === 'GK'
           ? []
-          : availBench.filter((b) => b.pos !== 'GK');
+          : availBench.filter((b) => b.pos !== 'GK' || playerPen(b, slotSp) <= 1);
     if (!candidatePool.length) return;
 
     const bestCand = candidatePool

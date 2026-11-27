@@ -416,15 +416,16 @@ export const LeagueView = React.memo<{
 
       if (incomingOffers.length > 0) {
         const topOff = incomingOffers[0];
+        const isLoan = topOff.kind === 'loan' || topOff.kind === 'loanopt';
         items.push({
           id: 'transfer-offers',
           kind: 'alert',
           tone: 'warn',
           urgent: true,
-          icon: '💼',
-          tag: 'ข้อเสนอซื้อตัว',
+          icon: isLoan ? '🤝' : '💼',
+          tag: 'ข้อเสนอซื้อ-ยืม',
           title: `${incomingOffers.length} ข้อเสนอรอพิจารณา`,
-          detail: `${topOff.t} ยื่นซื้อ ${topOff.n} (${fmtMoney(topOff.p)})`,
+          detail: `${topOff.t} ${isLoan ? 'ยื่นขอยืม' : 'ยื่นซื้อ'} ${topOff.n} (${isLoan ? `ค่ายืม ${fmtMoney(topOff.p)}` : fmtMoney(topOff.p)})`,
           actionLabel: 'เปิดดู',
           onAction: () => onNavigate?.('k', 'sell')
         });

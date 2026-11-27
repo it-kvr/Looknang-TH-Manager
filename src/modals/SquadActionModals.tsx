@@ -6,7 +6,9 @@ import {
   getLeagueTransferContext,
   quickSellSquadPlayers,
   releaseSquadPlayers,
-  validateBatchSquadRemoval
+  validateBatchSquadRemoval,
+  batchListOrPitchPlayers,
+  batchLoanListOrPitchPlayers
 } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
@@ -353,7 +355,7 @@ export const SquadSellModal: React.FC<{
           </div>
         </div>
 
-        <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
+        <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex flex-wrap gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -363,11 +365,231 @@ export const SquadSellModal: React.FC<{
           </button>
           <button
             type="button"
+            disabled={check.eligiblePlayers.length === 0}
+            onClick={() => {
+              const targetNames = check.eligiblePlayers.map((q) => q.n);
+              if (targetNames.length === 0) return;
+              let resOut = { listedCount: 0, pitchedCount: 0, offerCount: 0 };
+              onUpdateState((d) => {
+                resOut = batchListOrPitchPlayers(d, targetNames, pricePct, check.twOpen);
+              });
+              SFX.confirm();
+              onClearSelection?.(targetNames);
+              onClose();
+              if (!check.twOpen) {
+                onToast(`🏷️ ขึ้นบัญชีขาย ${resOut.listedCount} รายเรียบร้อย (รอเปิดตลาด ${check.twOpen ? '' : 'รอบถัดไป'})`);
+              } else if (resOut.offerCount > 0) {
+                onToast(`💼 เสนอขาย ${resOut.listedCount} ราย — มี ${resOut.offerCount} ข้อเสนอซื้อเข้ามา!`);
+              } else {
+                onToast(`🏷️ ขึ้นบัญชีขาย ${resOut.listedCount} ราย (${pricePct}% ของตลาด) แล้ว`);
+              }
+            }}
+            className="btn btn-md btn-secondary"
+          >
+            🏷️ ขึ้นบัญชี{check.twOpen ? ' & เสนอขาย' : 'ขาย'}
+          </button>
+          <button
+            type="button"
             disabled={!check.canConfirm}
             onClick={handleConfirm}
             className="btn btn-md btn-primary flex-1"
           >
-            ✅ ยืนยันขาย {check.eligiblePlayers.length} ราย (+{fmtMoney(check.totalQuickSellValue)})
+            ✅ ขายด่วน {check.eligiblePlayers.length} ราย (+{fmtMoney(check.totalQuickSellValue)})
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const SquadLoanOutModal: React.FC<{
+  state: GameState;
+  team: Team;
+  playerNames: string[];
+  onClose: () => void;
+  onUpdateState: (updater: (draft: GameState) => void) => void;
+  onClearSelection?: (names: string[]) => void;
+  onToast: (msg: string) => void;
+}> = ({ state, team, playerNames, onClose, onUpdateState, onClearSelection, onToast }) => {
+  const [loanMode, setLoanMode] = useState<'any' | 'loan' | 'loanopt'>('any');
+  const check = useMemo(
+    () => validateBatchSquadRemoval(state, team, playerNames, 'sell', 85),
+    [state, team, playerNames]
+  );
+
+  const listPool = useMemo(() => {
+    const blockedNames = new Set(check.blockedPlayers.map((b) => b.player.n));
+    return playerNames
+      .map((name) => team.sq.find((q) => q.n === name))
+      .filter((q): q is Player => !!q && !q.me && !q.loan && !blockedNames.has(q.n));
+  }, [playerNames, team.sq, check.blockedPlayers]);
+
+  const estTotalFee = useMemo(
+    () => listPool.reduce((sum, q) => sum + Math.max(2, Math.round(Math.max(6, vlu(q)) * 0.18)), 0),
+    [listPool]
+  );
+
+  const handleAction = (pitchNow: boolean) => {
+    const names = (pitchNow ? check.eligiblePlayers : listPool).map((q) => q.n);
+    if (names.length === 0) return;
+    let resOut = { listedCount: 0, pitchedCount: 0, offerCount: 0 };
+    onUpdateState((d) => {
+      resOut = batchLoanListOrPitchPlayers(d, names, pitchNow, loanMode);
+    });
+    SFX.confirm();
+    onClearSelection?.(names);
+    onClose();
+    if (pitchNow && resOut.offerCount > 0) {
+      onToast(`🤝 เสนอปล่อยยืม ${resOut.listedCount} ราย — มี ${resOut.offerCount} สโมสรยื่นขอยืมเข้ามา!`);
+    } else if (pitchNow) {
+      onToast(`📋 ขึ้นบัญชีปล่อยยืม ${resOut.listedCount} รายแล้ว รอทีมอื่นยื่นขอยืม`);
+    } else {
+      onToast(`📋 ขึ้นบัญชีปล่อยยืม ${resOut.listedCount} รายไว้แล้ว`);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+        <div className="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
+          <div>
+            <div className="font-bold text-sm mland:text-xs">🤝 ปล่อยยืมตัวนักเตะ ({check.eligiblePlayers.length} ราย)</div>
+            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">
+              ส่งนักเตะออกไปเก็บประสบการณ์รับค่ายืมตัว + ลดภาระค่าเหนื่อย และกลับมาช่วยทีมซีซั่นหน้า
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดหน้าต่างปล่อยยืมตัว"
+            className="btn-icon rounded-full!"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 space-y-2.5">
+          {!check.twOpen && (
+            <div className="p-2.5 rounded-xl bg-amber-500/12 border border-amber-500/35 text-xs font-semibold text-[#9a6700] dark:text-amber-300">
+              🔒 ตลาดซื้อขายปิดอยู่ — สามารถขึ้นบัญชีปล่อยยืมรอไว้ได้ และจะมีข้อเสนอยืมเข้ามาทันทีเมื่อตลาดเปิด
+            </div>
+          )}
+
+          {check.eligiblePlayers.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10.5px]">
+                <span className="font-semibold text-[var(--mut)]">เงื่อนไขที่เปิดรับ</span>
+                <div className="seg-bar">
+                  {([
+                    ['any', 'เปิดรับทั้ง 2 แบบ'],
+                    ['loan', 'ยืมอย่างเดียว'],
+                    ['loanopt', 'ยืม+ออปชันซื้อขาด']
+                  ] as const).map(([k, lbl]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setLoanMode(k);
+                      }}
+                      className={`seg-btn ${loanMode === k ? 'seg-btn-active' : ''}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="max-h-48 overflow-y-auto space-y-1 pr-0.5">
+                {check.eligiblePlayers.map((q) => {
+                  const wg = ensureCon(q).wg || wagOf(q);
+                  const estFee = Math.max(2, Math.round(Math.max(6, vlu(q)) * 0.18));
+                  return (
+                    <div
+                      key={q.n}
+                      className="flex items-center gap-2 p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]"
+                    >
+                      <PlayerFace player={q} team={team} state={state} size={32} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold flex items-center gap-1 min-w-0">
+                          <PositionBadge role={q.ro} size="2xs" />
+                          <span className="truncate">{q.n}</span>
+                          {q.loanListed ? (
+                            <span className="text-[10px] text-sky-400 font-bold shrink-0">· ขึ้นบัญชียืมแล้ว</span>
+                          ) : null}
+                        </div>
+                        <div className="text-[10px] text-[var(--mut)] tabular">
+                          อายุ {q.age} ปี · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด · ค่ายืมคาด ~{fmtMoneyNum(estFee)}
+                        </div>
+                      </div>
+                      <OvrBadge ov={q.ov} size="xs" />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {check.blockedPlayers.length > 0 && (
+            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1">
+              <div className="text-[11px] font-bold text-amber-300">รายการที่ปล่อยยืมไม่ได้:</div>
+              {check.blockedPlayers.map((b) => (
+                <div key={b.player.n} className="text-[11px] text-[var(--mut)]">
+                  • <b>{b.player.n}</b> — {b.reason}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {check.squadErrors.length > 0 && (
+            <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/35 space-y-0.5">
+              {check.squadErrors.map((err, i) => (
+                <div key={i} className="text-xs font-semibold text-rose-300">
+                  ⚠️ {err}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] grid grid-cols-3 gap-2 text-center text-xs tabular">
+            <div>
+              <div className="text-[10px] text-[var(--mut)]">ค่ายืมคาดการณ์</div>
+              <div className="font-bold text-emerald-400">~+{fmtMoney(estTotalFee)}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-[var(--mut)]">ประหยัดค่าเหนื่อย</div>
+              <div className="font-bold text-[var(--ink)]">{fmtMoneyNum(check.totalSavedWage)}/นัด</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-[var(--mut)]">เหลือในทีม</div>
+              <div className="font-bold text-[var(--ink)]">{check.afterSquadCount} คน</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-md btn-surface"
+          >
+            ยกเลิก
+          </button>
+          <button
+            type="button"
+            disabled={listPool.length === 0}
+            onClick={() => handleAction(false)}
+            className="btn btn-md btn-secondary"
+          >
+            📋 ขึ้นบัญชีปล่อยยืม
+          </button>
+          <button
+            type="button"
+            disabled={!check.canConfirm}
+            onClick={() => handleAction(true)}
+            className="btn btn-md btn-primary flex-1"
+          >
+            🤝 เสนอปล่อยยืม (เรียกข้อเสนอเข้าทีม)
           </button>
         </div>
       </div>

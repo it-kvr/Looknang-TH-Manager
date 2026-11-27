@@ -100,6 +100,12 @@ export interface Player {
   con?: PlayerContract;
   loan?: number;
   loanOpt?: number;
+  loanFromTeamId?: number;
+  loanFromTeamName?: string;
+  loanWageShare?: number;
+  loanOrigCon?: PlayerContract;
+  loanListed?: number;
+  loanAskFee?: number;
   price?: number;
   free?: number;
   askWg?: number;
@@ -487,6 +493,19 @@ export interface TransferOffer {
   t: string;
   teamId?: number;
   cnt?: number;
+  kind?: 'buy' | 'loan' | 'loanopt';
+  wageShare?: number;
+  buyOption?: number;
+}
+
+export interface ShortlistEntry {
+  n: string;
+  source: 'mk' | 'club' | 'scout' | 'created';
+  clubTeamId?: number;
+  clubName?: string;
+  addedSeason: number;
+  addedMd: number;
+  snapshot: Player;
 }
 
 export interface ActiveDilemma {
@@ -954,6 +973,7 @@ export interface GameState {
   slots?: (Record<string, unknown> | null)[];
   off?: TransferOffer | null;
   offers?: TransferOffer[];
+  shortlist?: ShortlistEntry[];
   res?: string[];
   matchHighlights?: MatchHighlightsSummary[];
   news?: string;

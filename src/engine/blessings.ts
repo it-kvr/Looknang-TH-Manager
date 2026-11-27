@@ -35,7 +35,7 @@ export const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamI
   }
   if (patch.altRoles !== undefined) {
     const cleanAlt = Array.from(new Set(patch.altRoles)).filter(
-      (r) => r !== patch.ro && (nextPos === 'GK' ? LINE[r] === 'GK' : LINE[r] !== 'GK')
+      (r) => r !== patch.ro && Boolean(LINE[r])
     );
     pl.altRoles = cleanAlt;
   }

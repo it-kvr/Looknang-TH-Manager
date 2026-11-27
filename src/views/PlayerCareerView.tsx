@@ -466,7 +466,7 @@ export const PlayerCareerView = React.memo<{
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mland:gap-1.5">
-                      {ALL_SUB_ROLES.filter((r) => r !== p.sp && (p.pos === 'GK' ? r === 'GK' : r !== 'GK')).map((role) => {
+                      {ALL_SUB_ROLES.filter((r) => r !== p.sp).map((role) => {
                         const unlocked = (p.altRoles || []).includes(role);
                         const isTarget = p.roleTrain === role;
                         const need = pen(p.sp, role) === 1 ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;

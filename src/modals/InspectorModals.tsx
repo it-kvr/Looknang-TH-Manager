@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Scissors } from 'lucide-react';
+import { Scissors, Star } from 'lucide-react';
 import type { Position, Player, Team, GameState } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
-import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans } from '../engine/simulation';
+import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans, isPlayerShortlisted, toggleShortlistPlayer } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -105,9 +105,13 @@ export const PlayerInspectorModal: React.FC<{
                 </span>
               </div>
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1.5">
-                <span>
+                <span title={livePlayer.altRoles?.length ? `ถนัดเพิ่ม: ${livePlayer.altRoles.join(', ')}` : undefined}>
                   {SPN[livePlayer.ro] || livePlayer.pos}
-                  {livePlayer.altRoles?.length ? ` (+${livePlayer.altRoles.join(', ')})` : ''}
+                  {livePlayer.altRoles?.length
+                    ? livePlayer.altRoles.length > 4
+                      ? ` (+${livePlayer.altRoles.slice(0, 4).join(', ')} +${livePlayer.altRoles.length - 4})`
+                      : ` (+${livePlayer.altRoles.join(', ')})`
+                    : ''}
                 </span>
                 <span aria-hidden="true">·</span>
                 <span className="font-semibold tabular" style={{ color: fitCol }}>
@@ -119,6 +123,44 @@ export const PlayerInspectorModal: React.FC<{
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 shrink-0">
+            {state.mode === 'm' && !isMyTeam && !isRetired && (
+              (() => {
+                const shortlisted = isPlayerShortlisted(state, livePlayer.n, liveTeam?.id);
+                const inferredSource: 'mk' | 'club' | 'scout' | 'created' = liveTeam
+                  ? 'club'
+                  : livePlayer.customCreated
+                    ? 'created'
+                    : state.scout?.results?.some((r) => r.n === livePlayer.n)
+                      ? 'scout'
+                      : 'mk';
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      let added = false;
+                      onUpdateState((d) => {
+                        added = toggleShortlistPlayer(d, livePlayer, {
+                          source: inferredSource,
+                          clubTeamId: liveTeam?.id,
+                          clubName: liveTeam?.name
+                        });
+                      });
+                      onToast(added ? `⭐ เพิ่ม ${livePlayer.n} เข้ารายชื่อที่สนใจแล้ว` : `นำ ${livePlayer.n} ออกจากรายชื่อที่สนใจแล้ว`);
+                    }}
+                    title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
+                    className={`h-8 mland:h-6.5 px-2.5 mland:px-2 inline-flex items-center gap-1 rounded-xl mland:rounded-lg border text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                      shortlisted
+                        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#8a5b00] dark:text-[var(--lamp)]'
+                        : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${shortlisted ? 'fill-current' : ''}`} />
+                    <span className="hidden sm:inline">{shortlisted ? 'สนใจอยู่' : 'ที่สนใจ'}</span>
+                  </button>
+                );
+              })()
+            )}
             <div className="seg-bar">
               <button
                 type="button"

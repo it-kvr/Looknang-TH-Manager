@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { IdCard, Lock, RefreshCw, Search, Unlock, Users, X } from 'lucide-react';
+import { IdCard, Lock, RefreshCw, Search, Star, Trash2, Unlock, Users, X } from 'lucide-react';
 import type { SubRole, MainTab, Player, Team, ScoutMission, GameState } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
@@ -17,7 +17,13 @@ import {
   acceptTransferOffer,
   resolveCounterOfferOutcome,
   applyCounterOfferOutcome,
-  validateBatchSquadRemoval
+  validateBatchSquadRemoval,
+  isPlayerShortlisted,
+  toggleShortlistPlayer,
+  removeShortlistPlayer,
+  resolveShortlistEntry,
+  getLoanedOutPlayers,
+  recallLoanedOutPlayer
 } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
@@ -30,7 +36,7 @@ import { TransferMarketIcon } from '../components/TransferMarketIcon';
 import { OvrBadge } from '../components/OvrBadge';
 import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { getRatingPalette } from '../components/RatingBadge';
-import { SquadSellModal } from '../modals/SquadActionModals';
+import { SquadSellModal, SquadLoanOutModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
   source: 'mk' | 'scout' | 'club';
@@ -78,12 +84,14 @@ export function evalOffer(q: Player, st: OfferDraft, me: Team) {
     cashNow = Math.max(0, Math.round((p0 * st.pct) / 100) - swapVal) + sgBonus;
     clubScore = (swapQ ? 100 : 0) + (st.pct - 100) + (swapVal >= p0 * 0.45 ? 6 : 0);
   } else if (type === 'loan') {
-    cashNow = Math.max(3, Math.round(p0 * 0.28)) + sgBonus;
-    clubScore = 96;
+    cashNow = Math.max(3, Math.round(p0 * 0.24)) + sgBonus;
+    const loanOpen = st.source === 'club' ? (q.age <= 24 ? 92 : q.ov >= 78 ? 64 : 80) : 94;
+    clubScore = loanOpen;
   } else if (type === 'loanopt') {
-    cashNow = Math.max(4, Math.round(p0 * 0.32)) + sgBonus;
-    loanOpt = Math.round(p0 * 0.78);
-    clubScore = 98;
+    cashNow = Math.max(4, Math.round(p0 * 0.28)) + sgBonus;
+    loanOpt = Math.round(p0 * 0.85);
+    const loanOpen = st.source === 'club' ? (q.age <= 24 ? 94 : q.ov >= 78 ? 68 : 84) : 96;
+    clubScore = loanOpen;
   }
 
   const roleBonus = role === 'key' ? 12 : role === 'rot' ? 2 : q.ov >= 68 ? -14 : 6;
@@ -95,7 +103,7 @@ export function evalOffer(q: Player, st: OfferDraft, me: Team) {
   return { type, yr, role, wb, wg, sgBonus, swapQ, swapVal, cashNow, dueLater, loanOpt, chance, p0 };
 }
 
-type MarketTab = 'buy' | 'sell' | 'scout' | 'con';
+type MarketTab = 'buy' | 'shortlist' | 'sell' | 'scout' | 'con';
 
 export const MarketView = React.memo<{
   state: GameState;
@@ -112,15 +120,19 @@ export const MarketView = React.memo<{
   const [marketSource, setMarketSource] = useState<'mk' | 'club' | 'created'>('mk');
   const [createdRefresh, setCreatedRefresh] = useState(0);
   const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW' | 'FREE'>('ALL');
+  const [loanOnlyFilter, setLoanOnlyFilter] = useState(false);
   const [subFilter, setSubFilter] = useState<'ALL' | SubRole>('ALL');
   const [sortBy, setSortBy] = useState<'default' | 'ov_desc' | 'price_asc' | 'age_asc'>('default');
   const [searchQuery, setSearchQuery] = useState('');
   const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER'>('MY_TIER');
+  const [shortlistFilter, setShortlistFilter] = useState<'all' | 'ready' | 'free' | 'club'>('all');
 
   const [scoutRole, setScoutRole] = useState<SubRole | ''>('');
   const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
   const [sellModalNames, setSellModalNames] = useState<string[] | null>(null);
-  const [sellSubView, setSellSubView] = useState<'all' | 'listed'>('all');
+  const [loanModalNames, setLoanModalNames] = useState<string[] | null>(null);
+  const [offerFilter, setOfferFilter] = useState<'all' | 'buy' | 'loan'>('all');
+  const [sellSubView, setSellSubView] = useState<'all' | 'listed' | 'loan_list' | 'loaned_out'>('all');
   const [sellPosFilter, setSellPosFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW'>('ALL');
   const [sellSearch, setSellSearch] = useState('');
   const [selectedSellNames, setSelectedSellNames] = useState<string[]>([]);
@@ -134,11 +146,20 @@ export const MarketView = React.memo<{
 
   useEffect(() => {
     if (navIntent?.tab !== 'k') return;
-    if (navIntent.sub === 'sell' || navIntent.sub === 'scout' || navIntent.sub === 'con' || navIntent.sub === 'buy') {
+    if (
+      navIntent.sub === 'sell' ||
+      navIntent.sub === 'scout' ||
+      navIntent.sub === 'con' ||
+      navIntent.sub === 'buy' ||
+      navIntent.sub === 'shortlist'
+    ) {
       setActiveTab(navIntent.sub);
     } else if (navIntent.sub === 'club') {
       setActiveTab('buy');
       setMarketSource('club');
+    } else if (navIntent.sub === 'loan') {
+      setActiveTab('sell');
+      setSellSubView('loaned_out');
     }
   }, [navIntent]);
 
@@ -155,18 +176,19 @@ export const MarketView = React.memo<{
       .filter(({ q }) => {
         const lineOk = filter === 'ALL' || (filter === 'FREE' ? !!q.free : q.pos === filter);
         const subOk = subFilter === 'ALL' || q.ro === subFilter;
+        const loanOk = !loanOnlyFilter || !q.free;
         const searchOk =
           !normalizedQuery ||
           q.n.toLowerCase().includes(normalizedQuery) ||
           q.ro.toLowerCase().includes(normalizedQuery) ||
           (SPN[q.ro] || '').toLowerCase().includes(normalizedQuery);
-        return lineOk && subOk && searchOk;
+        return lineOk && subOk && loanOk && searchOk;
       });
     if (sortBy === 'ov_desc') return [...base].sort((a, b) => b.q.ov - a.q.ov);
     if (sortBy === 'price_asc') return [...base].sort((a, b) => (a.q.free ? 0 : a.q.price || vlu(a.q)) - (b.q.free ? 0 : b.q.price || vlu(b.q)));
     if (sortBy === 'age_asc') return [...base].sort((a, b) => a.q.age - b.q.age || b.q.ov - a.q.ov);
     return base;
-  }, [state.mk, filter, subFilter, sortBy, normalizedQuery]);
+  }, [state.mk, filter, subFilter, loanOnlyFilter, sortBy, normalizedQuery]);
 
   const clubBasePool = useMemo(() => {
     if (activeTab !== 'buy' || marketSource !== 'club') return [];
@@ -186,12 +208,13 @@ export const MarketView = React.memo<{
     const items = clubBasePool.filter(({ q, team: t }) => {
       const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
       const subOk = subFilter === 'ALL' || q.ro === subFilter;
+      const loanOk = !loanOnlyFilter || (t.sq.length > 16 && (q.age <= 26 || q.ov <= 76));
       const searchOk =
         !normalizedQuery ||
         q.n.toLowerCase().includes(normalizedQuery) ||
         t.name.toLowerCase().includes(normalizedQuery) ||
         q.ro.toLowerCase().includes(normalizedQuery);
-      return lineOk && subOk && searchOk;
+      return lineOk && subOk && loanOk && searchOk;
     });
     const sorted = items.slice().sort((a, b) => {
       if (sortBy === 'price_asc') return a.price - b.price || b.q.ov - a.q.ov;
@@ -199,12 +222,13 @@ export const MarketView = React.memo<{
       return b.q.ov - a.q.ov;
     });
     return sorted.slice(0, 60);
-  }, [clubBasePool, filter, subFilter, sortBy, normalizedQuery]);
+  }, [clubBasePool, filter, subFilter, loanOnlyFilter, sortBy, normalizedQuery]);
 
-  const loanPlayers = useMemo(
-    () => me.sq.map((q, i) => ({ q, i })).filter(({ q }) => q.loan && q.loanOpt),
+  const loanInPlayers = useMemo(
+    () => me.sq.map((q, i) => ({ q, i })).filter(({ q }) => !!q.loan),
     [me.sq]
   );
+  const loanedOutList = useMemo(() => getLoanedOutPlayers(state, state.me), [state]);
   const contractList = useMemo(
     () =>
       me.sq
@@ -219,11 +243,28 @@ export const MarketView = React.memo<{
   );
 
   const incomingOffers = useMemo(() => getIncomingOffers(state), [state]);
+  const buyOffersCount = useMemo(
+    () => incomingOffers.filter((o) => !o.kind || o.kind === 'buy').length,
+    [incomingOffers]
+  );
+  const loanOffersCount = useMemo(
+    () => incomingOffers.filter((o) => o.kind === 'loan' || o.kind === 'loanopt').length,
+    [incomingOffers]
+  );
+  const filteredIncomingOffers = useMemo(() => {
+    if (offerFilter === 'buy') return incomingOffers.filter((o) => !o.kind || o.kind === 'buy');
+    if (offerFilter === 'loan') return incomingOffers.filter((o) => o.kind === 'loan' || o.kind === 'loanopt');
+    return incomingOffers;
+  }, [incomingOffers, offerFilter]);
+
   const listedPlayers = useMemo(() => me.sq.filter((q) => q.listed && !q.loan), [me.sq]);
+  const loanListedPlayers = useMemo(() => me.sq.filter((q) => q.loanListed && !q.loan), [me.sq]);
   const sellSearchNorm = sellSearch.trim().toLowerCase();
   const sellSquadList = useMemo(() => {
+    if (sellSubView === 'loaned_out') return [];
     const base = me.sq.filter((q) => {
       if (sellSubView === 'listed' && (!q.listed || q.loan)) return false;
+      if (sellSubView === 'loan_list' && (!q.loanListed || q.loan)) return false;
       if (sellPosFilter !== 'ALL' && q.pos !== sellPosFilter) return false;
       if (
         sellSearchNorm &&
@@ -237,6 +278,7 @@ export const MarketView = React.memo<{
     });
     return [...base].sort((a, b) => {
       if (!!b.listed !== !!a.listed) return b.listed ? 1 : -1;
+      if (!!b.loanListed !== !!a.loanListed) return b.loanListed ? 1 : -1;
       return b.ov - a.ov;
     });
   }, [me.sq, sellSubView, sellPosFilter, sellSearchNorm]);
@@ -252,6 +294,29 @@ export const MarketView = React.memo<{
     () => (activeSelectedSell.length > 0 ? validateBatchSquadRemoval(state, me, activeSelectedSell, 'sell', 85) : null),
     [state, me, activeSelectedSell]
   );
+
+  const shortlistResolved = useMemo(() => {
+    return (state.shortlist || []).map((entry) => ({
+      entry,
+      resolved: resolveShortlistEntry(state, entry)
+    }));
+  }, [state]);
+
+  const filteredShortlist = useMemo(() => {
+    return shortlistResolved.filter(({ resolved }) => {
+      if (shortlistFilter === 'ready') {
+        return (
+          resolved.status === 'mk' ||
+          resolved.status === 'scout' ||
+          (resolved.status === 'club' && tx.tw.open)
+        );
+      }
+      if (shortlistFilter === 'free') return !!resolved.player.free && resolved.status !== 'in_squad';
+      if (shortlistFilter === 'club') return resolved.status === 'club';
+      return true;
+    });
+  }, [shortlistResolved, shortlistFilter, tx.tw.open]);
+
   const createdPool = useMemo(() => listCreatedPlayersForManager(), [createdRefresh, state.md, state.season, me.sq.length]);
   const createdMarketList = useMemo(() => {
     const items = createdPool.filter((c) => {
@@ -273,13 +338,26 @@ export const MarketView = React.memo<{
 
   const expiringCount = contractList.filter(({ c }) => c.yr <= 1).length;
   const activeCount = marketSource === 'mk' ? marketList.length : marketSource === 'club' ? clubMarketList.length : createdMarketList.length;
-  const hasBuyFilters = filter !== 'ALL' || subFilter !== 'ALL' || sortBy !== 'default' || searchQuery.trim() !== '';
+  const hasBuyFilters = filter !== 'ALL' || subFilter !== 'ALL' || loanOnlyFilter || sortBy !== 'default' || searchQuery.trim() !== '';
 
   const resetBuyFilters = () => {
     setFilter('ALL');
     setSubFilter('ALL');
+    setLoanOnlyFilter(false);
     setSortBy('default');
     setSearchQuery('');
+  };
+
+  const handleToggleShortlist = (
+    q: Player,
+    opts: { source: 'mk' | 'club' | 'scout' | 'created'; clubTeamId?: number; clubName?: string }
+  ) => {
+    SFX.tap();
+    let added = false;
+    onUpdateState((d) => {
+      added = toggleShortlistPlayer(d, q, opts);
+    });
+    onToast(added ? `⭐ เพิ่ม ${q.n} เข้ารายชื่อที่สนใจแล้ว` : `นำ ${q.n} ออกจากรายชื่อที่สนใจแล้ว`);
   };
 
   const getDraftTarget = (draft: OfferDraft, s: GameState): { q: Player | undefined; sellerTeam?: Team } => {
@@ -294,20 +372,31 @@ export const MarketView = React.memo<{
     return { q };
   };
 
-  const openNegotiation = (source: 'mk' | 'scout' | 'club', idx: number, q: Player, sellerTeam?: Team) => {
+  const openNegotiation = (
+    source: 'mk' | 'scout' | 'club',
+    idx: number,
+    q: Player,
+    sellerTeam?: Team,
+    preferredType?: OfferDraft['type']
+  ) => {
     if (!tx.tw.open && !q.free) {
       onToast(`ตลาดซื้อขายปิดอยู่! ช่วงนี้เซ็นได้เฉพาะฟรีเอเยนต์ (เปิดรอบหน้า: ${tx.tw.rangeText})`);
       return;
     }
     if (source === 'club' && sellerTeam) {
       if (sellerTeam.sq.length <= 16) {
-        onToast(`${sellerTeam.name} มีนักเตะเหลือขั้นต่ำ (${sellerTeam.sq.length} คน) ไม่ปล่อยขาย`);
+        onToast(`${sellerTeam.name} มีนักเตะเหลือขั้นต่ำ (${sellerTeam.sq.length} คน) ไม่ปล่อยตัว`);
         return;
       }
       if (q.pos === 'GK' && sellerTeam.sq.filter((z) => z.pos === 'GK').length <= 2) {
-        onToast(`${sellerTeam.name} เหลือผู้รักษาประตูเพียง 2 คน ไม่ปล่อยขาย`);
+        onToast(`${sellerTeam.name} เหลือผู้รักษาประตูเพียง 2 คน ไม่ปล่อยตัว`);
         return;
       }
+    }
+    const desiredType: OfferDraft['type'] = q.free ? 'free' : preferredType || 'cash';
+    if ((desiredType === 'loan' || desiredType === 'loanopt') && tx.loansCount >= tx.maxLoans) {
+      onToast(`ครบโควตายืมตัวสูงสุด ${tx.maxLoans} คนแล้ว`);
+      return;
     }
     SFX.tap();
     const swCands = me.sq
@@ -321,7 +410,7 @@ export const MarketView = React.memo<{
       idx,
       clubTeamId: sellerTeam?.id,
       playerName: q.n,
-      type: targetWithPrice.free ? 'free' : 'cash',
+      type: desiredType,
       pct: 100,
       yr: 3,
       role: targetWithPrice.ov >= 70 ? 'key' : targetWithPrice.age <= 20 ? 'pro' : 'rot',
@@ -399,20 +488,35 @@ export const MarketView = React.memo<{
           }
         }
 
+        const origCon = target.con ? { ...target.con } : undefined;
         removeFromSrc();
         const incoming: Player = { ...target };
         if (deal.type === 'loan' || deal.type === 'loanopt') {
           incoming.loan = 1;
           if (deal.loanOpt) incoming.loanOpt = deal.loanOpt;
+          if (sellerRef) {
+            incoming.loanFromTeamId = sellerRef.id;
+            incoming.loanFromTeamName = sellerRef.name;
+            incoming.loanWageShare = 100;
+            if (origCon) incoming.loanOrigCon = origCon;
+          }
         }
         incoming.con = { yr: deal.yr, wg: deal.wg, role: deal.role };
         incoming.no = undefined;
         incoming.signedSeason = d.season;
         incoming.signedMd = d.md;
         delete incoming.listed;
+        delete incoming.loanListed;
         appendPlayerCareerLog(incoming, `✍️ ย้ายซบ ${t.name} (${TN[t.tier]}) ซีซั่น ${d.season}${incoming.loan ? ' (ยืมตัว)' : ''}`);
         t.sq.push(incoming);
         assignTeamShirtNumbers(t);
+        removeShortlistPlayer(d, incoming.n);
+        pushFeed(
+          d,
+          incoming.loan ? 'ยืมตัวเข้าทีม' : 'เสริมทัพ',
+          `${incoming.loan ? '🤝 ยืมตัว' : '✍️ เซ็น'} ${incoming.n} (${incoming.ro} OVR ${incoming.ov})${sellerRef ? ` จาก ${sellerRef.name}` : ''} เข้าทีมสำเร็จ`,
+          'ok'
+        );
 
         if (sellerRef && swappedOutPlayer) {
           swappedOutPlayer.no = undefined;
@@ -422,7 +526,11 @@ export const MarketView = React.memo<{
       });
       setOfferDraft(null);
       SFX.win();
-      onToast(`เซ็นสัญญา ${q.n} (${q.ro} · ${deal.yr} ปี · ${fmtMoneyNum(deal.wg)}/นัด) สำเร็จ!`);
+      onToast(
+        deal.type === 'loan' || deal.type === 'loanopt'
+          ? `🤝 ยืมตัว ${q.n} (${q.ro} · 1 ซีซั่น · ${fmtMoneyNum(deal.wg)}/นัด) สำเร็จ!`
+          : `เซ็นสัญญา ${q.n} (${q.ro} · ${deal.yr} ปี · ${fmtMoneyNum(deal.wg)}/นัด) สำเร็จ!`
+      );
     } else {
       onUpdateState((d) => {
         if (offerDraft.source === 'club' && offerDraft.clubTeamId != null) {
@@ -444,14 +552,22 @@ export const MarketView = React.memo<{
       if (nextTries >= 3 || (deal.chance < 20 && !q.free)) {
         setOfferDraft({ ...offerDraft, counter: null, msg: 'อีกฝ่ายปฏิเสธและยุติการเจรจาในรอบนี้แล้ว' });
       } else {
-        const cPct = deal.type === 'free' ? 100 : Math.min(125, offerDraft.pct + 10);
+        const isLoanOffer = deal.type === 'loan' || deal.type === 'loanopt';
+        const cPct = deal.type === 'free' || isLoanOffer ? 100 : Math.min(125, offerDraft.pct + 10);
         const cWb = Math.min(2, offerDraft.wb + 1) as 0 | 1 | 2;
-        const cDraft: OfferDraft = { ...offerDraft, pct: cPct, wb: cWb, role: q.ov >= 70 ? 'key' : offerDraft.role };
+        const cDraft: OfferDraft = {
+          ...offerDraft,
+          pct: cPct,
+          wb: cWb,
+          role: q.ov >= 70 ? 'key' : offerDraft.role
+        };
         const counter = evalOffer(q, cDraft, me);
         setOfferDraft({
           ...offerDraft,
           counter,
-          msg: `ขอปรับเงื่อนไขเป็น${deal.type === 'free' ? '' : `ค่าตัว ${cPct}% · `}จ่ายทันที ${fmtMoneyNum(counter.cashNow)} · ค่าเหนื่อย ${fmtMoneyNum(counter.wg)}/นัด · ${ROLE_L[counter.role]}`
+          msg: `ขอปรับเงื่อนไขเป็น${
+            deal.type === 'free' || isLoanOffer ? '' : `ค่าตัว ${cPct}% · `
+          }${isLoanOffer ? 'ค่ายืม ' : 'จ่ายทันที '}${fmtMoneyNum(counter.cashNow)} · ค่าเหนื่อย ${fmtMoneyNum(counter.wg)}/นัด · ${ROLE_L[counter.role]}`
         });
       }
     }
@@ -615,6 +731,30 @@ export const MarketView = React.memo<{
             </div>
             <div className="shrink-0 flex items-center gap-2 mland:gap-1.5">
               <OvrBadge ov={q.ov} size="lg" />
+              {(() => {
+                const shortlisted = isPlayerShortlisted(state, q.n, sellerTeam?.id);
+                return (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleToggleShortlist(q, {
+                        source: offerDraft.source,
+                        clubTeamId: sellerTeam?.id,
+                        clubName: sellerTeam?.name
+                      })
+                    }
+                    title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
+                    className={`h-8 mland:h-6.5 px-2.5 mland:px-2 inline-flex items-center justify-center gap-1 rounded-xl mland:rounded-lg border text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer transition-all shrink-0 ${
+                      shortlisted
+                        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#8a5b00] dark:text-[var(--lamp)]'
+                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${shortlisted ? 'fill-current' : ''}`} />
+                    <span className="hidden sm:inline">{shortlisted ? 'สนใจอยู่' : 'สนใจ'}</span>
+                  </button>
+                );
+              })()}
               <button
                 type="button"
                 onClick={() => onInspectPlayer(q, sellerTeam || null)}
@@ -1186,10 +1326,23 @@ export const MarketView = React.memo<{
   };
 
   const marketTabs: { id: MarketTab; icon: React.ReactNode; label: string; count?: string }[] = [
-    { id: 'buy', icon: <TransferMarketIcon size={14} className="w-[14px] h-[14px] mland:w-[12px] mland:h-[12px] mland:!text-[11px]" />, label: 'ซื้อ & ยืมนักเตะ', count: `${activeCount}` },
-    { id: 'sell', icon: '🏷️', label: 'ขาย & ข้อเสนอ', count: incomingOffers.length > 0 ? `${incomingOffers.length} ดีล` : listedPlayers.length > 0 ? `${listedPlayers.length} ขาย` : undefined },
-    { id: 'scout', icon: '🔍', label: 'แมวมองสโมสร', count: state.scout?.results ? 'พร้อม' : state.scout ? `${state.scout.turnsLeft} นัด` : undefined },
-    { id: 'con', icon: '📋', label: 'สัญญา & เยาวชน', count: expiringCount + loanPlayers.length > 0 ? `${expiringCount + loanPlayers.length} ใกล้หมด` : undefined }
+    { id: 'buy', icon: <TransferMarketIcon size={14} className="w-[14px] h-[14px] mland:w-[12px] mland:h-[12px] mland:!text-[11px]" />, label: 'ซื้อ & ยืมเข้า', count: `${activeCount}` },
+    { id: 'shortlist', icon: '⭐', label: 'ที่สนใจ', count: shortlistResolved.length > 0 ? `${shortlistResolved.length}` : undefined },
+    {
+      id: 'sell',
+      icon: '🏷️',
+      label: 'ขาย · ปล่อยยืม',
+      count:
+        incomingOffers.length > 0
+          ? `${incomingOffers.length} ดีล`
+          : loanedOutList.length > 0
+            ? `${loanedOutList.length} ยืมออก`
+            : listedPlayers.length + loanListedPlayers.length > 0
+              ? `${listedPlayers.length + loanListedPlayers.length}`
+              : undefined
+    },
+    { id: 'scout', icon: '🔍', label: 'แมวมอง', count: state.scout?.results ? 'พร้อม' : state.scout ? `${state.scout.turnsLeft} นัด` : undefined },
+    { id: 'con', icon: '📋', label: 'สัญญา · ยืม', count: expiringCount + loanInPlayers.length > 0 ? `${expiringCount + loanInPlayers.length}` : undefined }
   ];
 
   const scoutFocusCards: { focus: ScoutMission['focus']; icon: string; title: string; desc: string }[] = [
@@ -1276,8 +1429,8 @@ export const MarketView = React.memo<{
         </div>
       </div>
 
-      {/* 4-Section Market Navigation */}
-      <div className="seg-bar grid grid-cols-4 w-full shrink-0">
+      {/* 5-Section Market Navigation */}
+      <div className="seg-bar grid grid-cols-5 w-full shrink-0">
         {marketTabs.map((t) => {
           const active = activeTab === t.id;
           return (
@@ -1288,14 +1441,14 @@ export const MarketView = React.memo<{
                 SFX.tap();
                 setActiveTab(t.id);
               }}
-              className={`seg-btn min-w-0 gap-1 ${active ? 'seg-btn-active' : ''}`}
+              className={`seg-btn min-w-0 gap-1 px-1 sm:px-2 ${active ? 'seg-btn-active' : ''}`}
             >
-              <span className="inline-flex items-center justify-center gap-1.5 min-w-0">
+              <span className="inline-flex items-center justify-center gap-1 min-w-0">
                 <span className="inline-flex items-center justify-center shrink-0 leading-none">{t.icon}</span>
-                <span className="truncate whitespace-nowrap">{t.label}</span>
+                <span className="truncate whitespace-nowrap text-[10.5px] sm:text-xs mland:text-[10px]">{t.label}</span>
               </span>
               {t.count && (
-                <span className={`hidden sm:inline mland:inline text-[10px] mland:text-[8.5px] font-semibold tabular shrink-0 whitespace-nowrap ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
+                <span className={`hidden md:inline mland:inline text-[10px] mland:text-[8.5px] font-semibold tabular shrink-0 whitespace-nowrap ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
                   ({t.count})
                 </span>
               )}
@@ -1454,6 +1607,25 @@ export const MarketView = React.memo<{
                   </div>
                 </div>
               )}
+
+              {marketSource !== 'created' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setLoanOnlyFilter((v) => !v);
+                    if (!loanOnlyFilter && filter === 'FREE') setFilter('ALL');
+                  }}
+                  className={`w-full px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border text-[11px] mland:text-[9.5px] font-bold flex items-center justify-between cursor-pointer transition-colors ${
+                    loanOnlyFilter
+                      ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]'
+                      : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  <span>🤝 เฉพาะนักเตะที่ยืมตัวได้</span>
+                  <span>{loanOnlyFilter ? '✓ เปิด' : 'ทั้งหมด'}</span>
+                </button>
+              )}
             </div>
 
             {marketSource === 'mk' && (
@@ -1515,10 +1687,12 @@ export const MarketView = React.memo<{
                   marketList.map(({ q, i }) => {
                     const blockedByWindow = !tx.tw.open && !q.free;
                     const askWage = q.askWg || wagOf(q);
+                    const shortlisted = isPlayerShortlisted(state, q.n);
+                    const canLoanQuick = !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
                     return (
                       <div
                         key={`${q.n}-${i}`}
-                        className={`flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors ${blockedByWindow ? 'opacity-65' : ''}`}
+                        className={`flex items-center gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors ${blockedByWindow ? 'opacity-65' : ''}`}
                       >
                         <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
                           <PlayerFace player={q} size={40} />
@@ -1541,7 +1715,7 @@ export const MarketView = React.memo<{
                             <span className="md:hidden">· ค่าเหนื่อย ~{fmtMoneyNum(askWage)}</span>
                           </div>
                         </button>
-                        <div className="hidden md:block text-right tabular shrink-0 min-w-[80px]">
+                        <div className="hidden md:block text-right tabular shrink-0 min-w-[74px]">
                           <div className={`text-xs font-bold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                             {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)}
                           </div>
@@ -1552,13 +1726,37 @@ export const MarketView = React.memo<{
                         <OvrBadge ov={q.ov} size="sm" />
                         <button
                           type="button"
+                          onClick={() => handleToggleShortlist(q, { source: 'mk' })}
+                          title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
+                          aria-label={shortlisted ? `นำ ${q.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${q.n} เข้ารายชื่อที่สนใจ`}
+                          className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                            shortlisted
+                              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#8a5b00] dark:text-[var(--lamp)]'
+                              : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${shortlisted ? 'fill-current' : ''}`} />
+                        </button>
+                        {!q.free && (
+                          <button
+                            type="button"
+                            disabled={!canLoanQuick}
+                            onClick={() => openNegotiation('mk', i, q, undefined, 'loan')}
+                            title={tx.loansCount >= tx.maxLoans ? `โควตายืมเต็ม ${tx.maxLoans} คน` : 'เจรจายืมตัว 1 ฤดูกาล'}
+                            className="btn btn-sm btn-secondary shrink-0 px-2"
+                          >
+                            🤝 ยืม
+                          </button>
+                        )}
+                        <button
+                          type="button"
                           disabled={!!q.locked || blockedByWindow}
-                          onClick={() => openNegotiation('mk', i, q)}
-                          className={`btn btn-sm min-w-[88px] mland:min-w-[76px] shrink-0 ${
+                          onClick={() => openNegotiation('mk', i, q, undefined, q.free ? 'free' : 'cash')}
+                          className={`btn btn-sm min-w-[78px] mland:min-w-[66px] shrink-0 ${
                             blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                           }`}
                         >
-                          {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เซ็นฟรี' : `ยื่น ${fmtMoneyNum(q.price || 0)}`}
+                          {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : `ซื้อ ${fmtMoneyNum(q.price || 0)}`}
                         </button>
                       </div>
                     );
@@ -1580,10 +1778,12 @@ export const MarketView = React.memo<{
                 clubMarketList.length > 0 ? (
                   clubMarketList.map(({ q, team, idx, price }) => {
                     const blockedByWindow = !tx.tw.open;
+                    const shortlisted = isPlayerShortlisted(state, q.n, team.id);
+                    const canLoanClub = !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans && team.sq.length > 16;
                     return (
                       <div
                         key={`${team.id}-${q.n}-${idx}`}
-                        className={`flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors ${blockedByWindow ? 'opacity-65' : ''}`}
+                        className={`flex items-center gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors ${blockedByWindow ? 'opacity-65' : ''}`}
                       >
                         <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
                           <PlayerFace player={q} team={team} state={state} size={40} />
@@ -1603,7 +1803,7 @@ export const MarketView = React.memo<{
                             <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
                           </div>
                         </button>
-                        <div className="hidden md:block text-right tabular shrink-0 min-w-[80px]">
+                        <div className="hidden md:block text-right tabular shrink-0 min-w-[74px]">
                           <div className="text-xs font-bold text-[var(--ink)] leading-tight">
                             ~{fmtMoneyNum(price)}
                           </div>
@@ -1614,13 +1814,41 @@ export const MarketView = React.memo<{
                         <OvrBadge ov={q.ov} size="sm" />
                         <button
                           type="button"
+                          onClick={() =>
+                            handleToggleShortlist(q, {
+                              source: 'club',
+                              clubTeamId: team.id,
+                              clubName: team.name
+                            })
+                          }
+                          title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
+                          aria-label={shortlisted ? `นำ ${q.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${q.n} เข้ารายชื่อที่สนใจ`}
+                          className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                            shortlisted
+                              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#8a5b00] dark:text-[var(--lamp)]'
+                              : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${shortlisted ? 'fill-current' : ''}`} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canLoanClub}
+                          onClick={() => openNegotiation('club', idx, q, team, 'loan')}
+                          title={tx.loansCount >= tx.maxLoans ? `โควตายืมเต็ม ${tx.maxLoans} คน` : 'เจรจาขอยืมตัวจากสโมสรนี้'}
+                          className="btn btn-sm btn-secondary shrink-0 px-2"
+                        >
+                          🤝 ยืม
+                        </button>
+                        <button
+                          type="button"
                           disabled={!!q.locked || blockedByWindow}
-                          onClick={() => openNegotiation('club', idx, q, team)}
-                          className={`btn btn-sm min-w-[88px] mland:min-w-[76px] shrink-0 ${
+                          onClick={() => openNegotiation('club', idx, q, team, 'cash')}
+                          className={`btn btn-sm min-w-[78px] mland:min-w-[66px] shrink-0 ${
                             blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                           }`}
                         >
-                          {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${fmtMoneyNum(price)}`}
+                          {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิด' : `ซื้อ ~${fmtMoneyNum(price)}`}
                         </button>
                       </div>
                     );
@@ -1789,6 +2017,20 @@ export const MarketView = React.memo<{
                         </div>
                       </button>
                       <OvrBadge ov={q.ov} size="sm" />
+                      {!alreadyInSquad && (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleShortlist(q, { source: 'created', clubName: cand.clubName || cand.sourceLabel })}
+                          title={isPlayerShortlisted(state, q.n) ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
+                          className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                            isPlayerShortlisted(state, q.n)
+                              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#8a5b00] dark:text-[var(--lamp)]'
+                              : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${isPlayerShortlisted(state, q.n) ? 'fill-current' : ''}`} />
+                        </button>
+                      )}
                       <div className="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0">
                         {alreadyInSquad ? (
                           <span className="text-[11px] mland:text-[9.5px] text-[var(--g)] font-bold whitespace-nowrap px-2">
@@ -1847,31 +2089,246 @@ export const MarketView = React.memo<{
         </div>
       )}
 
-      {/* SECTION 2: OUTGOING TRANSFERS & INCOMING BIDS */}
+      {/* SECTION 1B: SHORTLIST / WATCHLIST */}
+      {activeTab === 'shortlist' && (
+        <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+                ⭐ รายชื่อนักเตะที่สนใจ ({filteredShortlist.length}/{shortlistResolved.length})
+              </h3>
+              <span className="hidden sm:inline text-[11px] mland:text-[9.5px] text-[var(--mut)]">
+                ติดตามสถานะและยื่นซื้อ/ขอยืมได้ทันที
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="seg-bar">
+                {([
+                  ['all', 'ทั้งหมด'],
+                  ['ready', 'พร้อมเจรจา'],
+                  ['free', 'ฟรีเอเยนต์'],
+                  ['club', 'สโมสรอื่น']
+                ] as const).map(([k, lbl]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setShortlistFilter(k)}
+                    className={`seg-btn ${shortlistFilter === k ? 'seg-btn-active' : ''}`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+              {shortlistResolved.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onUpdateState((d) => {
+                      d.shortlist = [];
+                    });
+                    onToast('ล้างรายชื่อที่สนใจทั้งหมดแล้ว');
+                  }}
+                  className="btn btn-xs btn-ghost hover:text-[var(--red)]"
+                >
+                  ล้างทั้งหมด
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+            {filteredShortlist.length > 0 ? (
+              filteredShortlist.map(({ entry, resolved }) => {
+                const { status, player: q, team: curTeam, idx, estPrice } = resolved;
+                const canDeal = status === 'mk' || status === 'scout' || status === 'club';
+                const blockedByWindow = !tx.tw.open && !q.free;
+                const canLoanHere = canDeal && !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
+                const sourceLabel =
+                  status === 'in_squad'
+                    ? '✓ ย้ายเข้าทีมคุณแล้ว'
+                    : status === 'mk'
+                      ? q.free
+                        ? '🆓 ฟรีเอเยนต์ (ตลาดกลาง)'
+                        : '🌐 ตลาดกลาง'
+                      : status === 'scout'
+                        ? '🔍 รายงานแมวมอง'
+                        : status === 'club' && curTeam
+                          ? `🏟️ ${curTeam.name} (${TN[curTeam.tier]})`
+                          : status === 'created'
+                            ? '🌱 นักเตะสร้างเอง'
+                            : '⏳ ย้ายออกนอกลีก/รอตลาดใหม่';
+
+                return (
+                  <div
+                    key={`${entry.n}-${entry.clubTeamId ?? entry.source}`}
+                    className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/45 transition-colors"
+                  >
+                    <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
+                      <PlayerFace player={q} team={curTeam} state={state} size={40} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onInspectPlayer(q, curTeam || null)}
+                      className="flex-1 min-w-0 text-left cursor-pointer group"
+                    >
+                      <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
+                        <PositionBadge role={q.ro} size="xs" />
+                        <span className="truncate group-hover:underline">{q.n}</span>
+                        <span
+                          className={`text-[10.5px] mland:text-[9px] font-bold truncate ${
+                            status === 'in_squad'
+                              ? 'text-[var(--g)]'
+                              : status === 'unavailable'
+                                ? 'text-[var(--mut)]'
+                                : q.free
+                                  ? 'text-[var(--g)]'
+                                  : 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                          }`}
+                        >
+                          · {sourceLabel}
+                        </span>
+                      </div>
+                      <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-snug mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5">
+                        <span>{q.age} ปี ·</span>
+                        <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
+                        <span aria-hidden="true">·</span>
+                        <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
+                        <span>
+                          · {q.free ? 'ไร้ค่าตัว' : `ประเมิน ~${fmtMoneyNum(estPrice)}`} · ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด
+                        </span>
+                      </div>
+                    </button>
+                    <OvrBadge ov={q.ov} size="sm" />
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0">
+                      {status === 'in_squad' ? (
+                        <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] px-2">✓ อยู่ในทีม</span>
+                      ) : canDeal ? (
+                        <>
+                          {!q.free && (
+                            <button
+                              type="button"
+                              disabled={!canLoanHere}
+                              onClick={() => openNegotiation(status, idx, q, curTeam, 'loan')}
+                              className="btn btn-sm btn-secondary"
+                            >
+                              🤝 ยืม
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={!!q.locked || blockedByWindow}
+                            onClick={() => openNegotiation(status, idx, q, curTeam, q.free ? 'free' : 'cash')}
+                            className={`btn btn-sm ${blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'}`}
+                          >
+                            {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เซ็นฟรี' : `💰 ซื้อ ${fmtMoneyNum(estPrice)}`}
+                          </button>
+                        </>
+                      ) : status === 'created' ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('buy');
+                            setMarketSource('created');
+                          }}
+                          className="btn btn-sm btn-secondary"
+                        >
+                          ไปหน้าสร้างเอง
+                        </button>
+                      ) : (
+                        <span className="text-[10.5px] text-[var(--mut)] px-1.5">ไม่พบในตลาด</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          onUpdateState((d) => removeShortlistPlayer(d, entry.n, entry.clubTeamId));
+                          onToast(`นำ ${entry.n} ออกจากรายชื่อที่สนใจแล้ว`);
+                        }}
+                        title="นำออกจากรายชื่อที่สนใจ"
+                        aria-label={`ลบ ${entry.n} ออกจากที่สนใจ`}
+                        className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] hover:text-[var(--red)] flex items-center justify-center cursor-pointer shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-2">
+                <div className="text-2xl opacity-75">⭐</div>
+                <p className="text-xs sm:text-sm font-bold text-[var(--ink)]">
+                  {shortlistResolved.length === 0 ? 'ยังไม่มีนักเตะในรายชื่อที่สนใจ' : 'ไม่พบนักเตะตามตัวกรองที่เลือก'}
+                </p>
+                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-sm">
+                  กดปุ่มรูปดาว ☆ บนรายชื่อนักเตะในตลาดกลาง สโมสรอื่น แมวมอง หรือการ์ดนักเตะ เพื่อบันทึกไว้ติดตามและยื่นซื้อ/ขอยืมได้ทันที
+                </p>
+                {shortlistResolved.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('buy')}
+                    className="btn btn-sm btn-primary"
+                  >
+                    ไปเลือกดูนักเตะในตลาด
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* SECTION 2: OUTGOING TRANSFERS, LOANS & INCOMING BIDS */}
       {activeTab === 'sell' && (
         <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
-          {/* Left: Incoming Offers */}
+          {/* Left: Incoming Buy & Loan Offers */}
           <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
-            <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
-              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">💼 ข้อเสนอซื้อนักเตะเข้าทีม</h3>
-              <span className={`text-[11px] mland:text-[9.5px] font-bold tabular whitespace-nowrap ${incomingOffers.length > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                {incomingOffers.length} รายการ
-              </span>
+            <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+                💼 ทีมยื่นซื้อ &amp; ขอยืม ({incomingOffers.length})
+              </h3>
+              <div className="seg-bar shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setOfferFilter('all')}
+                  className={`seg-btn tabular ${offerFilter === 'all' ? 'seg-btn-active' : ''}`}
+                >
+                  ทั้งหมด ({incomingOffers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOfferFilter('buy')}
+                  className={`seg-btn tabular ${offerFilter === 'buy' ? 'seg-btn-active' : ''}`}
+                >
+                  💰 ซื้อ ({buyOffersCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOfferFilter('loan')}
+                  className={`seg-btn tabular ${offerFilter === 'loan' ? 'seg-btn-active' : ''}`}
+                >
+                  🤝 ยืม ({loanOffersCount})
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
-              {incomingOffers.length > 0 ? (
-                incomingOffers.map((off) => {
+              {filteredIncomingOffers.length > 0 ? (
+                filteredIncomingOffers.map((off) => {
                   const targetQ = me.sq.find((q) => q.n === off.n);
                   if (!targetQ) return null;
+                  const isLoanOffer = off.kind === 'loan' || off.kind === 'loanopt';
                   const marketVal = Math.max(5, vlu(targetQ));
                   const diffPct = Math.round(((off.p - marketVal) / marketVal) * 100);
                   const wg = ensureCon(targetQ).wg;
+                  const wageShare = off.wageShare ?? 80;
+                  const savedWg = Number(((wg * (isLoanOffer ? wageShare / 100 : 1))).toFixed(1));
                   const buyerTeam =
                     (off.teamId != null ? state.teams.find((t) => t.id === off.teamId) : undefined) ||
                     state.teams.find((t) => t.name === off.t);
                   return (
-                    <div key={`${off.n}__${off.t}`} className="px-3.5 py-2.5 mland:px-2.5 mland:py-2 space-y-2 mland:space-y-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
+                    <div key={`${off.n}__${off.t}__${off.kind || 'buy'}`} className="px-3.5 py-2.5 mland:px-2.5 mland:py-2 space-y-2 mland:space-y-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
                       <div className="flex items-center gap-2.5 mland:gap-2">
                         <div className="shrink-0 flex items-center gap-1.5">
                           <ClubCrest
@@ -1895,33 +2352,56 @@ export const MarketView = React.memo<{
                                 ({TN[buyerTeam.tier] || ''})
                               </span>
                             )}
+                            <span
+                              className={`px-1.5 py-[1px] rounded text-[9.5px] mland:text-[8px] font-extrabold shrink-0 ${
+                                isLoanOffer
+                                  ? 'bg-sky-500/15 text-sky-600 dark:text-sky-300 border border-sky-500/30'
+                                  : 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/30'
+                              }`}
+                            >
+                              {off.kind === 'loanopt' ? '🤝 ยืม+ซื้อขาด' : off.kind === 'loan' ? '🤝 ขอยืมตัว' : '💰 ยื่นซื้อ'}
+                            </span>
                           </div>
                           <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate mt-0.5 tabular flex items-center gap-1">
-                            <span>ขอซื้อ</span>
+                            <span>{isLoanOffer ? 'ขอยืม' : 'ขอซื้อ'}</span>
                             <PositionBadge role={targetQ.ro} size="2xs" />
                             <b className="text-[var(--ink)] truncate">{off.n}</b>
-                            <span>· ลดค่าเหนื่อย {fmtMoneyNum(wg)}/นัด</span>
+                            <span>· ลดค่าเหนื่อย {fmtMoneyNum(savedWg)}/นัด</span>
                           </div>
                         </button>
                         <OvrBadge ov={targetQ.ov} size="sm" />
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-                        <div className="flex items-baseline gap-1.5 text-[11px] mland:text-[9.5px] tabular">
-                          <span className="font-extrabold text-[var(--g)] text-xs sm:text-[13px] mland:text-[11px]">
-                            ยื่น {fmtMoney(off.p)}
-                          </span>
-                          <span className="text-[var(--mut)]">· ประเมิน {fmtMoneyNum(marketVal)}</span>
-                          <span
-                            className={`font-bold ${
-                              diffPct >= 0
-                                ? 'text-[var(--g)]'
-                                : 'text-[#8a5b00] dark:text-[var(--lamp)]'
-                            }`}
-                          >
-                            ({diffPct >= 0 ? `+${diffPct}%` : `${diffPct}%`})
-                          </span>
-                        </div>
+                        {isLoanOffer ? (
+                          <div className="flex flex-wrap items-baseline gap-1.5 text-[11px] mland:text-[9.5px] tabular">
+                            <span className="font-extrabold text-sky-600 dark:text-sky-300 text-xs sm:text-[13px] mland:text-[11px]">
+                              ค่ายืม +{fmtMoney(off.p)}
+                            </span>
+                            <span className="text-[var(--mut)]">· ช่วยค่าเหนื่อย {wageShare}%</span>
+                            {off.kind === 'loanopt' && off.buyOption ? (
+                              <span className="font-bold text-[#8a5b00] dark:text-[var(--lamp)]">
+                                · ซื้อขาด {fmtMoneyNum(off.buyOption)}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="flex items-baseline gap-1.5 text-[11px] mland:text-[9.5px] tabular">
+                            <span className="font-extrabold text-[var(--g)] text-xs sm:text-[13px] mland:text-[11px]">
+                              ยื่น {fmtMoney(off.p)}
+                            </span>
+                            <span className="text-[var(--mut)]">· ประเมิน {fmtMoneyNum(marketVal)}</span>
+                            <span
+                              className={`font-bold ${
+                                diffPct >= 0
+                                  ? 'text-[var(--g)]'
+                                  : 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                              }`}
+                            >
+                              ({diffPct >= 0 ? `+${diffPct}%` : `${diffPct}%`})
+                            </span>
+                          </div>
+                        )}
 
                         <div className="flex flex-wrap gap-1.5 shrink-0">
                           <button
@@ -1929,18 +2409,22 @@ export const MarketView = React.memo<{
                             onClick={() => {
                               const res = canAcceptTransferOffer(state, off);
                               if (!res.ok) {
-                                onToast(res.err || 'ขายไม่สำเร็จ');
+                                onToast(res.err || 'ดำเนินการไม่สำเร็จ');
                                 return;
                               }
                               onUpdateState((d) => {
                                 acceptTransferOffer(d, off);
                               });
                               SFX.win();
-                              onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`);
+                              onToast(
+                                isLoanOffer
+                                  ? `🤝 ปล่อยยืม ${off.n} ให้ ${res.buyerName || off.t} (ค่ายืม +${fmtMoney(off.p)}) สำเร็จ!`
+                                  : `ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`
+                              );
                             }}
                             className="btn btn-xs btn-primary"
                           >
-                            ✓ ตอบรับขาย
+                            {isLoanOffer ? '✓ ตอบรับปล่อยยืม' : '✓ ตอบรับขาย'}
                           </button>
                           {!off.cnt && (
                             <button
@@ -1948,21 +2432,27 @@ export const MarketView = React.memo<{
                               onClick={() => {
                                 const out = resolveCounterOfferOutcome(state, off);
                                 onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
-                                onToast(
-                                  out.accepted
-                                    ? `${off.t} ยอมเพิ่มราคาเป็น ${fmtMoney(out.newPrice ?? off.p)}!`
-                                    : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
-                                );
+                                if (out.accepted) {
+                                  SFX.tap();
+                                  onToast(
+                                    isLoanOffer
+                                      ? `${off.t} ยอมเพิ่มค่ายืมเป็น ${fmtMoney(out.newPrice ?? off.p)} (ค่าเหนื่อย ${out.newWageShare ?? wageShare}%)!`
+                                      : `${off.t} ยอมเพิ่มราคาเป็น ${fmtMoney(out.newPrice ?? off.p)}!`
+                                  );
+                                } else {
+                                  SFX.foul();
+                                  onToast(`${off.t} ถอนข้อเสนอ${isLoanOffer ? 'ขอยืม' : 'ซื้อ'} ${off.n}`);
+                                }
                               }}
                               className="btn btn-xs btn-secondary"
                             >
-                              โก่ง +15%
+                              {isLoanOffer ? 'ต่อรอง +ค่ายืม' : 'โก่ง +15%'}
                             </button>
                           )}
                           <button
                             type="button"
                             onClick={() => {
-                              onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
+                              onUpdateState((d) => removeIncomingOffer(d, off.n, off.t, off.kind));
                               onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
                             }}
                             className="btn btn-xs btn-secondary hover:text-[var(--red)]"
@@ -1977,23 +2467,29 @@ export const MarketView = React.memo<{
               ) : (
                 <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
                   <div className="text-2xl opacity-75">💼</div>
-                  <div className="text-xs sm:text-sm mland:text-xs font-bold">ยังไม่มีข้อเสนอซื้อนักเตะเข้ามา</div>
+                  <div className="text-xs sm:text-sm mland:text-xs font-bold">
+                    {offerFilter === 'loan'
+                      ? 'ยังไม่มีทีมยื่นขอยืมตัวเข้ามา'
+                      : offerFilter === 'buy'
+                        ? 'ยังไม่มีทีมยื่นซื้อตัวเข้ามา'
+                        : 'ยังไม่มีข้อเสนอซื้อหรือขอยืมเข้ามา'}
+                  </div>
                   <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
-                    เลือกนักเตะทางด้านขวาแล้วกด &ldquo;💰 ขาย&rdquo; เพื่อขายด่วนทันที หรือขึ้นบัญชี &amp; เสนอขายเพื่อเรียกข้อเสนอจากสโมสรอื่น
+                    เลือกนักเตะด้านขวาแล้วกด &ldquo;🤝 ปล่อยยืม&rdquo; เพื่อเสนอปล่อยยืม หรือ &ldquo;💰 ขาย&rdquo; เพื่อขายด่วน/เสนอขายเรียกข้อเสนอทันที
                   </p>
                 </div>
               )}
             </div>
           </section>
 
-          {/* Right: Squad Selling & Transfer List */}
+          {/* Right: Squad Selling, Loan Out & Currently Loaned Out */}
           <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
             <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 space-y-2 mland:space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-                  🏷️ ขายนักเตะ &amp; บัญชีขาย ({sellSquadList.length})
+                  🏷️ ขาย &amp; ปล่อยยืม ({sellSubView === 'loaned_out' ? loanedOutList.length : sellSquadList.length})
                 </h3>
-                <div className="seg-bar shrink-0">
+                <div className="seg-bar shrink-0 overflow-x-auto max-w-full">
                   <button
                     type="button"
                     onClick={() => setSellSubView('all')}
@@ -2008,46 +2504,62 @@ export const MarketView = React.memo<{
                   >
                     ตั้งขาย ({listedPlayers.length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSellSubView('loan_list')}
+                    className={`seg-btn tabular ${sellSubView === 'loan_list' ? 'seg-btn-active' : ''}`}
+                  >
+                    บัญชียืม ({loanListedPlayers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSellSubView('loaned_out')}
+                    className={`seg-btn tabular ${sellSubView === 'loaned_out' ? 'seg-btn-active' : ''}`}
+                  >
+                    ยืมออกอยู่ ({loanedOutList.length})
+                  </button>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5 mland:gap-1">
-                <div className="relative flex-1 min-w-[120px]">
-                  <Search className="w-3 h-3 text-[var(--mut)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={sellSearch}
-                    onChange={(e) => setSellSearch(e.target.value)}
-                    placeholder="ค้นหาชื่อ / ตำแหน่ง..."
-                    aria-label="ค้นหานักเตะในทีมเพื่อขาย"
-                    className="w-full pl-7 pr-6 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] focus:outline-none focus:border-[var(--g)]"
-                  />
-                  {sellSearch && (
-                    <button
-                      type="button"
-                      onClick={() => setSellSearch('')}
-                      aria-label="ล้างคำค้นหา"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
+              {sellSubView !== 'loaned_out' && (
+                <div className="flex flex-wrap items-center gap-1.5 mland:gap-1">
+                  <div className="relative flex-1 min-w-[120px]">
+                    <Search className="w-3 h-3 text-[var(--mut)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={sellSearch}
+                      onChange={(e) => setSellSearch(e.target.value)}
+                      placeholder="ค้นหาชื่อ / ตำแหน่ง..."
+                      aria-label="ค้นหานักเตะในทีมเพื่อขายหรือปล่อยยืม"
+                      className="w-full pl-7 pr-6 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] focus:outline-none focus:border-[var(--g)]"
+                    />
+                    {sellSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setSellSearch('')}
+                        aria-label="ล้างคำค้นหา"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="seg-bar shrink-0">
+                    {(['ALL', 'GK', 'DF', 'MF', 'FW'] as const).map((posKey) => (
+                      <button
+                        key={posKey}
+                        type="button"
+                        onClick={() => setSellPosFilter(posKey)}
+                        className={`seg-btn ${sellPosFilter === posKey ? 'seg-btn-active' : ''}`}
+                      >
+                        {posKey === 'ALL' ? 'ทั้งหมด' : posKey}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="seg-bar shrink-0">
-                  {(['ALL', 'GK', 'DF', 'MF', 'FW'] as const).map((posKey) => (
-                    <button
-                      key={posKey}
-                      type="button"
-                      onClick={() => setSellPosFilter(posKey)}
-                      className={`seg-btn ${sellPosFilter === posKey ? 'seg-btn-active' : ''}`}
-                    >
-                      {posKey === 'ALL' ? 'ทั้งหมด' : posKey}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
 
-              {activeSelectedSell.length > 0 && sellBatchPreview && (
+              {sellSubView !== 'loaned_out' && activeSelectedSell.length > 0 && sellBatchPreview && (
                 <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp-soft)]/75 border border-[var(--lamp)]/45 flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10px]">
                   <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular">
                     <span className="font-extrabold text-[var(--ink)]">☑ เลือก {activeSelectedSell.length} คน</span>
@@ -2063,11 +2575,21 @@ export const MarketView = React.memo<{
                       type="button"
                       onClick={() => {
                         SFX.tap();
+                        setLoanModalNames(activeSelectedSell);
+                      }}
+                      className="btn btn-xs btn-secondary"
+                    >
+                      🤝 ปล่อยยืม ({activeSelectedSell.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
                         setSellModalNames(activeSelectedSell);
                       }}
                       className="btn btn-xs btn-primary"
                     >
-                      💰 ขายที่เลือก ({activeSelectedSell.length})
+                      💰 ขาย ({activeSelectedSell.length})
                     </button>
                     <button
                       type="button"
@@ -2082,7 +2604,69 @@ export const MarketView = React.memo<{
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
-              {sellSquadList.length > 0 ? (
+              {sellSubView === 'loaned_out' ? (
+                loanedOutList.length > 0 ? (
+                  loanedOutList.map(({ q, hostTeam }) => (
+                    <div
+                      key={`${hostTeam.id}-${q.n}`}
+                      className="flex items-center gap-2.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/45 transition-colors"
+                    >
+                      <PlayerFace player={q} team={hostTeam} state={state} size={36} />
+                      <button
+                        type="button"
+                        onClick={() => onInspectPlayer(q, hostTeam)}
+                        className="flex-1 min-w-0 text-left cursor-pointer group"
+                      >
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1.5">
+                          <PositionBadge role={q.ro} size="xs" />
+                          <span className="truncate group-hover:underline">{q.n}</span>
+                          <span className="text-sky-600 dark:text-sky-300 text-[10.5px] mland:text-[9px] font-bold truncate">
+                            · ยืมตัวที่ {hostTeam.name}
+                          </span>
+                        </div>
+                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                          <span>{TN[hostTeam.tier]} · ลง {q.sp || 0} นัด · {q.sg || 0} ยิง · {q.sa || 0} จ่าย</span>
+                          <span>· ช่วยค่าเหนื่อย {q.loanWageShare ?? 80}%</span>
+                          {q.loanOpt ? (
+                            <span className="text-[#8a5b00] dark:text-[var(--lamp)] font-semibold">
+                              · ออปชันซื้อ {fmtMoneyNum(q.loanOpt)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </button>
+                      <OvrBadge ov={q.ov} size="sm" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          let errMsg = '';
+                          onUpdateState((d) => {
+                            const res = recallLoanedOutPlayer(d, q.n, hostTeam.id);
+                            if (!res.ok) errMsg = res.err || 'ดึงตัวกลับไม่สำเร็จ';
+                          });
+                          if (errMsg) {
+                            SFX.foul();
+                            onToast(errMsg);
+                          } else {
+                            SFX.confirm();
+                            onToast(`↩️ ดึง ${q.n} กลับจาก ${hostTeam.name} แล้ว`);
+                          }
+                        }}
+                        className="btn btn-xs btn-secondary shrink-0"
+                      >
+                        ↩️ ดึงกลับ
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
+                    <div className="text-2xl opacity-75">✈️</div>
+                    <div className="text-xs sm:text-sm mland:text-xs font-bold">ยังไม่มีนักเตะที่ปล่อยยืมตัวอยู่</div>
+                    <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
+                      เลือกนักเตะจาก &ldquo;ทั้งทีม&rdquo; แล้วกด &ldquo;🤝 ยืม&rdquo; เพื่อส่งออกไปเก็บเลเวลกับสโมสรอื่นและรับค่ายืมตัว
+                    </p>
+                  </div>
+                )
+              ) : sellSquadList.length > 0 ? (
                 sellSquadList.map((q) => {
                   const marketVal = Math.max(5, vlu(q));
                   const wg = ensureCon(q).wg;
@@ -2092,8 +2676,8 @@ export const MarketView = React.memo<{
                   return (
                     <div
                       key={q.n}
-                      className={`flex items-center gap-2.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 transition-colors hover:bg-[var(--surface-2)]/45 ${
-                        isChecked ? 'bg-[var(--g-soft)]/55' : q.listed ? 'bg-[var(--lamp-soft)]/15' : ''
+                      className={`flex items-center gap-2.5 mland:gap-1.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 transition-colors hover:bg-[var(--surface-2)]/45 ${
+                        isChecked ? 'bg-[var(--g-soft)]/55' : q.listed ? 'bg-[var(--lamp-soft)]/15' : q.loanListed ? 'bg-sky-500/8' : ''
                       }`}
                     >
                       <input
@@ -2105,7 +2689,7 @@ export const MarketView = React.memo<{
                             prev.includes(q.n) ? prev.filter((name) => name !== q.n) : [...prev, q.n]
                           )
                         }
-                        aria-label={`เลือก ${q.n} เพื่อขาย`}
+                        aria-label={`เลือก ${q.n} เพื่อขายหรือปล่อยยืม`}
                         className="w-3.5 h-3.5 accent-[var(--g)] cursor-pointer rounded shrink-0 disabled:opacity-30"
                       />
                       <PlayerFace player={q} team={me} state={state} size={36} />
@@ -2118,13 +2702,18 @@ export const MarketView = React.memo<{
                               · ตั้งขาย {fmtMoneyNum(q.askPrice || marketVal)}
                             </span>
                           ) : null}
+                          {q.loanListed ? (
+                            <span className="text-sky-600 dark:text-sky-300 text-[10.5px] mland:text-[9px] font-bold shrink-0">
+                              · บัญชีปล่อยยืม
+                            </span>
+                          ) : null}
                           {bidCount > 0 ? (
                             <span className="text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold shrink-0 tabular">
                               · {bidCount} ข้อเสนอ
                             </span>
                           ) : null}
                           {q.loan ? (
-                            <span className="text-[10.5px] mland:text-[9px] text-blue-600 dark:text-blue-400 font-bold shrink-0">· ยืมตัว</span>
+                            <span className="text-[10.5px] mland:text-[9px] text-blue-600 dark:text-blue-400 font-bold shrink-0">· ยืมตัวเข้า</span>
                           ) : null}
                         </div>
                         <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1.5">
@@ -2135,11 +2724,15 @@ export const MarketView = React.memo<{
                       <OvrBadge ov={q.ov} size="sm" />
                       {q.loan ? (
                         <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] font-semibold whitespace-nowrap shrink-0 min-w-[54px] text-right">
-                          ยืมตัว
+                          ยืมตัวเข้า
+                        </span>
+                      ) : q.me ? (
+                        <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] font-semibold whitespace-nowrap shrink-0 min-w-[54px] text-right">
+                          ตัวหลัก
                         </span>
                       ) : (
                         <div className="flex items-center gap-1 shrink-0">
-                          {q.listed ? (
+                          {(q.listed || q.loanListed) ? (
                             <button
                               type="button"
                               onClick={() => {
@@ -2147,16 +2740,29 @@ export const MarketView = React.memo<{
                                   const t = d.teams[d.me].sq.find((z) => z.n === q.n);
                                   if (t) {
                                     t.listed = 0;
+                                    t.loanListed = 0;
                                     delete t.askPrice;
+                                    delete t.loanAskFee;
                                   }
                                 });
-                                onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
+                                onToast(`ถอด ${q.n} ออกจากบัญชีขาย/ปล่อยยืมแล้ว`);
                               }}
                               className="btn btn-xs btn-secondary hover:text-[var(--red)]"
                             >
                               ถอด
                             </button>
                           ) : null}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              setLoanModalNames([q.n]);
+                            }}
+                            title="ขึ้นบัญชีหรือเสนอปล่อยยืมตัว"
+                            className="btn btn-xs btn-secondary"
+                          >
+                            🤝 ยืม
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -2176,11 +2782,15 @@ export const MarketView = React.memo<{
                 <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
                   <div className="text-2xl opacity-75">🏷️</div>
                   <div className="text-xs sm:text-sm mland:text-xs font-bold">
-                    {sellSubView === 'listed' ? 'ยังไม่มีนักเตะในบัญชีขาย' : 'ไม่พบนักเตะตามเงื่อนไขที่เลือก'}
+                    {sellSubView === 'listed'
+                      ? 'ยังไม่มีนักเตะในบัญชีขาย'
+                      : sellSubView === 'loan_list'
+                        ? 'ยังไม่มีนักเตะในบัญชีปล่อยยืม'
+                        : 'ไม่พบนักเตะตามเงื่อนไขที่เลือก'}
                   </div>
                   <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
-                    {sellSubView === 'listed'
-                      ? 'สลับไปดู "ทั้งทีม" แล้วกด "💰 ขาย" เพื่อตั้งขายด่วนหรือส่งโปรไฟล์ให้ทีมอื่นพิจารณา'
+                    {sellSubView === 'listed' || sellSubView === 'loan_list'
+                      ? 'สลับไปดู "ทั้งทีม" แล้วกด "💰 ขาย" หรือ "🤝 ยืม" เพื่อตั้งบัญชีและเรียกข้อเสนอจากทีมอื่น'
                       : 'ลองล้างคำค้นหาหรือเลือกตำแหน่งทั้งหมด'}
                   </p>
                 </div>
@@ -2324,8 +2934,10 @@ export const MarketView = React.memo<{
               {state.scout?.results ? (
                 state.scout.results.map((q, i) => {
                   const blockedByWindow = !tx.tw.open && !q.free;
+                  const shortlisted = isPlayerShortlisted(state, q.n);
+                  const canLoanScout = !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
                   return (
-                    <div key={`${q.n}-${i}`} className="flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors">
+                    <div key={`${q.n}-${i}`} className="flex items-center gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors">
                       <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
                         <PlayerFace player={q} size={40} />
                       </div>
@@ -2344,7 +2956,7 @@ export const MarketView = React.memo<{
                           <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
                         </div>
                       </button>
-                      <div className="hidden md:block text-right tabular shrink-0 min-w-[74px]">
+                      <div className="hidden md:block text-right tabular shrink-0 min-w-[70px]">
                         <div className={`text-xs font-bold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                           {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)}
                         </div>
@@ -2355,13 +2967,35 @@ export const MarketView = React.memo<{
                       <OvrBadge ov={q.ov} size="sm" />
                       <button
                         type="button"
+                        onClick={() => handleToggleShortlist(q, { source: 'scout' })}
+                        title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
+                        className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                          shortlisted
+                            ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#8a5b00] dark:text-[var(--lamp)]'
+                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${shortlisted ? 'fill-current' : ''}`} />
+                      </button>
+                      {!q.free && (
+                        <button
+                          type="button"
+                          disabled={!canLoanScout}
+                          onClick={() => openNegotiation('scout', i, q, undefined, 'loan')}
+                          className="btn btn-sm btn-secondary shrink-0 px-2"
+                        >
+                          🤝 ยืม
+                        </button>
+                      )}
+                      <button
+                        type="button"
                         disabled={!!q.locked || blockedByWindow}
-                        onClick={() => openNegotiation('scout', i, q)}
-                        className={`btn btn-sm min-w-[84px] shrink-0 ${
+                        onClick={() => openNegotiation('scout', i, q, undefined, q.free ? 'free' : 'cash')}
+                        className={`btn btn-sm min-w-[74px] shrink-0 ${
                           blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                         }`}
                       >
-                        {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : 'เจรจา'}
+                        {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : 'เจรจา'}
                       </button>
                     </div>
                   );
@@ -2470,16 +3104,16 @@ export const MarketView = React.memo<{
             </div>
           </section>
 
-          {/* Right: Loan Buyouts & Youth Academy */}
+          {/* Right: Loan Ins/Outs & Youth Academy */}
           <div className="flex flex-col min-h-0 gap-2.5 mland:gap-2 overflow-hidden">
-            {loanPlayers.length > 0 && (
-              <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col shrink-0 max-h-[42%] overflow-hidden">
+            {loanInPlayers.length > 0 && (
+              <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col shrink-0 max-h-[38%] overflow-hidden">
                 <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📌 ออปชันซื้อขาดนักเตะยืมตัว</h3>
-                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">{loanPlayers.length} คน</span>
+                  <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📌 นักเตะที่ยืมตัวเข้ามา</h3>
+                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">{loanInPlayers.length} คน</span>
                 </div>
                 <div className="overflow-y-auto divide-y divide-[var(--line)]/60">
-                  {loanPlayers.map(({ q, i }) => (
+                  {loanInPlayers.map(({ q, i }) => (
                     <div key={q.n} className="flex items-center gap-2.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/45 transition-colors">
                       <PlayerFace player={q} team={me} state={state} size={36} />
                       <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer group">
@@ -2487,30 +3121,82 @@ export const MarketView = React.memo<{
                           <PositionBadge role={q.ro} size="xs" />
                           <span className="truncate group-hover:underline">{q.n}</span>
                         </div>
-                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular mt-0.5">ค่าฉีกซื้อขาด {fmtMoney(q.loanOpt || 0)}</div>
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular mt-0.5 truncate">
+                          {q.loanFromTeamName ? `ยืมจาก ${q.loanFromTeamName}` : 'สัญญายืม 1 ซีซั่น'}
+                          {q.loanOpt ? ` · ซื้อขาด ${fmtMoney(q.loanOpt)}` : ' · ไม่มีออปชันซื้อขาด'}
+                        </div>
+                      </button>
+                      <OvrBadge ov={q.ov} size="sm" />
+                      {q.loanOpt ? (
+                        <button
+                          type="button"
+                          disabled={!tx.tw.open || state.money < q.loanOpt}
+                          onClick={() => {
+                            const cost = q.loanOpt || 0;
+                            onUpdateState((d) => {
+                              d.money -= cost;
+                              logFin(d, `ใช้ออปชันซื้อขาด ${q.n}`, -cost);
+                              const target = d.teams[d.me].sq[i];
+                              delete target.loan;
+                              delete target.loanOpt;
+                              delete target.loanFromTeamId;
+                              delete target.loanFromTeamName;
+                              delete target.loanWageShare;
+                              delete target.loanOrigCon;
+                              target.signedSeason = d.season;
+                              target.signedMd = d.md;
+                              target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
+                              appendPlayerCareerLog(target, `🤝 เซ็นสัญญาถาวรกับ ${d.teams[d.me].name} ซีซั่น ${d.season}`);
+                            });
+                            onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
+                          }}
+                          className="btn btn-sm btn-primary shrink-0"
+                        >
+                          {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${fmtMoneyNum(q.loanOpt)}`}
+                        </button>
+                      ) : (
+                        <span className="text-[10.5px] text-[var(--mut)] font-semibold shrink-0">หมดซีซั่นคืนต้นสังกัด</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {loanedOutList.length > 0 && (
+              <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col shrink-0 max-h-[34%] overflow-hidden">
+                <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">✈️ นักเตะที่ปล่อยยืมอยู่</h3>
+                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">{loanedOutList.length} คน</span>
+                </div>
+                <div className="overflow-y-auto divide-y divide-[var(--line)]/60">
+                  {loanedOutList.map(({ q, hostTeam }) => (
+                    <div key={`${hostTeam.id}-${q.n}`} className="flex items-center gap-2.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/45 transition-colors">
+                      <PlayerFace player={q} team={hostTeam} state={state} size={34} />
+                      <button type="button" onClick={() => onInspectPlayer(q, hostTeam)} className="flex-1 min-w-0 text-left cursor-pointer group">
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate flex items-center gap-1.5">
+                          <PositionBadge role={q.ro} size="xs" />
+                          <span className="truncate group-hover:underline">{q.n}</span>
+                        </div>
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
+                          อยู่ที่ {hostTeam.name} · ลง {q.sp || 0} นัด ({q.sg || 0}G/{q.sa || 0}A)
+                        </div>
                       </button>
                       <OvrBadge ov={q.ov} size="sm" />
                       <button
                         type="button"
-                        disabled={!tx.tw.open || state.money < (q.loanOpt || 0)}
                         onClick={() => {
-                          const cost = q.loanOpt || 0;
+                          let errMsg = '';
                           onUpdateState((d) => {
-                            d.money -= cost;
-                            logFin(d, `ใช้ออปชันซื้อขาด ${q.n}`, -cost);
-                            const target = d.teams[d.me].sq[i];
-                            delete target.loan;
-                            delete target.loanOpt;
-                            target.signedSeason = d.season;
-                            target.signedMd = d.md;
-                            target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
-                            appendPlayerCareerLog(target, `🤝 เซ็นสัญญาถาวรกับ ${d.teams[d.me].name} ซีซั่น ${d.season}`);
+                            const res = recallLoanedOutPlayer(d, q.n, hostTeam.id);
+                            if (!res.ok) errMsg = res.err || 'ดึงตัวกลับไม่สำเร็จ';
                           });
-                          onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
+                          if (errMsg) onToast(errMsg);
+                          else onToast(`↩️ ดึง ${q.n} กลับจาก ${hostTeam.name} แล้ว`);
                         }}
-                        className="btn btn-sm btn-primary shrink-0"
+                        className="btn btn-xs btn-secondary shrink-0"
                       >
-                        {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${fmtMoneyNum(q.loanOpt || 0)}`}
+                        ↩️ ดึงกลับ
                       </button>
                     </div>
                   ))}
@@ -2594,6 +3280,19 @@ export const MarketView = React.memo<{
           onUpdateState={onUpdateState}
           onClearSelection={(soldNames) =>
             setSelectedSellNames((prev) => prev.filter((name) => !soldNames.includes(name)))
+          }
+          onToast={onToast}
+        />
+      )}
+      {loanModalNames && loanModalNames.length > 0 && (
+        <SquadLoanOutModal
+          state={state}
+          team={me}
+          playerNames={loanModalNames}
+          onClose={() => setLoanModalNames(null)}
+          onUpdateState={onUpdateState}
+          onClearSelection={(names) =>
+            setSelectedSellNames((prev) => prev.filter((name) => !names.includes(name)))
           }
           onToast={onToast}
         />

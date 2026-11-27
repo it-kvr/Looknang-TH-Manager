@@ -171,9 +171,16 @@ export const GodBlessingModal: React.FC<{
                       {activeItem.pl.blessed && <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] font-extrabold shrink-0">⭐ ปรับแต่ง VIP</span>}
                       <span className="truncate">{activeItem.pl.n}</span>
                     </div>
-                    <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
+                    <div
+                      className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate"
+                      title={activeItem.pl.altRoles?.length ? `ถนัดเพิ่ม: ${activeItem.pl.altRoles.join(', ')}` : undefined}
+                    >
                       {activeItem.team ? activeItem.team.name : 'ตลาดซื้อขาย / ฟรีเอเยนต์'} · {activeItem.pl.ro} ({SPN[activeItem.pl.ro] || activeItem.pl.pos})
-                      {activeItem.pl.altRoles?.length ? ` · ถนัดเพิ่ม: ${activeItem.pl.altRoles.join(', ')}` : ''}
+                      {activeItem.pl.altRoles?.length
+                        ? activeItem.pl.altRoles.length > 4
+                          ? ` · ถนัดเพิ่ม: ${activeItem.pl.altRoles.slice(0, 4).join(', ')} +${activeItem.pl.altRoles.length - 4}`
+                          : ` · ถนัดเพิ่ม: ${activeItem.pl.altRoles.join(', ')}`
+                        : ''}
                     </div>
                     <PlayerBioStrip
                       bio={getPlayerBio(activeItem.pl, activeItem.pl.me ? state.p : null)}

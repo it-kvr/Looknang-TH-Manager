@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
@@ -3181,9 +3181,85 @@ export function createNewGame(
   return s;
 }
 
-export function startSeason(s: GameState) {
+export function resolveEndOfSeasonLoans(s: GameState) {
+  const returningList: { player: Player; fromTeam: Team; toTeamId: number }[] = [];
   s.teams.forEach((t) => {
-    t.sq = t.sq.filter((q) => !q.loan);
+    const keep: Player[] = [];
+    t.sq.forEach((q) => {
+      if (!q.loan) {
+        keep.push(q);
+        return;
+      }
+      if (q.loanFromTeamId != null) {
+        if (
+          q.loanOpt &&
+          q.loanOpt > 0 &&
+          t.id !== s.me &&
+          q.loanFromTeamId === s.me &&
+          (q.sp || 0) >= 8 &&
+          q.ov >= BASE[t.tier] &&
+          t.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
+          Math.random() < 0.35
+        ) {
+          const buyout = q.loanOpt;
+          delete q.loan;
+          delete q.loanOpt;
+          delete q.loanFromTeamId;
+          delete q.loanFromTeamName;
+          delete q.loanWageShare;
+          delete q.loanOrigCon;
+          delete q.listed;
+          delete q.loanListed;
+          q.con = { yr: 3, wg: wagOf(q), role: q.ov >= 72 ? 'key' : 'rot' };
+          q.signedSeason = s.season;
+          q.signedMd = 0;
+          appendPlayerCareerLog(q, `💰 ${t.name} ใช้ออปชันซื้อขาดหลังจบสัญญายืม (${fmtMoney(buyout)})`);
+          keep.push(q);
+          if (s.mode === 'm') {
+            s.money = capMoney(s.money + buyout);
+            logFin(s, `${t.name} ซื้อขาด ${q.n} หลังยืมตัว`, buyout);
+            pushFeed(s, 'ตลาดซื้อขาย', `💰 ${t.name} ใช้ออปชันซื้อขาด ${q.n} หลังหมดสัญญายืม รับ +${fmtMoney(buyout)}`, 'ok');
+          }
+          return;
+        }
+        returningList.push({ player: q, fromTeam: t, toTeamId: q.loanFromTeamId });
+      }
+    });
+    if (keep.length !== t.sq.length) {
+      t.sq = keep;
+      t.lu = null;
+    }
+  });
+
+  returningList.forEach(({ player: q, fromTeam, toTeamId }) => {
+    const parent = s.teams.find((tm) => tm.id === toTeamId);
+    if (!parent) return;
+    const orig = q.loanOrigCon ? { ...q.loanOrigCon } : ensureCon(q);
+    q.con = { ...orig, yr: Math.max(0, (orig.yr ?? 2) - 1) };
+    delete q.loan;
+    delete q.loanOpt;
+    delete q.loanFromTeamId;
+    delete q.loanFromTeamName;
+    delete q.loanWageShare;
+    delete q.loanOrigCon;
+    delete q.listed;
+    delete q.loanListed;
+    delete q.askPrice;
+    delete q.loanAskFee;
+    delete q.offerCoolMd;
+    q.no = undefined;
+    appendPlayerCareerLog(q, `↩️ หมดสัญญายืมตัวจาก ${fromTeam.name} กลับสู่ ${parent.name}`);
+    parent.sq.push(q);
+    parent.lu = null;
+    if (parent.id === s.me && s.mode === 'm') {
+      pushFeed(s, 'คืนจากยืมตัว', `↩️ ${q.n} (OVR ${q.ov}) หมดสัญญายืมตัวจาก ${fromTeam.name} กลับสู่ทีมแล้ว`, 'ok');
+    }
+  });
+}
+
+export function startSeason(s: GameState) {
+  resolveEndOfSeasonLoans(s);
+  s.teams.forEach((t) => {
     Object.assign(t, { pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, p: 0, fm: '' });
     t.sq.forEach((q) => {
       q.fit = 100;
@@ -3302,6 +3378,8 @@ export function startSeason(s: GameState) {
     if (s.boardFeedbackLog.length > 8) s.boardFeedbackLog.length = 8;
     s.clubDemands = [];
     syncAndEvaluateClubDemands(s, { seasonReset: true });
+    syncOffersField(s, []);
+    generateIncomingWindowOffers(s, { maxNew: 2, includeBuy: true, includeLoan: true, notify: false });
   }
   s.finPendIn = 0;
   s.finPendOut = 0;
@@ -3457,10 +3535,6 @@ export function applyPositionAdaptation(
       }
       if (!rawSlotSp) return;
       const normSlot = (EQ[rawSlotSp] || normalizeSubRole(rawSlotSp)) as SubRole;
-
-      // Never convert outfielders to GK unless genuinely played there, or GK to outfield trivially
-      if (q.pos === 'GK' && normSlot !== 'GK') return;
-      if (q.pos !== 'GK' && normSlot === 'GK') return;
 
       const curPen = playerPen(q, normSlot);
       if (curPen <= 0) return;
@@ -4625,6 +4699,102 @@ export function simulateCpuExtraCupRound(s: GameState, comp: 'lc' | 'sc' | 'dc')
   }
 }
 
+export function isPlayerShortlisted(s: GameState, playerName: string, clubTeamId?: number): boolean {
+  const list = s.shortlist || [];
+  return list.some((it) => it.n === playerName && (clubTeamId == null || it.clubTeamId == null || it.clubTeamId === clubTeamId));
+}
+
+export function removeShortlistPlayer(d: GameState, playerName: string, clubTeamId?: number) {
+  if (!Array.isArray(d.shortlist)) return;
+  d.shortlist = d.shortlist.filter(
+    (it) => !(it.n === playerName && (clubTeamId == null || it.clubTeamId == null || it.clubTeamId === clubTeamId))
+  );
+}
+
+export function toggleShortlistPlayer(
+  d: GameState,
+  player: Player,
+  opts: { source: 'mk' | 'club' | 'scout' | 'created'; clubTeamId?: number; clubName?: string }
+): boolean {
+  d.shortlist = d.shortlist || [];
+  const existsIdx = d.shortlist.findIndex(
+    (it) => it.n === player.n && (opts.clubTeamId == null || it.clubTeamId == null || it.clubTeamId === opts.clubTeamId)
+  );
+  if (existsIdx >= 0) {
+    d.shortlist.splice(existsIdx, 1);
+    return false;
+  }
+  const snap: Player = {
+    ...player,
+    vis: player.vis ? [...player.vis] : undefined,
+    traits: player.traits ? [...player.traits] : undefined,
+    altRoles: player.altRoles ? [...player.altRoles] : undefined,
+    con: player.con ? { ...player.con } : undefined
+  };
+  const entry: ShortlistEntry = {
+    n: player.n,
+    source: opts.source,
+    ...(opts.clubTeamId != null ? { clubTeamId: opts.clubTeamId } : {}),
+    ...(opts.clubName ? { clubName: opts.clubName } : {}),
+    addedSeason: d.season,
+    addedMd: d.md,
+    snapshot: snap
+  };
+  d.shortlist.unshift(entry);
+  if (d.shortlist.length > 40) d.shortlist.length = 40;
+  return true;
+}
+
+export function resolveShortlistEntry(s: GameState, entry: ShortlistEntry): {
+  status: 'in_squad' | 'mk' | 'scout' | 'club' | 'created' | 'unavailable';
+  player: Player;
+  team?: Team;
+  idx: number;
+  estPrice: number;
+} {
+  const me = s.teams[s.me];
+  const inMine = me?.sq.find((q) => q.n === entry.n);
+  if (inMine) {
+    return { status: 'in_squad', player: inMine, team: me, idx: -1, estPrice: Math.max(5, vlu(inMine)) };
+  }
+  const mkIdx = (s.mk || []).findIndex((q) => q.n === entry.n);
+  if (mkIdx >= 0) {
+    const q = s.mk[mkIdx];
+    return { status: 'mk', player: q, idx: mkIdx, estPrice: q.free ? 0 : q.price || Math.max(5, vlu(q)) };
+  }
+  const scResults = s.scout?.results || [];
+  const scIdx = scResults.findIndex((q) => q.n === entry.n);
+  if (scIdx >= 0) {
+    const q = scResults[scIdx];
+    return { status: 'scout', player: q, idx: scIdx, estPrice: q.free ? 0 : q.price || Math.max(5, vlu(q)) };
+  }
+  if (entry.clubTeamId != null) {
+    const prefTeam = s.teams.find((t) => t.id === entry.clubTeamId && t.id !== s.me);
+    const pIdx = prefTeam ? prefTeam.sq.findIndex((q) => q.n === entry.n && !q.loan) : -1;
+    if (prefTeam && pIdx >= 0) {
+      const q = prefTeam.sq[pIdx];
+      return { status: 'club', player: q, team: prefTeam, idx: pIdx, estPrice: Math.max(8, vlu(q)) };
+    }
+  }
+  for (const tm of s.teams) {
+    if (tm.id === s.me) continue;
+    const pIdx = tm.sq.findIndex((q) => q.n === entry.n && !q.loan);
+    if (pIdx >= 0) {
+      const q = tm.sq[pIdx];
+      return { status: 'club', player: q, team: tm, idx: pIdx, estPrice: Math.max(8, vlu(q)) };
+    }
+  }
+  if (entry.source === 'created') {
+    return { status: 'created', player: entry.snapshot, idx: -1, estPrice: Math.max(5, vlu(entry.snapshot)) };
+  }
+  return {
+    status: 'unavailable',
+    player: entry.snapshot,
+    idx: -1,
+    estPrice: entry.snapshot.free ? 0 : entry.snapshot.price || Math.max(5, vlu(entry.snapshot))
+  };
+}
+
 export function getIncomingOffers(s: GameState): TransferOffer[] {
   const me = s.teams[s.me];
   if (!me) return [];
@@ -4635,8 +4805,10 @@ export function getIncomingOffers(s: GameState): TransferOffer[] {
   const valid: TransferOffer[] = [];
   raw.forEach((o) => {
     if (!o || !o.n || !o.t) return;
-    if (!me.sq.some((q) => q.n === o.n)) return;
-    const key = `${o.n}__${o.teamId ?? o.t}`;
+    const found = me.sq.find((q) => q.n === o.n);
+    if (!found || found.loan || found.me) return;
+    const kindKey = o.kind || 'buy';
+    const key = `${o.n}__${o.teamId ?? o.t}__${kindKey}`;
     if (seen.has(key)) return;
     seen.add(key);
     valid.push(o);
@@ -4650,18 +4822,31 @@ export function syncOffersField(s: GameState, list: TransferOffer[]) {
 }
 
 export function addIncomingOffer(s: GameState, off: TransferOffer) {
+  const offKind = off.kind || 'buy';
   const list = getIncomingOffers(s).filter(
-    (x) => !(x.n === off.n && (x.teamId != null && off.teamId != null ? x.teamId === off.teamId : x.t === off.t))
+    (x) =>
+      !(
+        x.n === off.n &&
+        (x.kind || 'buy') === offKind &&
+        (x.teamId != null && off.teamId != null ? x.teamId === off.teamId : x.t === off.t)
+      )
   );
   list.unshift(off);
-  syncOffersField(s, list.slice(0, 4));
+  syncOffersField(s, list.slice(0, 6));
 }
 
-export function removeIncomingOffer(s: GameState, playerName: string, clubName?: string) {
+export function removeIncomingOffer(
+  s: GameState,
+  playerName: string,
+  clubName?: string,
+  kind?: TransferOffer['kind']
+) {
   const list = getIncomingOffers(s).filter((x) => {
     if (x.n !== playerName) return true;
     if (!clubName) return false;
-    return x.t !== clubName;
+    if (x.t !== clubName) return true;
+    if (kind && (x.kind || 'buy') !== kind) return true;
+    return false;
   });
   syncOffersField(s, list);
 }
@@ -4675,6 +4860,7 @@ export function getPlayerSellCheck(s: GameState, me: Team, q: Player) {
   const pitchedThisTurn = q.offerCoolMd === turnKey;
   let reason = '';
   if (!tx.tw.open) reason = `ตลาดปิดอยู่! ขายได้เฉพาะช่วง ${tx.tw.rangeText} (กด 🏷️ ขึ้นบัญชีขายรอไว้ได้)`;
+  else if (q.me) reason = 'ไม่สามารถขายนักเตะตัวหลักของคุณได้';
   else if (q.loan) reason = 'นักเตะยืมตัวไม่สามารถขายได้';
   else if (q.inj > 0) reason = 'นักเตะบาดเจ็บอยู่ ยังปล่อยตัวไม่ได้จนกว่าจะหาย';
   else if (sameDayLock) reason = 'เพิ่งเซ็นสัญญานัดนี้ ขายต่อทันทีไม่ได้ตามกฎลีก';
@@ -4686,9 +4872,44 @@ export function getPlayerSellCheck(s: GameState, me: Team, q: Player) {
     minRequired,
     samePosCount,
     pitchedThisTurn,
-    canList: !q.loan,
+    canList: !q.loan && !q.me,
     canPitch:
       tx.tw.open &&
+      !q.me &&
+      !q.loan &&
+      q.inj === 0 &&
+      !sameDayLock &&
+      me.sq.length > tx.minSquad &&
+      samePosCount > minRequired,
+    reason
+  };
+}
+
+export function getPlayerLoanOutCheck(s: GameState, me: Team, q: Player) {
+  const tx = getLeagueTransferContext(s, me);
+  const sameDayLock = q.signedSeason === s.season && q.signedMd === s.md;
+  const minRequired = tx.minPos[q.pos];
+  const samePosCount = tx.posCounts[q.pos];
+  const turnKey = s.season * 40 + s.md;
+  const pitchedThisTurn = q.offerCoolMd === turnKey;
+  let reason = '';
+  if (!tx.tw.open) reason = `ตลาดปิดอยู่! ปล่อยยืมได้เฉพาะช่วง ${tx.tw.rangeText} (ขึ้นบัญชีปล่อยยืมรอไว้ได้)`;
+  else if (q.me) reason = 'ไม่สามารถปล่อยยืมตัวละครหลักของคุณได้';
+  else if (q.loan) reason = 'นักเตะยืมตัวไม่สามารถปล่อยยืมต่อได้';
+  else if (q.inj > 0) reason = 'นักเตะบาดเจ็บอยู่ ยังปล่อยยืมไม่ได้จนกว่าจะหาย';
+  else if (sameDayLock) reason = 'เพิ่งเซ็นสัญญานัดนี้ ปล่อยยืมทันทีไม่ได้ตามกฎลีก';
+  else if (me.sq.length <= tx.minSquad) reason = `ขนาดทีมต้องมีอย่างน้อย ${tx.minSquad} คนตามกฎลีก`;
+  else if (samePosCount <= minRequired) reason = `ต้องเหลือนักเตะ ${q.pos} อย่างน้อย ${minRequired} คน`;
+  return {
+    twOpen: tx.tw.open,
+    sameDayLock,
+    minRequired,
+    samePosCount,
+    pitchedThisTurn,
+    canList: !q.loan && !q.me,
+    canLoanOut:
+      tx.tw.open &&
+      !q.me &&
       !q.loan &&
       q.inj === 0 &&
       !sameDayLock &&
@@ -4701,16 +4922,24 @@ export function getPlayerSellCheck(s: GameState, me: Team, q: Player) {
 export function canAcceptTransferOffer(s: GameState, off: TransferOffer): { ok: boolean; err?: string; buyerName?: string } {
   const me = s.teams[s.me];
   const tx = getLeagueTransferContext(s, me);
+  const isLoan = off.kind === 'loan' || off.kind === 'loanopt';
   if (!tx.tw.open) return { ok: false, err: `ตลาดซื้อขายปิดแล้ว (${tx.tw.rangeText})` };
   const q = me.sq.find((x) => x.n === off.n);
   if (!q) return { ok: false, err: 'ไม่พบนักเตะคนนี้ในทีมแล้ว' };
-  if (q.loan) return { ok: false, err: 'นักเตะยืมตัวขายไม่ได้' };
+  if (q.me) return { ok: false, err: 'ไม่สามารถปล่อยตัวละครหลักของโหมดนี้ได้' };
+  if (q.loan) return { ok: false, err: isLoan ? 'นักเตะยืมตัวปล่อยยืมต่อไม่ได้' : 'นักเตะยืมตัวขายไม่ได้' };
   if (me.sq.length <= tx.minSquad || tx.posCounts[q.pos] <= tx.minPos[q.pos]) {
-    return { ok: false, err: `ขายไม่ได้ ต้องเหลือขนาดทีม ≥ ${tx.minSquad} และ ${q.pos} ≥ ${tx.minPos[q.pos]}` };
+    return {
+      ok: false,
+      err: `${isLoan ? 'ปล่อยยืมไม่ได้' : 'ขายไม่ได้'} ต้องเหลือขนาดทีม ≥ ${tx.minSquad} และ ${q.pos} ≥ ${tx.minPos[q.pos]}`
+    };
   }
   const buyer =
     (off.teamId != null ? s.teams.find((tm) => tm.id === off.teamId) : undefined) ||
     s.teams.find((tm) => tm.name === off.t);
+  if (buyer && buyer.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) {
+    return { ok: false, err: `${buyer.name} มีขนาดทีมเต็มแล้ว (${LEAGUE_TRANSFER_RULES.maxSquad} คน)` };
+  }
   return { ok: true, buyerName: buyer?.name || off.t };
 }
 
@@ -4720,44 +4949,105 @@ export function acceptTransferOffer(d: GameState, off: TransferOffer): { ok: boo
   const me = d.teams[d.me];
   const idx = me.sq.findIndex((q) => q.n === off.n);
   if (idx < 0) return { ok: false, err: 'ไม่พบนักเตะคนนี้ในทีมแล้ว' };
-  const sold = me.sq.splice(idx, 1)[0];
+  const pl = me.sq.splice(idx, 1)[0];
   me.lu = null;
-  if (me.cap === sold.n) me.cap = '';
+  if (me.cap === pl.n) me.cap = '';
   if (me.setPieces) {
-    if (me.setPieces.corner === sold.n) me.setPieces.corner = '';
-    if (me.setPieces.freekick === sold.n) me.setPieces.freekick = '';
-    if (me.setPieces.penalty === sold.n) me.setPieces.penalty = '';
+    if (me.setPieces.corner === pl.n) me.setPieces.corner = '';
+    if (me.setPieces.freekick === pl.n) me.setPieces.freekick = '';
+    if (me.setPieces.penalty === pl.n) me.setPieces.penalty = '';
   }
   autoAssignTeamRoles(me, { careerP: d.p });
-  if (d.focusPlayer === sold.n) d.focusPlayer = null;
-  delete sold.listed;
-  delete sold.askPrice;
-  delete sold.offerCoolMd;
-  sold.no = undefined;
-  sold.signedSeason = d.season;
-  sold.signedMd = d.md;
+  if (d.focusPlayer === pl.n) d.focusPlayer = null;
+  delete pl.listed;
+  delete pl.loanListed;
+  delete pl.askPrice;
+  delete pl.loanAskFee;
+  delete pl.offerCoolMd;
+  pl.no = undefined;
+  pl.signedSeason = d.season;
+  pl.signedMd = d.md;
 
   const buyer =
     (off.teamId != null ? d.teams.find((tm) => tm.id === off.teamId) : undefined) ||
     d.teams.find((tm) => tm.name === off.t);
-  if (buyer && buyer.id !== d.me && buyer.sq.length < LEAGUE_TRANSFER_RULES.maxSquad) {
-    buyer.sq.push(sold);
-    buyer.lu = null;
-    assignTeamShirtNumbers(buyer);
-    autoAssignTeamRoles(buyer);
+  const buyerName = buyer?.name || off.t;
+  const isLoan = off.kind === 'loan' || off.kind === 'loanopt';
+
+  if (isLoan) {
+    const origCon = pl.con ? { ...pl.con } : ensureCon(pl);
+    const wageShare = clamp(off.wageShare ?? 80, 40, 100);
+    pl.loan = 1;
+    pl.loanFromTeamId = d.me;
+    pl.loanFromTeamName = me.name;
+    pl.loanWageShare = wageShare;
+    pl.loanOrigCon = origCon;
+    if (off.kind === 'loanopt' && off.buyOption) {
+      pl.loanOpt = off.buyOption;
+    } else {
+      delete pl.loanOpt;
+    }
+    pl.con = {
+      yr: 1,
+      wg: Math.max(0.1, Number(((origCon.wg || wagOf(pl)) * (wageShare / 100)).toFixed(1))),
+      role: pl.ov >= 70 ? 'key' : 'rot'
+    };
+    appendPlayerCareerLog(pl, `🤝 ย้ายยืมตัวไป ${buyerName} (${buyer ? TN[buyer.tier] : 'ลีกไทย'}) ซีซั่น ${d.season}`);
+    if (buyer && buyer.id !== d.me && buyer.sq.length < LEAGUE_TRANSFER_RULES.maxSquad) {
+      buyer.sq.push(pl);
+      buyer.lu = null;
+      assignTeamShirtNumbers(buyer);
+      autoAssignTeamRoles(buyer);
+    }
+    if (off.p > 0) {
+      d.money = capMoney(d.money + off.p);
+      logFin(d, `ปล่อยยืม ${off.n} ให้ ${buyerName}`, off.p);
+    }
+    pushFeed(
+      d,
+      'ปล่อยยืมตัว',
+      `🤝 ปล่อยยืม ${off.n} ให้ ${buyerName}${off.p > 0 ? ` · ค่ายืม +${fmtMoney(off.p)}` : ''} · ช่วยค่าเหนื่อย ${wageShare}%${
+        off.kind === 'loanopt' && off.buyOption ? ` (ออปชันซื้อ ${fmtMoneyNum(off.buyOption)})` : ''
+      }`,
+      'ok'
+    );
+  } else {
+    appendPlayerCareerLog(pl, `🤝 ย้ายซบ ${buyerName} ค่าตัว ${fmtMoney(off.p)} (ซีซั่น ${d.season})`);
+    if (buyer && buyer.id !== d.me && buyer.sq.length < LEAGUE_TRANSFER_RULES.maxSquad) {
+      buyer.sq.push(pl);
+      buyer.lu = null;
+      assignTeamShirtNumbers(buyer);
+      autoAssignTeamRoles(buyer);
+    }
+    d.money = capMoney(d.money + off.p);
+    logFin(d, `ขาย ${off.n} ให้ ${buyerName}`, off.p);
+    pushFeed(d, 'ตลาดซื้อขาย', `✅ ขาย ${off.n} ให้ ${buyerName} รับค่าตัว +${fmtMoney(off.p)}`, 'ok');
   }
 
-  const buyerName = buyer?.name || off.t;
-  d.money = capMoney(d.money + off.p);
-  logFin(d, `ขาย ${off.n} ให้ ${buyerName}`, off.p);
-  pushFeed(d, 'ตลาดซื้อขาย', `✅ ขาย ${off.n} ให้ ${buyerName} รับค่าตัว +${fmtMoney(off.p)}`, 'ok');
   removeIncomingOffer(d, off.n);
   return { ok: true, buyerName };
 }
 
-export function resolveCounterOfferOutcome(s: GameState, off: TransferOffer): { accepted: boolean; newPrice?: number } {
+export function resolveCounterOfferOutcome(
+  s: GameState,
+  off: TransferOffer
+): { accepted: boolean; newPrice?: number; newWageShare?: number } {
   const me = s.teams[s.me];
   const q = me.sq.find((x) => x.n === off.n);
+  const isLoan = off.kind === 'loan' || off.kind === 'loanopt';
+  if (isLoan) {
+    const curFee = off.p || 0;
+    const curShare = off.wageShare ?? 80;
+    const acceptProb = curShare < 100 ? 0.72 : 0.58;
+    if (Math.random() < acceptProb) {
+      return {
+        accepted: true,
+        newPrice: Math.max(curFee + 2, Math.round(curFee * 1.25)),
+        newWageShare: Math.min(100, curShare + 20)
+      };
+    }
+    return { accepted: false };
+  }
   const fairVal = q ? vlu(q) : off.p;
   const acceptProb = off.p < fairVal ? 0.68 : 0.56;
   if (Math.random() < acceptProb) {
@@ -4766,14 +5056,26 @@ export function resolveCounterOfferOutcome(s: GameState, off: TransferOffer): { 
   return { accepted: false };
 }
 
-export function applyCounterOfferOutcome(d: GameState, off: TransferOffer, out: { accepted: boolean; newPrice?: number }) {
+export function applyCounterOfferOutcome(
+  d: GameState,
+  off: TransferOffer,
+  out: { accepted: boolean; newPrice?: number; newWageShare?: number }
+) {
+  const offKind = off.kind || 'buy';
   if (out.accepted && out.newPrice != null) {
     const list = getIncomingOffers(d).map((item) =>
-      item.n === off.n && item.t === off.t ? { ...item, p: out.newPrice!, cnt: 1 } : item
+      item.n === off.n && item.t === off.t && (item.kind || 'buy') === offKind
+        ? {
+            ...item,
+            p: out.newPrice!,
+            ...(out.newWageShare != null ? { wageShare: out.newWageShare } : {}),
+            cnt: 1
+          }
+        : item
     );
     syncOffersField(d, list);
   } else {
-    removeIncomingOffer(d, off.n, off.t);
+    removeIncomingOffer(d, off.n, off.t, off.kind);
   }
 }
 
@@ -4797,7 +5099,7 @@ export function resolvePitchPlayerOutcome(
 
   const existingBuyerNames = new Set(
     getIncomingOffers(s)
-      .filter((o) => o.n === q.n)
+      .filter((o) => o.n === q.n && (!o.kind || o.kind === 'buy'))
       .map((o) => o.t)
   );
   const candidates = s.teams
@@ -4828,7 +5130,7 @@ export function resolvePitchPlayerOutcome(
             ? 0.9 + Math.random() * 0.15
             : 0.86 + Math.random() * 0.16;
       const bidPrice = Math.max(5, Math.round(askPrice * bidMult));
-      created.push({ n: q.n, p: bidPrice, t: opp.name, teamId: opp.id });
+      created.push({ n: q.n, p: bidPrice, t: opp.name, teamId: opp.id, kind: 'buy' });
     }
   }
 
@@ -4863,6 +5165,348 @@ export function applyPitchPlayerOutcome(
       ''
     );
   }
+}
+
+export function buildAiLoanOfferForPlayer(
+  q: Player,
+  opp: Team,
+  prefKind: 'loan' | 'loanopt' | 'any' = 'any'
+): TransferOffer {
+  const val = Math.max(6, vlu(q));
+  const useOpt = prefKind === 'loanopt' || (prefKind === 'any' && Math.random() < 0.4);
+  const loanFee = Math.max(2, Math.round(val * (useOpt ? 0.2 : 0.16) * (0.85 + Math.random() * 0.35)));
+  const wageShare = opp.tier >= 2 ? (Math.random() < 0.55 ? 100 : 80) : opp.tier === 1 ? (Math.random() < 0.5 ? 80 : 60) : 60;
+  const buyOption = useOpt ? Math.max(8, Math.round(val * (0.95 + Math.random() * 0.25))) : undefined;
+  return {
+    n: q.n,
+    p: loanFee,
+    t: opp.name,
+    teamId: opp.id,
+    kind: useOpt ? 'loanopt' : 'loan',
+    wageShare,
+    ...(buyOption ? { buyOption } : {})
+  };
+}
+
+export function resolvePitchLoanOutOutcome(
+  s: GameState,
+  playerName: string,
+  prefKind: 'loan' | 'loanopt' | 'any' = 'any'
+): { ok: boolean; askFee: number; turnKey: number; offers: TransferOffer[]; err?: string } {
+  const me = s.teams[s.me];
+  const q = me.sq.find((x) => x.n === playerName);
+  if (!q) return { ok: false, askFee: 0, turnKey: 0, offers: [], err: 'ไม่พบนักเตะในทีม' };
+  const chk = getPlayerLoanOutCheck(s, me, q);
+  if (!chk.canLoanOut) return { ok: false, askFee: 0, turnKey: 0, offers: [], err: chk.reason || 'ยังไม่สามารถปล่อยยืมได้ในตอนนี้' };
+  const turnKey = s.season * 40 + s.md;
+  if (q.offerCoolMd === turnKey) {
+    return { ok: false, askFee: 0, turnKey, offers: [], err: 'เสนอนักเตะคนนี้ไปแล้วในนัดนี้ ลองใหม่หลังจบแมตช์หน้าหรือรอข้อเสนออัตโนมัติ' };
+  }
+
+  const askFee = Math.max(2, Math.round(Math.max(6, vlu(q)) * 0.18));
+  const existingClubNames = new Set(
+    getIncomingOffers(s)
+      .filter((o) => o.n === q.n && (o.kind === 'loan' || o.kind === 'loanopt'))
+      .map((o) => o.t)
+  );
+  const candidates = s.teams
+    .filter(
+      (tm) =>
+        tm.id !== s.me &&
+        tm.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
+        tm.sq.filter((z) => !!z.loan).length < 4 &&
+        !existingClubNames.has(tm.name) &&
+        Math.abs(tm.tier - me.tier) <= 1
+    )
+    .sort((a, b) => {
+      const aNeed = a.sq.filter((z) => z.pos === q.pos).length;
+      const bNeed = b.sq.filter((z) => z.pos === q.pos).length;
+      return aNeed - bNeed || Math.random() - 0.5;
+    })
+    .slice(0, 6);
+
+  const created: TransferOffer[] = [];
+  const ageBonus = q.age <= 23 ? 0.18 : q.age >= 31 ? -0.12 : 0.04;
+  for (const opp of candidates) {
+    if (created.length >= 2) break;
+    const posNeed = opp.sq.filter((z) => z.pos === q.pos).length <= (LEAGUE_TRANSFER_RULES.minPos[q.pos] + 2) ? 0.14 : 0;
+    const fitBonus = opp.tier <= me.tier ? 0.12 : q.ov >= BASE[opp.tier] ? 0.1 : -0.08;
+    const prob = clamp(0.5 + ageBonus + posNeed + fitBonus, 0.2, 0.88);
+    if (Math.random() < prob) {
+      created.push(buildAiLoanOfferForPlayer(q, opp, prefKind));
+    }
+  }
+
+  // Guarantee at least 1 interested club if candidates exist when explicitly pitched on loan
+  if (created.length === 0 && candidates[0]) {
+    created.push(buildAiLoanOfferForPlayer(q, candidates[0], prefKind));
+  }
+
+  return { ok: true, askFee, turnKey, offers: created };
+}
+
+export function applyPitchLoanOutOutcome(
+  d: GameState,
+  playerName: string,
+  outcome: { ok: boolean; askFee: number; turnKey: number; offers: TransferOffer[] }
+) {
+  if (!outcome.ok) return;
+  const q = d.teams[d.me]?.sq.find((x) => x.n === playerName);
+  if (!q) return;
+  q.loanListed = 1;
+  q.loanAskFee = outcome.askFee;
+  q.offerCoolMd = outcome.turnKey;
+  outcome.offers.forEach((off) => addIncomingOffer(d, off));
+
+  if (outcome.offers.length > 0) {
+    pushFeed(
+      d,
+      'ข้อเสนอยืมตัว',
+      `🤝 เสนอปล่อยยืม ${q.n} — มี ${outcome.offers.length} สโมสรยื่นขอยืมตัวเข้ามาแล้ว!`,
+      'offer'
+    );
+  } else {
+    pushFeed(
+      d,
+      'ตลาดซื้อขาย',
+      `📋 ขึ้นบัญชีปล่อยยืม ${q.n} แล้ว รอทีมที่สนใจยื่นข้อเสนอเข้ามา`,
+      ''
+    );
+  }
+}
+
+export function batchLoanListOrPitchPlayers(
+  d: GameState,
+  playerNames: string[],
+  pitchNow: boolean,
+  prefKind: 'loan' | 'loanopt' | 'any' = 'any'
+): { listedCount: number; pitchedCount: number; offerCount: number } {
+  const me = d.teams[d.me];
+  if (!me) return { listedCount: 0, pitchedCount: 0, offerCount: 0 };
+  const tx = getLeagueTransferContext(d, me);
+  let listedCount = 0;
+  let pitchedCount = 0;
+  let offerCount = 0;
+
+  Array.from(new Set(playerNames)).forEach((name) => {
+    const q = me.sq.find((p) => p.n === name);
+    if (!q || q.loan || q.me) return;
+    q.loanListed = 1;
+    q.loanAskFee = Math.max(2, Math.round(Math.max(6, vlu(q)) * 0.18));
+    listedCount += 1;
+
+    if (pitchNow && tx.tw.open) {
+      const outcome = resolvePitchLoanOutOutcome(d, q.n, prefKind);
+      if (outcome.ok) {
+        applyPitchLoanOutOutcome(d, q.n, outcome);
+        pitchedCount += 1;
+        offerCount += outcome.offers.length;
+      }
+    }
+  });
+
+  if (listedCount > 0 && (!pitchNow || !tx.tw.open)) {
+    pushFeed(d, 'ตลาดซื้อขาย', `📋 ขึ้นบัญชีปล่อยยืมนักเตะ ${listedCount} รายแล้ว`, '');
+  }
+
+  return { listedCount, pitchedCount, offerCount };
+}
+
+export function getLoanedOutPlayers(s: GameState, teamId = s.me): { q: Player; hostTeam: Team }[] {
+  const out: { q: Player; hostTeam: Team }[] = [];
+  s.teams.forEach((tm) => {
+    if (tm.id === teamId) return;
+    tm.sq.forEach((q) => {
+      if (q.loan && q.loanFromTeamId === teamId) {
+        out.push({ q, hostTeam: tm });
+      }
+    });
+  });
+  return out;
+}
+
+export function recallLoanedOutPlayer(
+  d: GameState,
+  playerName: string,
+  hostTeamId: number
+): { ok: boolean; err?: string } {
+  const me = d.teams[d.me];
+  const host = d.teams.find((t) => t.id === hostTeamId);
+  if (!me || !host) return { ok: false, err: 'ไม่พบข้อมูลสโมสร' };
+  if (me.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) {
+    return { ok: false, err: `ขนาดทีมเต็ม ${LEAGUE_TRANSFER_RULES.maxSquad} คนแล้ว ไม่สามารถดึงตัวกลับได้` };
+  }
+  const idx = host.sq.findIndex((q) => q.n === playerName && q.loan && q.loanFromTeamId === d.me);
+  if (idx < 0) return { ok: false, err: 'ไม่พบนักเตะในสัญญายืมตัวของทีมนี้' };
+  if (host.sq.length <= 16) {
+    return { ok: false, err: `${host.name} มีนักเตะขั้นต่ำ (${host.sq.length} คน) ไม่สามารถเรียกกลับกลางคันได้` };
+  }
+  const q = host.sq.splice(idx, 1)[0];
+  host.lu = null;
+  if (host.cap === q.n) host.cap = '';
+  assignTeamShirtNumbers(host);
+  autoAssignTeamRoles(host);
+
+  const orig = q.loanOrigCon ? { ...q.loanOrigCon } : ensureCon(q);
+  q.con = orig;
+  delete q.loan;
+  delete q.loanOpt;
+  delete q.loanFromTeamId;
+  delete q.loanFromTeamName;
+  delete q.loanWageShare;
+  delete q.loanOrigCon;
+  delete q.listed;
+  delete q.loanListed;
+  q.no = undefined;
+  appendPlayerCareerLog(q, `↩️ ถูกดึงตัวกลับจากสัญญายืมที่ ${host.name} (ซีซั่น ${d.season})`);
+  me.sq.push(q);
+  me.lu = null;
+  assignTeamShirtNumbers(me);
+  autoAssignTeamRoles(me, { careerP: d.p });
+  pushFeed(d, 'ปล่อยยืมตัว', `↩️ ดึง ${q.n} กลับจาก ${host.name} เข้าสู่ทีมชุดใหญ่แล้ว`, 'ok');
+  return { ok: true };
+}
+
+export function generateIncomingWindowOffers(
+  s: GameState,
+  opts?: { maxNew?: number; includeBuy?: boolean; includeLoan?: boolean; notify?: boolean }
+) {
+  if (s.mode !== 'm') return 0;
+  const me = s.teams[s.me];
+  if (!me) return 0;
+  const tw = getTransferWindowInfo(s);
+  if (!tw.open) return 0;
+
+  const maxNew = opts?.maxNew ?? 2;
+  const includeBuy = opts?.includeBuy ?? true;
+  const includeLoan = opts?.includeLoan ?? true;
+  const notify = opts?.notify ?? true;
+  let createdCount = 0;
+
+  const starterNames = new Set(xi(me).map((x) => x.n));
+
+  if (includeBuy) {
+    const activeOffers = getIncomingOffers(s);
+    if (activeOffers.length < 5) {
+      const listedCands = me.sq.filter(
+        (x) =>
+          !!x.listed &&
+          !x.me &&
+          !x.loan &&
+          x.inj === 0 &&
+          !(x.signedSeason === s.season && x.signedMd === s.md) &&
+          me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
+          me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
+          activeOffers.filter((o) => o.n === x.n && (!o.kind || o.kind === 'buy')).length < 2
+      );
+      const bidProb = listedCands.length ? 0.72 : 0.28;
+      if (Math.random() < bidProb) {
+        const cands = listedCands.length
+          ? listedCands
+          : me.sq
+              .slice()
+              .sort((a, b) => b.ov - a.ov)
+              .slice(0, 7)
+              .filter(
+                (x) =>
+                  !x.me &&
+                  !x.loan &&
+                  x.inj === 0 &&
+                  !(x.signedSeason === s.season && x.signedMd === s.md) &&
+                  me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
+                  me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
+                  !activeOffers.some((o) => o.n === x.n && (!o.kind || o.kind === 'buy'))
+              );
+        if (cands.length) {
+          const q = P(cands);
+          const existingClubs = new Set(activeOffers.filter((o) => o.n === q.n && (!o.kind || o.kind === 'buy')).map((o) => o.t));
+          const oppPool = s.teams.filter(
+            (x) => x.id !== s.me && x.sq.length < LEAGUE_TRANSFER_RULES.maxSquad && !existingClubs.has(x.name)
+          );
+          if (oppPool.length) {
+            const opp = P(oppPool);
+            const baseVal = q.askPrice || Math.max(5, vlu(q));
+            const mult = q.listed ? 0.9 + Math.random() * 0.2 : 1.06 + Math.random() * 0.34;
+            const newOff: TransferOffer = {
+              n: q.n,
+              p: Math.max(5, Math.round(baseVal * mult)),
+              t: opp.name,
+              teamId: opp.id,
+              kind: 'buy'
+            };
+            addIncomingOffer(s, newOff);
+            createdCount++;
+            if (notify) {
+              pushFeed(s, 'ข้อเสนอซื้อ', `💼 ${newOff.t} ยื่นซื้อ ${newOff.n} (${fmtMoneyNum(newOff.p)})`, 'offer');
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (includeLoan && createdCount < maxNew) {
+    const activeOffers = getIncomingOffers(s);
+    if (activeOffers.length < 6) {
+      const loanListedCands = me.sq.filter(
+        (x) =>
+          !!x.loanListed &&
+          !x.me &&
+          !x.loan &&
+          x.inj === 0 &&
+          !(x.signedSeason === s.season && x.signedMd === s.md) &&
+          me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
+          me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
+          activeOffers.filter((o) => o.n === x.n && (o.kind === 'loan' || o.kind === 'loanopt')).length < 2
+      );
+      const loanProb = loanListedCands.length ? 0.78 : 0.34;
+      if (Math.random() < loanProb) {
+        const cands = loanListedCands.length
+          ? loanListedCands
+          : me.sq.filter(
+              (x) =>
+                !x.me &&
+                !x.loan &&
+                x.inj === 0 &&
+                !(x.signedSeason === s.season && x.signedMd === s.md) &&
+                (x.age <= 24 || !starterNames.has(x.n)) &&
+                me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
+                me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
+                !activeOffers.some((o) => o.n === x.n && (o.kind === 'loan' || o.kind === 'loanopt'))
+            );
+        if (cands.length) {
+          const q = P(cands);
+          const existingClubs = new Set(
+            activeOffers.filter((o) => o.n === q.n && (o.kind === 'loan' || o.kind === 'loanopt')).map((o) => o.t)
+          );
+          const oppPool = s.teams.filter(
+            (x) =>
+              x.id !== s.me &&
+              x.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
+              x.sq.filter((z) => !!z.loan).length < 4 &&
+              !existingClubs.has(x.name) &&
+              Math.abs(x.tier - me.tier) <= 1
+          );
+          if (oppPool.length) {
+            const opp = P(oppPool);
+            const loanOff = buildAiLoanOfferForPlayer(q, opp, 'any');
+            addIncomingOffer(s, loanOff);
+            createdCount++;
+            if (notify) {
+              pushFeed(
+                s,
+                'ข้อเสนอยืมตัว',
+                `🤝 ${loanOff.t} ยื่นขอยืม ${loanOff.n} (ค่ายืม ${fmtMoneyNum(loanOff.p)} · ค่าเหนื่อย ${loanOff.wageShare}%)`,
+                'offer'
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return createdCount;
 }
 
 export function getPlayerReleaseCheck(s: GameState, me: Team, q: Player) {
@@ -4947,7 +5591,7 @@ export function validateBatchSquadRemoval(
     posRemoved[q.pos] += 1;
     const val = Math.max(5, vlu(q));
     const baseQuick = Math.max(4, Math.round((val * quickPricePct) / 100));
-    const bestBid = offers.filter((o) => o.n === q.n).sort((a, b) => b.p - a.p)[0];
+    const bestBid = offers.filter((o) => o.n === q.n && (!o.kind || o.kind === 'buy')).sort((a, b) => b.p - a.p)[0];
     const effQuick = bestBid && bestBid.p > baseQuick ? bestBid.p : baseQuick;
     const con = ensureCon(q);
     const wg = con.wg || wagOf(q);
@@ -5043,7 +5687,9 @@ export function releaseSquadPlayers(
       return;
     }
     delete pl.listed;
+    delete pl.loanListed;
     delete pl.askPrice;
+    delete pl.loanAskFee;
     delete pl.offerCoolMd;
     pl.no = undefined;
     pl.free = 1;
@@ -5139,7 +5785,7 @@ export function quickSellSquadPlayers(
 
   soldPlayers.forEach((sold) => {
     const baseQuick = Math.max(4, Math.round((Math.max(5, vlu(sold)) * pricePct) / 100));
-    const bestBid = offers.filter((o) => o.n === sold.n).sort((a, b) => b.p - a.p)[0];
+    const bestBid = offers.filter((o) => o.n === sold.n && (!o.kind || o.kind === 'buy')).sort((a, b) => b.p - a.p)[0];
     const useBid = !!(bestBid && bestBid.p >= baseQuick);
     const salePrice = useBid ? bestBid.p : baseQuick;
 
@@ -5155,7 +5801,9 @@ export function quickSellSquadPlayers(
     }
 
     delete sold.listed;
+    delete sold.loanListed;
     delete sold.askPrice;
+    delete sold.loanAskFee;
     delete sold.offerCoolMd;
     sold.no = undefined;
     sold.signedSeason = d.season;
@@ -5649,57 +6297,14 @@ export function afterMatchDay(
     } else if (s.md === 14) {
       mkMarket(s);
       pushFeed(s, 'ตลาดซื้อขาย', '🟢 ตลาดซื้อขายเลกสอง (นัดที่ 15–20) เปิดทำการแล้ว!', 'ok');
+      generateIncomingWindowOffers(s, { maxNew: 2, includeBuy: true, includeLoan: true, notify: true });
     } else if (s.md === 20) {
       syncOffersField(s, []);
       pushFeed(s, 'ตลาดซื้อขาย', '🔒 ตลาดซื้อขายเลกสองปิดแล้ว จนถึงต้นฤดูกาลหน้า', '');
     }
 
-    const activeOffers = getIncomingOffers(s);
-    const listedCands = me.sq.filter(
-      (x) =>
-        !!x.listed &&
-        !x.loan &&
-        x.inj === 0 &&
-        me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
-        me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
-        activeOffers.filter((o) => o.n === x.n).length < 2
-    );
-    const bidProb = listedCands.length ? 0.68 : 0.22;
-    if (tw.open && activeOffers.length < 3 && Math.random() < bidProb) {
-      const cands = listedCands.length
-        ? listedCands
-        : me.sq
-            .slice()
-            .sort((a, b) => b.ov - a.ov)
-            .slice(0, 6)
-            .filter(
-              (x) =>
-                !x.loan &&
-                x.inj === 0 &&
-                me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
-                me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
-                !activeOffers.some((o) => o.n === x.n)
-            );
-      if (cands.length) {
-        const q = P(cands);
-        const existingClubs = new Set(activeOffers.filter((o) => o.n === q.n).map((o) => o.t));
-        const oppPool = s.teams.filter(
-          (x) => x.id !== s.me && x.sq.length < LEAGUE_TRANSFER_RULES.maxSquad && !existingClubs.has(x.name)
-        );
-        if (oppPool.length) {
-          const opp = P(oppPool);
-          const baseVal = q.askPrice || Math.max(5, vlu(q));
-          const mult = q.listed ? 0.9 + Math.random() * 0.2 : 1.08 + Math.random() * 0.35;
-          const newOff: TransferOffer = {
-            n: q.n,
-            p: Math.max(5, Math.round(baseVal * mult)),
-            t: opp.name,
-            teamId: opp.id
-          };
-          addIncomingOffer(s, newOff);
-          pushFeed(s, 'ข้อเสนอ', `💼 ${newOff.t} ยื่นซื้อ ${newOff.n} (${fmtMoneyNum(newOff.p)})`, 'offer');
-        }
-      }
+    if (tw.open && s.md !== 14) {
+      generateIncomingWindowOffers(s, { maxNew: 2, includeBuy: true, includeLoan: true, notify: true });
     }
   } else {
     s.derby = 0;

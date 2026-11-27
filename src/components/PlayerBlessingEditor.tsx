@@ -243,9 +243,7 @@ export const PlayerBlessingEditor: React.FC<{
     if (!nextSigPool.includes(sig)) {
       setSig(nextPos === 'GK' ? 'sv' : 'fin');
     }
-    setAltRoles((prev) =>
-      prev.filter((r) => r !== nextRo && (nextPos === 'GK' ? LINE[r] === 'GK' : LINE[r] !== 'GK'))
-    );
+    setAltRoles((prev) => prev.filter((r) => r !== nextRo));
     const computedOv = clamp(OVF(nextPos, coreA), 1, 99);
     setOv(computedOv);
     if (computedOv > pot) setPot(computedOv);
@@ -407,9 +405,7 @@ export const PlayerBlessingEditor: React.FC<{
     return tr.name.toLowerCase().includes(q) || tr.desc.toLowerCase().includes(q);
   });
 
-  const compatibleAltRoles = ALL_SUB_ROLES.filter(
-    (r) => r !== ro && (curPos === 'GK' ? false : LINE[r] !== 'GK')
-  );
+  const compatibleAltRoles = ALL_SUB_ROLES.filter((r) => r !== ro);
 
   const previewPlayer: Player = {
     ...player,
@@ -693,17 +689,28 @@ export const PlayerBlessingEditor: React.FC<{
           <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10.5px] font-bold text-[var(--ink)]">
-                🧩 ตำแหน่งถนัดเพิ่ม ({altRoles.length}) <span className="font-normal text-[var(--mut)]">· เล่นเต็ม 100% ไม่โดนหักหลุดตำแหน่ง</span>
+                🧩 ตำแหน่งถนัดเพิ่ม ({altRoles.length}/{compatibleAltRoles.length}) <span className="font-normal text-[var(--mut)]">· เล่นเต็ม 100% ไม่โดนหักหลุดตำแหน่ง</span>
               </span>
-              {altRoles.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => { SFX.tap(); setAltRoles([]); }}
-                  className="text-[10px] font-bold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
-                >
-                  ล้าง
-                </button>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {altRoles.length < compatibleAltRoles.length && (
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); setAltRoles([...compatibleAltRoles]); }}
+                    className="text-[10px] font-bold text-[var(--g)] hover:underline cursor-pointer"
+                  >
+                    เลือกทั้งหมด
+                  </button>
+                )}
+                {altRoles.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); setAltRoles([]); }}
+                    className="text-[10px] font-bold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
+                  >
+                    ล้าง
+                  </button>
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap gap-1">
               {compatibleAltRoles.map((rKey) => {

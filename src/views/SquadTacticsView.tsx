@@ -103,15 +103,18 @@ export const SquadTacticsView = React.memo<{
         if (starter.inj > 0 || (starter.sus || 0) > 0) return;
         const sf = Math.round(starter.fit ?? 100);
         if (sf >= threshold) return;
+        const starterSlotSp = slots[idx]?.sp || starter.ro;
         const subIdx = freshPool.findIndex((b) =>
-          starter.pos === 'GK' ? b.pos === 'GK' : b.pos === starter.pos
+          starter.pos === 'GK'
+            ? b.pos === 'GK' || playerPen(b, 'GK') === 0
+            : b.pos === starter.pos || playerPen(b, starterSlotSp) === 0
         );
         const fallbackIdx =
           subIdx >= 0
             ? subIdx
             : starter.pos === 'GK'
               ? -1
-              : freshPool.findIndex((b) => b.pos !== 'GK');
+              : freshPool.findIndex((b) => b.pos !== 'GK' || playerPen(b, starterSlotSp) <= 1);
         if (fallbackIdx >= 0) {
           const replacement = freshPool.splice(fallbackIdx, 1)[0];
           nextLu[idx] = replacement.n;
@@ -1960,7 +1963,7 @@ export const SquadTacticsView = React.memo<{
                 {isMgr && incomingOffers.length > 0 && (
                   <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 flex items-center justify-between gap-2 text-xs mland:text-[10.5px]">
                     <span className="font-semibold truncate">
-                      💼 มี <b className="tabular">{incomingOffers.length}</b> ข้อเสนอซื้อนักเตะรอเจรจาในตลาดซื้อขาย
+                      💼 มี <b className="tabular">{incomingOffers.length}</b> ข้อเสนอซื้อ/ขอยืมนักเตะรอเจรจาในตลาดซื้อขาย
                     </span>
                     <button
                       type="button"

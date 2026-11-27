@@ -25,6 +25,12 @@ export const packSavePlayer = (q: Player): unknown[] => {
   if (q.con) ex.c = [q.con.yr, q.con.wg, Math.max(0, SAVE_CON_ROLE.indexOf(q.con.role))];
   if (q.loan) ex.ln = q.loan;
   if (q.loanOpt) ex.lo = q.loanOpt;
+  if (q.loanFromTeamId !== undefined) ex.lf = q.loanFromTeamId;
+  if (q.loanFromTeamName) ex.lfn = q.loanFromTeamName;
+  if (q.loanWageShare !== undefined) ex.lws = q.loanWageShare;
+  if (q.loanOrigCon) ex.loc = [q.loanOrigCon.yr, q.loanOrigCon.wg, Math.max(0, SAVE_CON_ROLE.indexOf(q.loanOrigCon.role))];
+  if (q.loanListed) ex.ll = q.loanListed;
+  if (q.loanAskFee !== undefined) ex.laf = q.loanAskFee;
   if (q.price !== undefined) ex.pr = q.price;
   if (q.free) ex.fr = q.free;
   if (q.askWg !== undefined) ex.aw = q.askWg;
@@ -164,6 +170,18 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   }
   if (ex.ln !== undefined) p.loan = Number(ex.ln);
   if (ex.lo !== undefined) p.loanOpt = Number(ex.lo);
+  if (ex.lf !== undefined) p.loanFromTeamId = Number(ex.lf);
+  if (ex.lfn !== undefined) p.loanFromTeamName = String(ex.lfn);
+  if (ex.lws !== undefined) p.loanWageShare = Number(ex.lws);
+  if (Array.isArray(ex.loc)) {
+    p.loanOrigCon = {
+      yr: Number(ex.loc[0] || 1),
+      wg: Number(ex.loc[1] || 1),
+      role: SAVE_CON_ROLE[Number(ex.loc[2] || 1)] || 'rot'
+    };
+  }
+  if (ex.ll !== undefined) p.loanListed = Number(ex.ll);
+  if (ex.laf !== undefined) p.loanAskFee = Number(ex.laf);
   if (ex.pr !== undefined) p.price = Number(ex.pr);
   if (ex.fr !== undefined) p.free = Number(ex.fr);
   if (ex.aw !== undefined) p.askWg = Number(ex.aw);
@@ -438,6 +456,12 @@ export const packSaveState = (s: GameState): Record<string, unknown> => {
   if (s.fxo) {
     out.fxo = Object.fromEntries(Object.entries(s.fxo).map(([k, v]) => [k, packFixturesCompact(v)]));
   }
+  if (Array.isArray(s.shortlist) && s.shortlist.length) {
+    out.shortlist = s.shortlist.map((entry) => ({
+      ...entry,
+      snapshot: packSavePlayer(entry.snapshot)
+    }));
+  }
   return out;
 };
 
@@ -453,6 +477,15 @@ export const unpackSaveState = (raw: Record<string, unknown>): GameState => {
     copy.fxo = Object.fromEntries(
       Object.entries(raw.fxo as Record<string, unknown>).map(([k, v]) => [k, unpackFixturesCompact(v)])
     );
+  }
+  if (Array.isArray(raw.shortlist)) {
+    copy.shortlist = raw.shortlist.map((item) => {
+      const entry = item as Record<string, unknown>;
+      return {
+        ...entry,
+        snapshot: unpackSavePlayer(entry.snapshot)
+      };
+    });
   }
   const result = copy as unknown as GameState;
   if (Array.isArray(result.teams)) ensureAiTeamPhilosophies(result, false);
