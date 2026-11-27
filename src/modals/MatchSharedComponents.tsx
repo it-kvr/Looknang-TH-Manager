@@ -38,12 +38,11 @@ import { useScrollTopOnChange } from '../utils/scrollReset';
 import { getShirtNo } from '../engine/playerCore';
 import { computeMatchStreamProjection, fmtFansShort } from '../engine/simulation';
 import {
-  getStreamViewerTier,
-  getViewerTierMeta,
   type BroadcastChannelInfo,
   type LiveCommentItem
 } from '../engine/liveStreamChat';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
+import { BroadcastChannelLogo, getBroadcastChannelBrandStyle } from '../components/SponsorLogos';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
@@ -88,6 +87,169 @@ export const LiveStreamBadge: React.FC<{ animated?: boolean; active?: boolean }>
     </span>
     <span>Live</span>
   </span>
+);
+
+const LiveBroadcastStudioHeader: React.FC<{
+  broadcastChannel: BroadcastChannelInfo;
+  streamPlanId: string;
+  liveViewers: number;
+  peakViewers: number;
+  estLiveIn: number;
+  totalCost: number;
+  mode: 'm' | 'p';
+  done: boolean;
+  compact?: boolean;
+  actions?: React.ReactNode;
+}> = ({
+  broadcastChannel,
+  streamPlanId,
+  liveViewers,
+  peakViewers,
+  estLiveIn,
+  totalCost,
+  mode,
+  done,
+  compact = false,
+  actions
+}) => {
+  const brand = getBroadcastChannelBrandStyle(broadcastChannel.name);
+  const showFinanceCol = mode === 'm' && streamPlanId !== 'off';
+
+  return (
+    <div
+      className={`relative border-b border-[var(--line)] shrink-0 overflow-hidden ${
+        compact ? 'px-2 pt-2 pb-1.5 space-y-1.5' : 'px-3 pt-2.5 pb-2 mland:px-2.5 mland:pt-2 mland:pb-1.5 space-y-2 mland:space-y-1.5'
+      }`}
+      style={{
+        background: `linear-gradient(135deg, color-mix(in srgb, ${brand.bg} 18%, var(--surface)), var(--surface) 68%, color-mix(in srgb, ${brand.accent} 6%, var(--surface)))`
+      }}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]"
+        style={{ background: `linear-gradient(90deg, ${brand.bg}, ${brand.accent})` }}
+      />
+
+      {/* Broadcaster Network Identity */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <BroadcastChannelLogo
+            channel={broadcastChannel}
+            size={compact ? 26 : 30}
+            muted={streamPlanId === 'off'}
+          />
+          <span
+            className={`font-extrabold truncate text-[var(--ink)] tracking-tight ${
+              compact ? 'text-[11px] mland:text-[9.5px]' : 'text-xs sm:text-[13px] mland:text-[10.5px]'
+            }`}
+          >
+            {broadcastChannel.name}
+          </span>
+        </div>
+
+        {done ? (
+          <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] font-badge-latin font-extrabold text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0 tabular">
+            FT
+          </span>
+        ) : (
+          <LiveStreamBadge animated={true} />
+        )}
+      </div>
+
+      {/* Hairline Broadcast Metrics Strip */}
+      <div
+        className={`grid ${showFinanceCol ? 'grid-cols-3' : 'grid-cols-2'} divide-x divide-[var(--line)]/65 rounded-xl bg-[var(--surface)]/75 border border-[var(--line)]/70 py-1 text-center tabular`}
+      >
+        <div className="px-1.5">
+          <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] leading-none">กำลังดู</div>
+          <div className={`font-extrabold text-[var(--ink)] mt-0.5 leading-tight ${compact ? 'text-[10.5px] mland:text-[9px]' : 'text-[11px] mland:text-[9.5px]'}`}>
+            {liveViewers.toLocaleString()}
+          </div>
+        </div>
+        <div className="px-1.5">
+          <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] leading-none">สูงสุด</div>
+          <div className={`font-extrabold text-[var(--ink)] mt-0.5 leading-tight ${compact ? 'text-[10.5px] mland:text-[9px]' : 'text-[11px] mland:text-[9.5px]'}`}>
+            {peakViewers.toLocaleString()}
+          </div>
+        </div>
+        {showFinanceCol && (
+          <div className="px-1.5">
+            <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] leading-none">รายได้ / ต้นทุน</div>
+            <div className={`font-extrabold mt-0.5 leading-tight truncate ${compact ? 'text-[10px] mland:text-[8.5px]' : 'text-[10.5px] mland:text-[9px]'}`}>
+              <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
+              <span className="text-[var(--mut)] mx-0.5">/</span>
+              <span className="text-[var(--red)]">-{fmtMoneyNum(totalCost)}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {actions}
+    </div>
+  );
+};
+
+const LiveBroadcastChatFeed: React.FC<{
+  comments: (LiveCommentItem | ArchivedStreamComment)[];
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  compact?: boolean;
+}> = ({ comments, scrollRef, compact = false }) => (
+  <div
+    ref={scrollRef}
+    className={`flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-1.5 ${
+      compact ? 'p-2 mland:p-1.5' : 'p-2.5 mland:p-2'
+    }`}
+  >
+    {comments.map((cm) => {
+      const isClub = cm.kind === 'club';
+      const isDonate = Boolean(cm.donateBaht);
+      const isGoal = cm.kind === 'goal';
+      const isAlert = cm.kind === 'var' || cm.kind === 'card';
+      return (
+        <div
+          key={cm.id}
+          className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] leading-snug border transition-colors ${
+            isClub
+              ? 'bg-[var(--g-soft)] border-[var(--g)]/35'
+              : isDonate
+                ? 'bg-amber-500/12 border-amber-500/35'
+                : isGoal
+                  ? 'bg-emerald-500/8 border-emerald-500/25'
+                  : 'bg-[var(--surface-2)]/35 border-[var(--line)]/45'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1.5">
+            <span
+              className={`font-bold truncate ${
+                isClub || isGoal
+                  ? 'text-[var(--g)]'
+                  : isAlert
+                    ? 'text-[var(--red)]'
+                    : isDonate
+                      ? 'text-[#9a6700] dark:text-[var(--lamp)]'
+                      : 'text-[var(--ink)]'
+              }`}
+            >
+              {cm.user}
+            </span>
+            <span className="inline-flex items-center gap-1.5 shrink-0 tabular">
+              {cm.donateBaht && (
+                <span className="font-extrabold text-[#9a6700] dark:text-[var(--lamp)] text-[10px]">
+                  💎 {cm.donateBaht.toLocaleString()}฿
+                </span>
+              )}
+              <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">{cm.m}&apos;</span>
+            </span>
+          </div>
+          <div className="text-[var(--mut)] mt-0.5 break-words">
+            <span className={isGoal || isDonate || isClub ? 'text-[var(--ink)] font-medium' : ''}>
+              {cm.text}
+            </span>
+          </div>
+        </div>
+      );
+    })}
+  </div>
 );
 
 export function isCardLogEntry(l: MatchLogItem): boolean {
@@ -1397,11 +1559,22 @@ export const MatchBroadcastHeader = React.memo<{
   const [showEnvModsPopover, setShowEnvModsPopover] = useState(false);
   const homeId = homeOrig.id;
   const awayId = awayOrig.id;
+  const headerBrand = getBroadcastChannelBrandStyle(broadcastChannel.name);
 
   return (
     <div className="relative z-20 shrink-0 px-2.5 py-2 sm:px-3.5 sm:py-2 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mland:grid mland:grid-cols-[182px_minmax(0,1fr)_182px] sm:grid sm:grid-cols-[212px_minmax(0,1fr)_212px] md:grid-cols-[238px_minmax(0,1fr)_238px] lg:grid-cols-[276px_minmax(0,1fr)_276px] xl:grid-cols-[315px_minmax(0,1fr)_315px] mland:gap-x-2 sm:gap-x-2.5">
-        <div className="relative order-1 w-[calc(100%-175px)] max-w-[235px] sm:w-full sm:max-w-none mland:w-full mland:max-w-none h-10 sm:h-11 md:h-12 mland:h-[38px] px-2 mland:px-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs flex flex-col justify-center gap-0.5 min-w-0">
+        <div
+          className="relative order-1 w-[calc(100%-175px)] max-w-[235px] sm:w-full sm:max-w-none mland:w-full mland:max-w-none h-10 sm:h-11 md:h-12 mland:h-[38px] px-2.5 mland:px-1.5 rounded-xl mland:rounded-lg border border-[var(--line)] shadow-2xs flex flex-col justify-center gap-0.5 min-w-0 overflow-hidden"
+          style={{
+            background: `linear-gradient(135deg, color-mix(in srgb, ${headerBrand.bg} 12%, var(--surface)), var(--surface) 72%)`
+          }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
+            style={{ background: `linear-gradient(90deg, ${headerBrand.bg}, ${headerBrand.accent})` }}
+          />
           <div
             className="w-full min-w-0 truncate text-[10.5px] sm:text-[11px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight"
             title={compTitle}
@@ -1515,13 +1688,14 @@ export const MatchBroadcastHeader = React.memo<{
             <span className="w-px h-3 bg-[var(--line)] shrink-0" />
             <span
               className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold tabular shrink-0"
-              title={
-                streamPlanId === 'off'
-                  ? `ถ่ายทอดผ่าน ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
-                  : `ถ่ายทอดสดทาง ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
-              }
+              title={`${broadcastChannel.name} · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`}
             >
-              <span className={`leading-none shrink-0 text-[9px] mland:text-[7.5px] ${streamPlanId === 'off' ? 'opacity-50 grayscale' : ''}`}>🎥</span>
+              <BroadcastChannelLogo
+                channel={broadcastChannel}
+                size={14}
+                muted={streamPlanId === 'off'}
+                className="rounded-[4px] mland:w-3 mland:h-3"
+              />
               <span className={streamPlanId === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
                 {liveViewers.toLocaleString()}
               </span>
@@ -3319,8 +3493,6 @@ export const FullTimeMatchStage = React.memo<{
             renderFullTimePlayersPanel()
           ) : rightTab === 'chat' ? (
             (() => {
-              const vTier = getStreamViewerTier(liveViewers);
-              const tierMeta = getViewerTierMeta(vTier);
               const myG = meIsHome ? gh : ga;
               const oppG = meIsHome ? ga : gh;
               const totalG = gh + ga;
@@ -3332,78 +3504,20 @@ export const FullTimeMatchStage = React.memo<{
                   : 0;
               return (
                 <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
-                  <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/70 border-b border-[var(--line)] space-y-1.5 shrink-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🎥</span>
-                        <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
-                          {broadcastChannel.name}
-                        </span>
-                      </div>
-                      <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0">
-                        {broadcastChannel.badge}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
-                      <span className="text-[var(--mut)]">
-                        ผู้ชมสด <b className="text-[var(--ink)]">{liveViewers.toLocaleString()}</b> · สูงสุด <b className="text-[var(--ink)]">{peakViewers.toLocaleString()}</b>
-                      </span>
-                      {state.mode === 'm' && (
-                        streamProj.plan.id === 'off' ? (
-                          <span className="text-[var(--mut)]">ช่องกลาง ({tierMeta.label})</span>
-                        ) : (
-                          <span className="font-bold">
-                            <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
-                            <span className="text-[var(--mut)] mx-1">/</span>
-                            <span className="text-[var(--red)]">-{fmtMoneyNum(streamProj.plan.totalCost)}</span>
-                          </span>
-                        )
-                      )}
-                    </div>
-                  </div>
-
-                  <div ref={rightChatScrollRef} className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
-                    {liveComments.map((cm) => (
-                      <div
-                        key={cm.id}
-                        className={`py-1.5 mland:py-1 text-[11px] mland:text-[9.5px] leading-snug ${
-                          cm.kind === 'club'
-                            ? 'px-2 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30 my-0.5'
-                            : cm.donateBaht
-                              ? 'px-2 rounded-lg bg-[#facc15]/15 border border-[#facc15]/40 my-0.5'
-                              : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1.5">
-                          <span className={`font-bold truncate ${
-                            cm.kind === 'club'
-                              ? 'text-[var(--g)]'
-                              : cm.kind === 'goal'
-                                ? 'text-[var(--g)]'
-                                : cm.kind === 'var' || cm.kind === 'card'
-                                  ? 'text-[var(--red)]'
-                                  : 'text-[var(--ink)]'
-                          }`}>
-                            {cm.user}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 shrink-0 tabular">
-                            {cm.donateBaht && (
-                              <span className="font-extrabold text-[#9a6700] dark:text-[var(--lamp)] text-[10px]">
-                                💎 {cm.donateBaht.toLocaleString()}฿
-                              </span>
-                            )}
-                            <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">{cm.m}&apos;</span>
-                          </span>
-                        </div>
-                        <div className="text-[var(--mut)] mt-0.5 break-words">
-                          <span className={cm.kind === 'goal' || cm.donateBaht || cm.kind === 'club' ? 'text-[var(--ink)] font-medium' : ''}>
-                            {cm.text}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <LiveBroadcastStudioHeader
+                    broadcastChannel={broadcastChannel}
+                    streamPlanId={streamProj.plan.id}
+                    liveViewers={liveViewers}
+                    peakViewers={peakViewers}
+                    estLiveIn={estLiveIn}
+                    totalCost={streamProj.plan.totalCost}
+                    mode={state.mode}
+                    done={true}
+                  />
+                  <LiveBroadcastChatFeed
+                    comments={liveComments}
+                    scrollRef={rightChatScrollRef}
+                  />
                 </div>
               );
             })()
@@ -4805,8 +4919,6 @@ export const LiveStreamChatPanel = React.memo<{
   onToggleFullscreen,
   onClubShout
 }) => {
-  const vTier = getStreamViewerTier(liveViewers);
-  const tierMeta = getViewerTierMeta(vTier);
   const totalG = gh + ga;
   const myG = meIsHome ? gh : ga;
   const oppG = meIsHome ? ga : gh;
@@ -4820,58 +4932,27 @@ export const LiveStreamChatPanel = React.memo<{
 
   return (
     <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
-      <div
-        className={`bg-[var(--surface-2)]/70 border-b border-[var(--line)] shrink-0 ${
-          isLivePitchFullscreen
-            ? 'px-2 py-1.5 mland:px-1.5 mland:py-1 space-y-1'
-            : 'px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5'
-        }`}
-      >
-        <div className="flex items-center justify-between gap-1.5">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🎥</span>
-            <span className={`font-bold truncate text-[var(--ink)] ${isLivePitchFullscreen ? 'text-[11px] mland:text-[9.5px]' : 'text-xs mland:text-[10.5px]'}`}>
-              {broadcastChannel.name}
-            </span>
-          </div>
-          <span className={`font-bold text-[var(--g)] shrink-0 ${isLivePitchFullscreen ? 'text-[9px] mland:text-[8px]' : 'text-[10px] mland:text-[8.5px]'}`}>
-            {broadcastChannel.badge}
-          </span>
-        </div>
-
-        <div className={`flex flex-wrap items-center justify-between gap-1.5 tabular ${isLivePitchFullscreen ? 'text-[9.5px] mland:text-[8.5px]' : 'text-[10.5px] mland:text-[9px]'}`}>
-          <span className="text-[var(--mut)] truncate">
-            กำลังดู <b className="text-[var(--ink)]">{liveViewers.toLocaleString()}</b> · สูงสุด <b className="text-[var(--ink)]">{peakViewers.toLocaleString()}</b>
-          </span>
-          {mode === 'm' && (
-            streamProj.plan.id === 'off' ? (
-              <span className="text-[var(--mut)]">ช่องกลาง ({tierMeta.label})</span>
-            ) : (
-              <span className="font-bold shrink-0">
-                <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
-                <span className="text-[var(--mut)] mx-0.5">/</span>
-                <span className="text-[var(--red)]">-{fmtMoneyNum(streamProj.plan.totalCost)}</span>
-              </span>
-            )
-          )}
-        </div>
-
-        {!done && (
-          <div className="flex items-center justify-between gap-1.5 pt-0.5">
-            {!isLivePitchFullscreen && (
-              <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                {tierMeta.desc}
-              </span>
-            )}
-            <div className={`flex items-center gap-1 shrink-0 ${isLivePitchFullscreen ? 'w-full justify-between' : ''}`}>
+      <LiveBroadcastStudioHeader
+        broadcastChannel={broadcastChannel}
+        streamPlanId={streamProj.plan.id}
+        liveViewers={liveViewers}
+        peakViewers={peakViewers}
+        estLiveIn={estLiveIn}
+        totalCost={streamProj.plan.totalCost}
+        mode={mode}
+        done={done}
+        compact={isLivePitchFullscreen}
+        actions={
+          !done ? (
+            <div className="grid grid-cols-2 gap-1.5">
               {matchPhaseUi !== 'halftime' && (
                 <button
                   type="button"
                   onClick={onToggleFullscreen}
                   title={isLivePitchFullscreen ? 'ย่อจอกลับสู่มุมมองปกติ' : 'ดูออนไลน์แบบเต็มจอพร้อมแชทข้างๆ'}
-                  className={`btn btn-xs whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
+                  className={`btn btn-xs whitespace-nowrap w-full inline-flex items-center justify-center gap-1 ${
                     isLivePitchFullscreen
-                      ? 'px-2 mland:px-1.5 bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
+                      ? 'bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
                       : 'btn-secondary'
                   }`}
                 >
@@ -4892,61 +4973,22 @@ export const LiveStreamChatPanel = React.memo<{
                 type="button"
                 disabled={!canClubShout}
                 onClick={onClubShout}
-                className={`btn btn-xs btn-secondary whitespace-nowrap shrink-0 ${isLivePitchFullscreen ? 'px-2 mland:px-1.5' : ''}`}
+                className={`btn btn-xs btn-secondary whitespace-nowrap w-full ${
+                  matchPhaseUi === 'halftime' ? 'col-span-2' : ''
+                }`}
               >
                 {canClubShout ? '👋 ทักทายคนดู' : `รอ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
               </button>
             </div>
-          </div>
-        )}
-      </div>
+          ) : null
+        }
+      />
 
-      <div
-        ref={rightChatScrollRef}
-        className={`flex-1 min-h-0 overflow-y-auto no-scrollbar divide-y divide-[var(--line)]/45 ${
-          isLivePitchFullscreen ? 'p-2 mland:p-1.5' : 'p-2.5 mland:p-2'
-        }`}
-      >
-        {liveComments.map((cm) => (
-          <div
-            key={cm.id}
-            className={`py-1.5 mland:py-1 text-[11px] mland:text-[9.5px] leading-snug ${
-              cm.kind === 'club'
-                ? 'px-2 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30 my-0.5'
-                : cm.donateBaht
-                  ? 'px-2 rounded-lg bg-[#facc15]/15 border border-[#facc15]/40 my-0.5'
-                  : ''
-            }`}
-          >
-            <div className="flex items-center justify-between gap-1.5">
-              <span className={`font-bold truncate ${
-                cm.kind === 'club'
-                  ? 'text-[var(--g)]'
-                  : cm.kind === 'goal'
-                    ? 'text-[var(--g)]'
-                    : cm.kind === 'var' || cm.kind === 'card'
-                      ? 'text-[var(--red)]'
-                      : 'text-[var(--ink)]'
-              }`}>
-                {cm.user}
-              </span>
-              <span className="inline-flex items-center gap-1.5 shrink-0 tabular">
-                {cm.donateBaht && (
-                  <span className="font-extrabold text-[#9a6700] dark:text-[var(--lamp)] text-[10px]">
-                    💎 {cm.donateBaht.toLocaleString()}฿
-                  </span>
-                )}
-                <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">{cm.m}&apos;</span>
-              </span>
-            </div>
-            <div className="text-[var(--mut)] mt-0.5 break-words">
-              <span className={cm.kind === 'goal' || cm.donateBaht || cm.kind === 'club' ? 'text-[var(--ink)] font-medium' : ''}>
-                {cm.text}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
+      <LiveBroadcastChatFeed
+        comments={liveComments}
+        scrollRef={rightChatScrollRef}
+        compact={isLivePitchFullscreen}
+      />
     </div>
   );
 });

@@ -1,6 +1,7 @@
-import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId, VarReviewState, MatchHighlightClip, MatchHighlightFrame } from '../types/game';
+import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId, VarReviewState, MatchHighlightClip, MatchHighlightFrame, MatchEnvironment, PitchPerimeterBrand } from '../types/game';
 import { COACH_OUTFITS } from '../data/thaiFootballData';
 import { getTurfGradeSpec } from '../data/crestAndKitData';
+import { PARTNER_DEAL_BRAND_SPECS, SHIRT_SPONSOR_BRANDS } from '../data/sponsorBrands';
 import { clamp } from '../utils/math';
 import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
 import { HL_ACT } from '../engine/matchHighlights';
@@ -271,6 +272,527 @@ const fitCanvasText = (ctx: CanvasRenderingContext2D, text: string, maxW: number
     else hi = mid - 1;
   }
   return lo > 0 ? `${text.slice(0, lo)}…` : '…';
+};
+
+const resolvePitchPerimeterBrands = (
+  env?: Pick<MatchEnvironment, 'perimeterBrands' | 'pitchSeed'> | null
+): PitchPerimeterBrand[] => {
+  if (env?.perimeterBrands?.length) {
+    return env.perimeterBrands;
+  }
+  const seed = Math.abs(env?.pitchSeed ?? 137);
+  const sp = SHIRT_SPONSOR_BRANDS[seed % SHIRT_SPONSOR_BRANDS.length] || SHIRT_SPONSOR_BRANDS[0];
+  const p0 = PARTNER_DEAL_BRAND_SPECS[seed % PARTNER_DEAL_BRAND_SPECS.length];
+  const p1 = PARTNER_DEAL_BRAND_SPECS[(seed + 3) % PARTNER_DEAL_BRAND_SPECS.length];
+  const p2 = PARTNER_DEAL_BRAND_SPECS[(seed + 6) % PARTNER_DEAL_BRAND_SPECS.length];
+  return [
+    { kind: 'partner', id: p0.id, label: p0.label, shortLabel: p0.shortLabel, bg: p0.bg, accent: p0.accent },
+    { kind: 'sponsor', id: sp.id, label: sp.thName, shortLabel: sp.code, bg: sp.badgeBg, accent: sp.accent, motif: sp.motif },
+    { kind: 'partner', id: p1.id, label: p1.label, shortLabel: p1.shortLabel, bg: p1.bg, accent: p1.accent },
+    { kind: 'partner', id: p2.id, label: p2.label, shortLabel: p2.shortLabel, bg: p2.bg, accent: p2.accent }
+  ];
+};
+
+const getPerimeterSig = (brands: PitchPerimeterBrand[]): string =>
+  brands.map((b) => `${b.kind[0]}:${b.id}`).join(',');
+
+const drawPerimeterDealerLogoEmblem = (
+  ctx: CanvasRenderingContext2D,
+  brand: PitchPerimeterBrand,
+  cx: number,
+  cy: number,
+  size: number
+) => {
+  ctx.save();
+  ctx.translate(cx - size / 2, cy - size / 2);
+  ctx.scale(size / 36, size / 36);
+
+  // Rounded logo tile
+  ctx.fillStyle = brand.bg;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, 36, 36, 8);
+  ctx.fill();
+  ctx.strokeStyle = brand.accent;
+  ctx.globalAlpha = 0.72;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.roundRect(1, 1, 34, 34, 7.2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  const fg = '#ffffff';
+  const ac = brand.accent;
+
+  if (brand.kind === 'partner') {
+    switch (brand.id) {
+      case 'drink': {
+        ctx.fillStyle = ac;
+        ctx.globalAlpha = 0.28;
+        ctx.beginPath();
+        ctx.moveTo(18, 7);
+        ctx.bezierCurveTo(18, 7, 25.5, 15.5, 25.5, 21);
+        ctx.arc(18, 21, 7.5, 0, Math.PI, false);
+        ctx.bezierCurveTo(10.5, 15.5, 18, 7, 18, 7);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2.1;
+        ctx.stroke();
+        ctx.fillStyle = ac;
+        ctx.beginPath();
+        ctx.moveTo(19, 14);
+        ctx.lineTo(15.5, 20);
+        ctx.lineTo(18.5, 20);
+        ctx.lineTo(17, 25.5);
+        ctx.lineTo(21, 19.5);
+        ctx.lineTo(18, 19.5);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case 'snack': {
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 3.2;
+        ctx.beginPath();
+        ctx.moveTo(9, 23.5);
+        ctx.quadraticCurveTo(13.5, 12, 18, 18);
+        ctx.quadraticCurveTo(22.5, 24, 27, 12);
+        ctx.stroke();
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2.3;
+        ctx.beginPath();
+        ctx.moveTo(9, 27);
+        ctx.quadraticCurveTo(14, 21, 18, 24);
+        ctx.quadraticCurveTo(22.5, 27, 27, 20);
+        ctx.stroke();
+        break;
+      }
+      case 'apparel': {
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2.2;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(9, 13);
+        ctx.lineTo(14, 9);
+        ctx.lineTo(22, 9);
+        ctx.lineTo(27, 13);
+        ctx.lineTo(24, 17);
+        ctx.lineTo(22, 15.5);
+        ctx.lineTo(22, 27);
+        ctx.lineTo(14, 27);
+        ctx.lineTo(14, 15.5);
+        ctx.lineTo(12, 17);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2.6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(15, 20);
+        ctx.lineTo(21, 17);
+        ctx.stroke();
+        break;
+      }
+      case 'tyre': {
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 3.4;
+        ctx.setLineDash([4.2, 2.3]);
+        ctx.beginPath();
+        ctx.arc(18, 18, 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.arc(18, 18, 4.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = ac;
+        ctx.beginPath();
+        ctx.arc(18, 18, 2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case 'convenience': {
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(7, 10, 22, 16, 3);
+        ctx.stroke();
+        ctx.fillStyle = fg;
+        ctx.font = '900 11.5px ui-sans-serif, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('24', 18, 18.6);
+        break;
+      }
+      case 'ecom': {
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(18, 12.5, 5, Math.PI, 0);
+        ctx.stroke();
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.roundRect(9, 13, 18, 14, 2.5);
+        ctx.stroke();
+        ctx.strokeStyle = ac;
+        ctx.beginPath();
+        ctx.moveTo(14, 20);
+        ctx.lineTo(18, 17);
+        ctx.lineTo(22, 20);
+        ctx.stroke();
+        break;
+      }
+      case 'telecom': {
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(18, 22, 10.5, Math.PI * 1.18, Math.PI * 1.82);
+        ctx.stroke();
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.arc(18, 22, 6.2, Math.PI * 1.18, Math.PI * 1.82);
+        ctx.stroke();
+        ctx.fillStyle = ac;
+        ctx.beginPath();
+        ctx.arc(18, 23.5, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(15.5, 28);
+        ctx.lineTo(18, 25);
+        ctx.lineTo(20.5, 28);
+        ctx.stroke();
+        break;
+      }
+      case 'fintech': {
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.roundRect(7, 10, 22, 16, 3);
+        ctx.stroke();
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2.7;
+        ctx.beginPath();
+        ctx.moveTo(7, 15);
+        ctx.lineTo(29, 15);
+        ctx.stroke();
+        ctx.fillStyle = ac;
+        ctx.beginPath();
+        ctx.roundRect(11, 19.5, 6.5, 3.6, 1);
+        ctx.fill();
+        break;
+      }
+      case 'airline': {
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.moveTo(8, 21);
+        ctx.lineTo(27, 11);
+        ctx.lineTo(21, 24);
+        ctx.lineTo(17, 20);
+        ctx.lineTo(12, 25);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(9, 26.5);
+        ctx.lineTo(26, 26.5);
+        ctx.stroke();
+        break;
+      }
+      case 'asia_tech':
+      default: {
+        ctx.strokeStyle = ac;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.arc(18, 18, 9.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = fg;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.ellipse(18, 18, 4.5, 9.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(8.5, 18);
+        ctx.lineTo(27.5, 18);
+        ctx.stroke();
+        break;
+      }
+    }
+  } else {
+    // Main shirt sponsor geometric emblem (matches motif buckets cleanly at small LED size)
+    const m = ((brand.motif ?? 0) % 8 + 8) % 8;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (m === 0) {
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(18, 7);
+      ctx.lineTo(27, 11);
+      ctx.lineTo(27, 19);
+      ctx.quadraticCurveTo(27, 25.5, 18, 29.5);
+      ctx.quadraticCurveTo(9, 25.5, 9, 19);
+      ctx.lineTo(9, 11);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(13.5, 18.5);
+      ctx.lineTo(17, 22);
+      ctx.lineTo(23.5, 14.5);
+      ctx.stroke();
+    } else if (m === 1) {
+      ctx.fillStyle = ac;
+      ctx.beginPath();
+      ctx.moveTo(20, 7.5);
+      ctx.lineTo(12, 19);
+      ctx.lineTo(18, 19);
+      ctx.lineTo(15.5, 28.5);
+      ctx.lineTo(24.5, 16.5);
+      ctx.lineTo(18.5, 16.5);
+      ctx.closePath();
+      ctx.fill();
+    } else if (m === 2) {
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(18, 18, 9.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(12.5, 23);
+      ctx.lineTo(18, 11);
+      ctx.lineTo(23.5, 23);
+      ctx.closePath();
+      ctx.fill();
+    } else if (m === 3) {
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.roundRect(7.5, 9.5, 21, 15, 3);
+      ctx.stroke();
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(15, 13.2);
+      ctx.lineTo(22.5, 17);
+      ctx.lineTo(15, 20.8);
+      ctx.closePath();
+      ctx.fill();
+    } else if (m === 4) {
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.moveTo(8, 22.5);
+      ctx.quadraticCurveTo(15, 14, 28, 11);
+      ctx.quadraticCurveTo(22, 18.5, 13, 24);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(10, 26.5);
+      ctx.lineTo(26.5, 21.5);
+      ctx.stroke();
+    } else if (m === 5) {
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(8, 24);
+      ctx.lineTo(10.5, 12);
+      ctx.lineTo(15, 17.5);
+      ctx.lineTo(18, 9.5);
+      ctx.lineTo(21, 17.5);
+      ctx.lineTo(25.5, 12);
+      ctx.lineTo(28, 24);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(9, 27);
+      ctx.lineTo(27, 27);
+      ctx.stroke();
+    } else if (m === 6) {
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(18, 7.5);
+      ctx.lineTo(27.5, 18);
+      ctx.lineTo(18, 28.5);
+      ctx.lineTo(8.5, 18);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.arc(18, 18, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = ac;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(18, 7.5);
+      ctx.lineTo(21.1, 14);
+      ctx.lineTo(28, 15);
+      ctx.lineTo(23, 20);
+      ctx.lineTo(24.2, 27);
+      ctx.lineTo(18, 23.6);
+      ctx.lineTo(11.8, 27);
+      ctx.lineTo(13, 20);
+      ctx.lineTo(8, 15);
+      ctx.lineTo(14.9, 14);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.arc(18, 18, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+};
+
+const drawSingleDealerLedBoard = (
+  ctx: CanvasRenderingContext2D,
+  brand: PitchPerimeterBrand,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  isNight: boolean
+) => {
+  const rad = clamp(h * 0.2, 2.2, 4.5);
+  ctx.save();
+
+  // Ground shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.36)';
+  ctx.beginPath();
+  ctx.roundRect(x + 0.5, y + 1.5, w, h, rad);
+  ctx.fill();
+
+  // LED board backdrop gradient
+  const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+  grad.addColorStop(0, brand.bg);
+  grad.addColorStop(1, isNight ? '#070d18' : '#0b1422');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, rad);
+  ctx.fill();
+
+  // Crisp LED frame border & glowing accent top bar
+  ctx.strokeStyle = isNight ? 'rgba(255, 255, 255, 0.24)' : 'rgba(255, 255, 255, 0.2)';
+  ctx.lineWidth = Math.max(0.8, h * 0.055);
+  ctx.stroke();
+
+  ctx.fillStyle = brand.accent;
+  ctx.globalAlpha = isNight ? 0.85 : 0.72;
+  ctx.beginPath();
+  ctx.roundRect(x + 1.5, y + 1, Math.max(4, w - 3), Math.max(1.2, h * 0.1), 1);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Brand emblem badge on left of LED panel
+  const iconSize = clamp(h - 3.4, 8.5, 22);
+  const padL = clamp(h * 0.22, 3, 6);
+  const iconCx = x + padL + iconSize * 0.5;
+  const iconCy = y + h * 0.53;
+  drawPerimeterDealerLogoEmblem(ctx, brand, iconCx, iconCy, iconSize);
+
+  // Brand label next to emblem (auto-selects Thai label or punchy shortLabel to prevent clipping)
+  const textX = x + padL + iconSize + clamp(h * 0.22, 3.2, 7);
+  const textMaxW = x + w - padL - textX;
+  if (textMaxW >= 16) {
+    const fontPx = clamp(h * 0.5, 7.2, 12.5);
+    ctx.font = `800 ${fontPx.toFixed(1)}px "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif`;
+    const chosenText =
+      measureTextCached(ctx, brand.label) <= textMaxW
+        ? brand.label
+        : fitCanvasText(ctx, brand.shortLabel || brand.label, textMaxW);
+    ctx.fillStyle = '#f8fafc';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(chosenText, textX, y + h * 0.54);
+  }
+
+  ctx.restore();
+};
+
+const drawPitchPerimeterDealerBoards = (
+  ctx: CanvasRenderingContext2D,
+  opts: {
+    padX: number;
+    padTop: number;
+    pw: number;
+    ph: number;
+    isNight: boolean;
+    env?: MatchEnvironment | null;
+  }
+) => {
+  const { padX, padTop, pw, ph, isNight, env } = opts;
+  const brands = resolvePitchPerimeterBrands(env);
+  if (!brands.length) return;
+
+  // 1. Top Perimeter Dealer LED Row (ขอบสนามส่วนบน)
+  const topBoardH = clamp(padTop * 0.44, 13, 28);
+  const topGapFromLine = Math.max(3, padTop * 0.09);
+  const topBoardY = Math.max(2, padTop - topBoardH - topGapFromLine);
+  const topStartX = padX + 4;
+  const topAvailW = Math.max(60, pw - 8);
+  const topCount = topAvailW >= 900 ? 8 : topAvailW >= 410 ? 6 : 5;
+  const panelGap = Math.max(3, pw * 0.0055);
+  const topPanelW = (topAvailW - panelGap * (topCount - 1)) / topCount;
+
+  for (let i = 0; i < topCount; i++) {
+    const brand = brands[i % brands.length];
+    const bx = topStartX + i * (topPanelW + panelGap);
+    drawSingleDealerLedBoard(ctx, brand, bx, topBoardY, topPanelW, topBoardH, isNight);
+  }
+
+  // 2. Left & Right Behind-the-Goal Perimeter Dealer Boards (ขอบสนามซ้ายและขวา)
+  const sideBoardT = clamp(padX * 0.56, 13, 28);
+  const sideGapFromLine = Math.max(3, padX * 0.085);
+  const leftCx = Math.max(sideBoardT * 0.5 + 1.5, padX - sideGapFromLine - sideBoardT * 0.5);
+  const rightCx = padX + pw + sideGapFromLine + sideBoardT * 0.5;
+  const wings: [number, number][] = [
+    [padTop + ph * 0.025, padTop + ph * 0.385],
+    [padTop + ph * 0.615, padTop + ph * 0.975]
+  ];
+
+  wings.forEach(([wy0, wy1], wingIdx) => {
+    const wingH = Math.max(24, wy1 - wy0);
+    const wingPanels = wingH >= 102 ? 2 : 1;
+    const pGap = Math.max(3, ph * 0.012);
+    const segLen = (wingH - pGap * (wingPanels - 1)) / wingPanels;
+
+    for (let k = 0; k < wingPanels; k++) {
+      const segCy = wy0 + segLen * 0.5 + k * (segLen + pGap);
+
+      // Left edge board facing inward (-90 deg)
+      const leftBrand = brands[(wingIdx * wingPanels + k + 1) % brands.length];
+      ctx.save();
+      ctx.translate(leftCx, segCy);
+      ctx.rotate(-Math.PI / 2);
+      drawSingleDealerLedBoard(ctx, leftBrand, -segLen / 2, -sideBoardT / 2, segLen, sideBoardT, isNight);
+      ctx.restore();
+
+      // Right edge board facing inward (+90 deg)
+      const rightBrand = brands[(wingIdx * wingPanels + k + 2) % brands.length];
+      ctx.save();
+      ctx.translate(rightCx, segCy);
+      ctx.rotate(Math.PI / 2);
+      drawSingleDealerLedBoard(ctx, rightBrand, -segLen / 2, -sideBoardT / 2, segLen, sideBoardT, isNight);
+      ctx.restore();
+    }
+  });
 };
 
 export type VarCameraMode = 'full' | 'wide' | 'zoom';
@@ -2822,10 +3344,10 @@ export const drawLivePitchToCanvas = (
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const padX = Math.max(20, cssW * 0.042);
-  const padY = Math.max(30, cssH * 0.102);
-  const padTop = padY;
-  const padBottom = padY;
+  const padX = Math.max(24, cssW * 0.048);
+  const padTop = Math.max(34, cssH * 0.112);
+  const padBottom = Math.max(30, cssH * 0.102);
+  const padY = padTop;
   const pw = cssW - padX * 2;
   const ph = cssH - padTop - padBottom;
   const px = (x: number) => padX + (x / 100) * pw;
@@ -2856,7 +3378,8 @@ export const drawLivePitchToCanvas = (
     }
   }
   const stadiumStyle = env?.stadiumStyle || 'modern_bowl';
-  const bgKey = `${cssW}x${cssH}@${dpr}|${stadiumStyle}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
+  const perimeterSig = getPerimeterSig(resolvePitchPerimeterBrands(env));
+  const bgKey = `${cssW}x${cssH}@${dpr}|${stadiumStyle}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}|${perimeterSig}`;
 
   if (typeof document !== 'undefined') {
     if (!pitchBgCache || pitchBgCache.key !== bgKey) {
@@ -2953,6 +3476,9 @@ export const drawLivePitchToCanvas = (
           bctx.stroke();
         }
         bctx.restore();
+
+        // Top, Left & Right Perimeter Dealer / Partner LED Boards
+        drawPitchPerimeterDealerBoards(bctx, { padX, padTop, pw, ph, isNight, env });
 
         const stripeCount =
           turfSpec.cutStyle === 'patchy'
@@ -5620,78 +6146,91 @@ export const drawLivePitchToCanvas = (
     const bothShouting =
       coachSpeechDrawQueue.filter((item) => Boolean(item.c.shoutText && item.c.shoutTimer > 0)).length >= 2;
     const midSplitX = px(50);
+    const touchBot = padY + ph;
 
-    coachSpeechDrawQueue.forEach(({ c, cx, cy, cr, kit, warmupPhase }) => {
-      if (c.shoutText && c.shoutTimer > 0) {
-        const sAlpha = clamp(c.shoutTimer / 0.4, 0, 1);
-        ctx.save();
-        ctx.globalAlpha = sAlpha;
-        ctx.font = '700 9px "Noto Sans Thai", sans-serif';
-        const maxShoutW = bothShouting ? Math.max(58, cssW * 0.24) : Math.max(72, cssW * 0.32);
-        const shoutStr = fitCanvasText(ctx, c.shoutText, maxShoutW);
-        const sw = measureTextCached(ctx, shoutStr) + 14;
-        const sh = 16;
-        let bx: number;
-        if (bothShouting) {
-          if (c.side === 'H') {
-            bx = clamp(cx - sw * 0.72, 6, Math.max(6, midSplitX - sw - 4));
-          } else {
-            bx = clamp(cx - sw * 0.28, Math.min(cssW - sw - 6, midSplitX + 4), cssW - sw - 6);
-          }
+    // Pass 1: Coach Speech Bubbles
+    coachSpeechDrawQueue.forEach(({ c, cx, cy, cr, kit }) => {
+      if (!(c.shoutText && c.shoutTimer > 0)) return;
+      const sAlpha = clamp(c.shoutTimer / 0.4, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = sAlpha;
+      ctx.font = '700 9px "Noto Sans Thai", sans-serif';
+      const maxShoutW = bothShouting ? Math.max(58, cssW * 0.24) : Math.max(72, cssW * 0.32);
+      const shoutStr = fitCanvasText(ctx, c.shoutText, maxShoutW);
+      const sw = measureTextCached(ctx, shoutStr) + 14;
+      const sh = 16;
+      let bx: number;
+      if (bothShouting) {
+        if (c.side === 'H') {
+          bx = clamp(cx - sw * 0.72, 6, Math.max(6, midSplitX - sw - 4));
         } else {
-          bx = clamp(cx - sw / 2, 6, cssW - sw - 6);
+          bx = clamp(cx - sw * 0.28, Math.min(cssW - sw - 6, midSplitX + 4), cssW - sw - 6);
         }
-        const by = clamp(cy - cr - sh - 5.5, 4, cssH - sh - 4);
-        const tailX = clamp(cx, bx + 6, bx + sw - 6);
-
-        drawSoftRoundedShadow(ctx, bx, by, sw, sh, 5.5, 2, 1.5);
-        ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
-        ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, sw, sh, 5.5);
-        ctx.fill();
-        ctx.stroke();
-
-        // Pointer tail directed at the coach
-        ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
-        ctx.beginPath();
-        ctx.moveTo(tailX - 3, by + sh - 0.6);
-        ctx.lineTo(tailX, by + sh + 3.8);
-        ctx.lineTo(tailX + 3, by + sh - 0.6);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
-        ctx.lineWidth = 1.1;
-        ctx.beginPath();
-        ctx.moveTo(tailX - 2.8, by + sh);
-        ctx.lineTo(tailX, by + sh + 3.8);
-        ctx.lineTo(tailX + 2.8, by + sh);
-        ctx.stroke();
-
-        ctx.fillStyle = c.isUserCoach ? '#fde047' : '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(shoutStr, bx + sw / 2, by + sh / 2 + 0.3);
-        ctx.restore();
-      } else if (c.moodEmoji && (c.moodTimer || 0) > 0) {
-        const mTimer = c.moodTimer || 0;
-        const mAlpha = clamp(mTimer / 0.35, 0, 1);
-        const bob = Math.sin(warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
-        ctx.save();
-        ctx.globalAlpha = mAlpha;
-        const emX = clamp(cx, 10, cssW - 10);
-        const emY = clamp(cy - cr - 8 + bob, 8, cssH - 8);
-        ctx.fillStyle = 'rgba(5, 14, 9, 0.58)';
-        ctx.beginPath();
-        ctx.arc(emX, emY, 7.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.font = '11px Sarabun, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(c.moodEmoji, emX, emY + 0.5);
-        ctx.restore();
+      } else if (c.side === 'H') {
+        bx = clamp(cx - sw / 2, 6, Math.max(6, midSplitX - sw * 0.35));
+      } else {
+        bx = clamp(cx - sw / 2, Math.min(cssW - sw - 6, midSplitX - sw * 0.65), cssW - sw - 6);
       }
+      const by = clamp(cy - cr - sh - 5.5, 4, cssH - sh - 4);
+      const tailX = clamp(cx, bx + 6, bx + sw - 6);
+
+      drawSoftRoundedShadow(ctx, bx, by, sw, sh, 5.5, 2, 1.5);
+      ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
+      ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, sw, sh, 5.5);
+      ctx.fill();
+      ctx.stroke();
+
+      // Pointer tail directed at the coach
+      ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
+      ctx.beginPath();
+      ctx.moveTo(tailX - 3, by + sh - 0.6);
+      ctx.lineTo(tailX, by + sh + 3.8);
+      ctx.lineTo(tailX + 3, by + sh - 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(tailX - 2.8, by + sh);
+      ctx.lineTo(tailX, by + sh + 3.8);
+      ctx.lineTo(tailX + 2.8, by + sh);
+      ctx.stroke();
+
+      ctx.fillStyle = c.isUserCoach ? '#fde047' : '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(shoutStr, bx + sw / 2, by + sh / 2 + 0.3);
+      ctx.restore();
+    });
+
+    // Pass 2: Coach Mood Emojis (no background, placed cleanly in unobstructed sideline apron beside coach)
+    coachSpeechDrawQueue.forEach(({ c, cx, cy, cr, warmupPhase }) => {
+      if ((c.shoutText && c.shoutTimer > 0) || !c.moodEmoji || (c.moodTimer || 0) <= 0) return;
+      const mTimer = c.moodTimer || 0;
+      const mAlpha = clamp(mTimer / 0.35, 0, 1);
+      const bob = Math.sin(warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
+      const emSize = Math.round(clamp(cr * 1.65, 12, 15));
+      const emOffset = cr + 9.5;
+      let emX: number;
+      if (c.side === 'H') {
+        const innerX = cx + emOffset;
+        emX = innerX <= midSplitX - 8 ? innerX : Math.max(10, cx - emOffset);
+      } else {
+        const innerX = cx - emOffset;
+        emX = innerX >= midSplitX + 8 ? innerX : Math.min(cssW - 10, cx + emOffset);
+      }
+      const emY = clamp(cy - cr * 0.35 + bob, touchBot + emSize * 0.52, cssH - emSize * 0.55);
+
+      ctx.save();
+      ctx.globalAlpha = mAlpha;
+      ctx.font = `${emSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", Sarabun, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(c.moodEmoji, emX, emY + 0.5);
+      ctx.restore();
     });
   }
 
@@ -5884,7 +6423,8 @@ const getHighlightWorldBgCache = (
     }
   }
 
-  const key = `hl|${stadiumStyle}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(2)}|${puddleSig}|${homeKit}|${awayKit}|${homeTrim}|${awayTrim}`;
+  const perimeterSig = getPerimeterSig(resolvePitchPerimeterBrands(env));
+  const key = `hl|${stadiumStyle}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(2)}|${puddleSig}|${homeKit}|${awayKit}|${homeTrim}|${awayTrim}|${perimeterSig}`;
 
   if (hlPitchBgCache && hlPitchBgCache.key === key) {
     return { canvas: hlPitchBgCache.canvas, apronFill };
@@ -5979,6 +6519,9 @@ const getHighlightWorldBgCache = (
     bctx.stroke();
   }
   bctx.restore();
+
+  // Top, Left & Right Perimeter Dealer / Partner LED Boards
+  drawPitchPerimeterDealerBoards(bctx, { padX, padTop: padY, pw, ph, isNight, env });
 
   // 2. Multi-grade mowed turf stripes
   const stripeCount =

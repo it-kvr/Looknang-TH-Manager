@@ -139,6 +139,39 @@ export function getSponsorBrandById(id?: string | null): ShirtSponsorBrand | nul
   return SHIRT_SPONSOR_BRANDS.find((b) => b.id === id) || null;
 }
 
+export interface PartnerBrandBoardSpec {
+  id: string;
+  label: string;
+  shortLabel: string;
+  bg: string;
+  accent: string;
+}
+
+export const PARTNER_DEAL_BRAND_SPECS: readonly PartnerBrandBoardSpec[] = [
+  { id: 'drink', label: 'น้ำแร่ สปอร์ตไทย', shortLabel: 'H2O SPORT', bg: '#0284c7', accent: '#bae6fd' },
+  { id: 'snack', label: 'ทาโร่ สแน็ค', shortLabel: 'TARO', bg: '#ea580c', accent: '#fde047' },
+  { id: 'apparel', label: 'ลูกหนัง สปอร์ต', shortLabel: 'LNT PRO', bg: '#15803d', accent: '#bbf7d0' },
+  { id: 'tyre', label: 'ยางสยามไดร์ฟ', shortLabel: 'SIAMDRIVE', bg: '#27272a', accent: '#fb923c' },
+  { id: 'convenience', label: 'มาร์ท 24 ชม.', shortLabel: 'MART 24H', bg: '#be123c', accent: '#fef08a' },
+  { id: 'ecom', label: 'ไทยมอลล์', shortLabel: 'THAIMALL', bg: '#d97706', accent: '#fef3c7' },
+  { id: 'telecom', label: 'สยาม 5G+', shortLabel: '5G LIVE', bg: '#2563eb', accent: '#67e8f9' },
+  { id: 'fintech', label: 'ดิจิทัลเพย์', shortLabel: 'DPAY', bg: '#7c3aed', accent: '#a7f3d0' },
+  { id: 'airline', label: 'ไทยวิงส์', shortLabel: 'THAIWINGS', bg: '#0369a1', accent: '#fcd34d' },
+  { id: 'asia_tech', label: 'เอเชีย โปร-เทค', shortLabel: 'ASIAPRO', bg: '#0f172a', accent: '#10b981' }
+];
+
+export function getPartnerDealBoardSpec(id: string, fallbackName?: string): PartnerBrandBoardSpec {
+  const hit = PARTNER_DEAL_BRAND_SPECS.find((p) => p.id === id);
+  if (hit) return hit;
+  return {
+    id,
+    label: fallbackName || id.toUpperCase(),
+    shortLabel: (fallbackName || id).slice(0, 8).toUpperCase(),
+    bg: '#334155',
+    accent: '#cbd5e1'
+  };
+}
+
 export function getAiTeamSponsorBrand(
   teamId: number,
   season = 1,

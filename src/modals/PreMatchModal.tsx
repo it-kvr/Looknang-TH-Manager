@@ -12,7 +12,6 @@ import {
   SlidersHorizontal,
   Sparkles,
   Sun,
-  Tv,
   Users,
   X
 } from 'lucide-react';
@@ -36,6 +35,7 @@ import { getMatchBroadcastChannel } from '../engine/liveStreamChat';
 import { buildMatchEnvironment, getStadiumDisplayName, type MatchFixtureKind } from '../engine/matchEnv';
 import { buildAssistantCoachNotes, recommendMatchPlanAndLineup, type AssistantAppliedPlanResult } from '../engine/assistantNotes';
 import { ClubCrest, FormationPitch, PlayerFace } from '../components/SvgVisuals';
+import { BroadcastChannelLogo } from '../components/SponsorLogos';
 import { MatchPlayerThumb } from './MatchSharedComponents';
 import { FacilityUpgradeSvg, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
 import { getStaminaMeta } from '../components/StaminaBar';
@@ -1285,9 +1285,9 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   />
                 </div>
                 <div className="flex items-center justify-between gap-1 text-[9.5px] mland:text-[7.5px] text-[var(--mut)] tabular">
-                  <span className="inline-flex items-center gap-1 truncate">
-                    <Tv className="w-2.5 h-2.5 shrink-0" />
-                    <span className="truncate">{broadcastChannel.name}</span>
+                  <span className="inline-flex items-center gap-1.5 truncate">
+                    <BroadcastChannelLogo channel={broadcastChannel} size={14} className="rounded-[3px]" />
+                    <span className="truncate font-semibold text-[var(--ink)]">{broadcastChannel.name}</span>
                   </span>
                   <span className="shrink-0 font-semibold text-[var(--ink)]">
                     ~{fmtFansShort(streamProj.baseViewers)} · แฟน {fmtFansShort(ensureTeamFans(homeTeam))}

@@ -765,7 +765,10 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
           dirtMix: params.matchEnv.dirtMix,
           pitchSeed: params.matchEnv.pitchSeed,
           stadiumStyle: params.matchEnv.stadiumStyle,
-          puddles: params.matchEnv.puddles?.slice(0, 4) || []
+          puddles: params.matchEnv.puddles?.slice(0, 4) || [],
+          ...(params.matchEnv.perimeterBrands?.length
+            ? { perimeterBrands: params.matchEnv.perimeterBrands.slice(0, 6) }
+            : {})
         }
       : undefined,
     actors,

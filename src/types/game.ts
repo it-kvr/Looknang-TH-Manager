@@ -1805,6 +1805,16 @@ export interface TeamFacilityMatchModifiers {
   }[];
 }
 
+export interface PitchPerimeterBrand {
+  kind: 'partner' | 'sponsor';
+  id: string;
+  label: string;
+  shortLabel: string;
+  bg: string;
+  accent: string;
+  motif?: number;
+}
+
 export interface MatchEnvironment {
   season: 'rainy' | 'summer';
   timeOfDay: 'day' | 'night';
@@ -1816,6 +1826,7 @@ export interface MatchEnvironment {
   dirtMix?: number;
   pitchSeed?: number;
   stadiumStyle?: StadiumStyleId;
+  perimeterBrands?: PitchPerimeterBrand[];
 }
 
 export interface LiveMatchWorld {

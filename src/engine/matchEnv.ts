@@ -1,9 +1,108 @@
 import { clamp } from '../utils/math';
 import { getAiTeamStadiumStyleId, getStadiumStyleSpec, getTurfGradeForLevel } from '../data/crestAndKitData';
-import type { GameState, MatchEnvironment, MatchPitchPuddle, StadiumStyleId, Team } from '../types/game';
-import { getFacilityCondition } from './simulation';
+import {
+  PARTNER_DEAL_BRAND_SPECS,
+  getAiTeamSponsorBrand,
+  getPartnerDealBoardSpec,
+  resolveStateSponsorBrand
+} from '../data/sponsorBrands';
+import type { GameState, MatchEnvironment, MatchPitchPuddle, PitchPerimeterBrand, StadiumStyleId, Team } from '../types/game';
+import { getActivePartnerDeals, getFacilityCondition } from './simulation';
 
 export type MatchFixtureKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
+
+function toPartnerPerimeterBrand(id: string, fallbackName?: string): PitchPerimeterBrand {
+  const spec = getPartnerDealBoardSpec(id, fallbackName);
+  return {
+    kind: 'partner',
+    id: spec.id,
+    label: spec.label,
+    shortLabel: spec.shortLabel,
+    bg: spec.bg,
+    accent: spec.accent
+  };
+}
+
+function buildMatchPerimeterBrands(
+  homeOrig: Team,
+  kind: MatchFixtureKind,
+  meIsHome: boolean,
+  state: GameState,
+  clubSeed: number
+): PitchPerimeterBrand[] {
+  if (kind === 'nt') {
+    return ['airline', 'telecom', 'fintech', 'drink'].map((id) => toPartnerPerimeterBrand(id));
+  }
+  if (kind === 'sc') {
+    return ['asia_tech', 'airline', 'telecom', 'convenience'].map((id) => toPartnerPerimeterBrand(id));
+  }
+
+  const out: PitchPerimeterBrand[] = [];
+  const seen = new Set<string>();
+  const pushUnique = (b: PitchPerimeterBrand) => {
+    const key = `${b.kind}:${b.id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(b);
+  };
+
+  if (meIsHome && state.mode === 'm') {
+    const activeDeals = getActivePartnerDeals(state);
+    activeDeals.forEach((deal) => {
+      pushUnique(toPartnerPerimeterBrand(deal.id, deal.name));
+    });
+    const mainSp = resolveStateSponsorBrand(state);
+    pushUnique({
+      kind: 'sponsor',
+      id: mainSp.id,
+      label: mainSp.thName,
+      shortLabel: mainSp.code,
+      bg: mainSp.badgeBg,
+      accent: mainSp.accent,
+      motif: mainSp.motif
+    });
+    if (kind === 'asia') {
+      pushUnique(toPartnerPerimeterBrand('asia_tech'));
+    }
+    const tierPool =
+      homeOrig.tier >= 2
+        ? ['telecom', 'fintech', 'airline', 'ecom', 'apparel', 'drink']
+        : homeOrig.tier === 1
+          ? ['convenience', 'tyre', 'apparel', 'ecom', 'drink', 'snack']
+          : ['drink', 'snack', 'apparel', 'tyre', 'convenience'];
+    let ptr = clubSeed % tierPool.length;
+    while (out.length < 3 && seen.size < PARTNER_DEAL_BRAND_SPECS.length + 1) {
+      pushUnique(toPartnerPerimeterBrand(tierPool[ptr % tierPool.length]));
+      ptr++;
+    }
+    return out;
+  }
+
+  const aiSp = getAiTeamSponsorBrand(homeOrig.id, state.season ?? 1);
+  pushUnique({
+    kind: 'sponsor',
+    id: aiSp.id,
+    label: aiSp.thName,
+    shortLabel: aiSp.code,
+    bg: aiSp.badgeBg,
+    accent: aiSp.accent,
+    motif: aiSp.motif
+  });
+  if (kind === 'asia') {
+    pushUnique(toPartnerPerimeterBrand('asia_tech'));
+    pushUnique(toPartnerPerimeterBrand('airline'));
+  }
+  const aiPool =
+    homeOrig.tier >= 2
+      ? ['telecom', 'fintech', 'airline', 'ecom', 'apparel', 'drink']
+      : homeOrig.tier === 1
+        ? ['convenience', 'tyre', 'apparel', 'ecom', 'drink', 'snack']
+        : ['drink', 'snack', 'apparel', 'tyre', 'convenience'];
+  for (let i = 0; i < aiPool.length && out.length < 4; i++) {
+    pushUnique(toPartnerPerimeterBrand(aiPool[(clubSeed + i) % aiPool.length]));
+  }
+  return out;
+}
 
 export function buildMatchEnvironment(
   homeOrig: Team,
@@ -103,6 +202,8 @@ export function buildMatchEnvironment(
         }))
       : [];
 
+  const perimeterBrands = buildMatchPerimeterBrands(homeOrig, kind, meIsHome, state, clubSeed);
+
   return {
     season,
     timeOfDay,
@@ -113,7 +214,8 @@ export function buildMatchEnvironment(
     grassLength,
     dirtMix,
     pitchSeed: clubSeed,
-    stadiumStyle
+    stadiumStyle,
+    perimeterBrands
   };
 }
 

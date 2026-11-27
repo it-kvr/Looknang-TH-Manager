@@ -319,3 +319,164 @@ export const BroadcastPlanLogo: React.FC<{ id: string; size?: number; className?
     </svg>
   );
 };
+
+export interface BroadcastChannelBrandSpec {
+  id: string;
+  bg: string;
+  bg2: string;
+  accent: string;
+  mark: string;
+  motif: 'play' | 'shield' | 'bolt' | 'globe' | 'crown' | 'cup' | 'changsuek' | 'ring';
+}
+
+const CHANNEL_BRAND_SPECS: Record<string, BroadcastChannelBrandSpec> = {
+  'BallThai Local Play': { id: 'ballthai_play', bg: '#0f766e', bg2: '#042f2e', accent: '#5eead4', mark: 'BT', motif: 'play' },
+  'Siamball Stream TV': { id: 'siamball_tv', bg: '#0369a1', bg2: '#082f49', accent: '#7dd3fc', mark: 'SB', motif: 'ring' },
+  'Thonburi Sports Net': { id: 'thonburi_net', bg: '#1e293b', bg2: '#090d16', accent: '#fbbf24', mark: 'TSN', motif: 'shield' },
+  'BallThai Plus HD': { id: 'ballthai_plus', bg: '#1d4ed8', bg2: '#172554', accent: '#60a5fa', mark: 'BT+', motif: 'bolt' },
+  'SiamFooty Network': { id: 'siamfooty_hd', bg: '#991b1b', bg2: '#450a0a', accent: '#fca5a5', mark: 'SF', motif: 'play' },
+  'ThaiSport Channel 2': { id: 'thaisport_ch2', bg: '#6d28d9', bg2: '#2e1065', accent: '#c4b5fd', mark: 'TS2', motif: 'shield' },
+  'SiamSport Prime HD': { id: 'siamsport_hd', bg: '#0f172a', bg2: '#020617', accent: '#facc15', mark: 'SS1', motif: 'crown' },
+  'PrimeBall Thailand': { id: 'primeball_th', bg: '#312e81', bg2: '#1e1b4b', accent: '#38bdf8', mark: 'PB', motif: 'ring' },
+  'ThaiPro TV1 Ultra': { id: 'thaipro_tv1', bg: '#065f46', bg2: '#022c22', accent: '#34d399', mark: 'TV1', motif: 'bolt' },
+  'CupPlay Sports HD': { id: 'cupplay_hd', bg: '#92400e', bg2: '#451a03', accent: '#fde047', mark: 'CUP', motif: 'cup' },
+  'SiamCup Live TV': { id: 'siamcup_tv', bg: '#be123c', bg2: '#4c0519', accent: '#fda4af', mark: 'SC', motif: 'cup' },
+  'Thairath & Changsuek HD': { id: 'changsuek_hd', bg: '#1e3a8a', bg2: '#0f172a', accent: '#facc15', mark: 'TH', motif: 'changsuek' },
+  'AsiaFootball Network HD': { id: 'asia_hd', bg: '#0c4a6e', bg2: '#082f49', accent: '#2dd4bf', mark: 'AFN', motif: 'globe' },
+  'ThaiChampions Sports HD': { id: 'champions_hd', bg: '#27272a', bg2: '#09090b', accent: '#f59e0b', mark: 'TC', motif: 'crown' }
+};
+
+export function getBroadcastChannelBrandStyle(channelName?: string | null): BroadcastChannelBrandSpec {
+  if (channelName && CHANNEL_BRAND_SPECS[channelName]) {
+    return CHANNEL_BRAND_SPECS[channelName];
+  }
+  return {
+    id: 'default_tv',
+    bg: '#1e293b',
+    bg2: '#090d16',
+    accent: '#38bdf8',
+    mark: (channelName || 'TV').slice(0, 2).toUpperCase(),
+    motif: 'play'
+  };
+}
+
+export const BroadcastChannelLogo: React.FC<{
+  channel?: { name: string; short?: string } | null;
+  size?: number;
+  muted?: boolean;
+  className?: string;
+}> = ({ channel, size = 28, muted = false, className = '' }) => {
+  const uid = React.useId().replace(/:/g, '');
+  const spec = getBroadcastChannelBrandStyle(channel?.name);
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 36 36"
+      aria-hidden="true"
+      className={`shrink-0 rounded-lg shadow-2xs ${muted ? 'opacity-70 saturate-75' : ''} ${className}`}
+    >
+      <defs>
+        <linearGradient id={`bcl-${uid}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={spec.bg} />
+          <stop offset="100%" stopColor={spec.bg2} />
+        </linearGradient>
+      </defs>
+      <rect width="36" height="36" rx="8.5" fill={`url(#bcl-${uid})`} />
+      <rect
+        x="0.8"
+        y="0.8"
+        width="34.4"
+        height="34.4"
+        rx="7.7"
+        fill="none"
+        stroke={spec.accent}
+        strokeOpacity="0.58"
+        strokeWidth="1"
+      />
+      <path d="M5 10 C12 4, 24 4, 31 10" fill="none" stroke="#ffffff" strokeOpacity="0.14" strokeWidth="1.2" />
+
+      {spec.motif === 'play' && (
+        <>
+          <circle cx="18" cy="18" r="10.5" fill="none" stroke={spec.accent} strokeOpacity="0.45" strokeWidth="1.5" />
+          <path d="M14.5 12.2 L24.5 18 L14.5 23.8 Z" fill="#ffffff" />
+          <circle cx="27" cy="9" r="2.1" fill={spec.accent} />
+        </>
+      )}
+
+      {spec.motif === 'ring' && (
+        <>
+          <circle cx="18" cy="18" r="9.5" fill="none" stroke={spec.accent} strokeWidth="1.9" />
+          <path d="M11 18 H25 M18 8.5 A12 12 0 0 1 18 27.5" fill="none" stroke="#ffffff" strokeOpacity="0.7" strokeWidth="1.4" />
+          <circle cx="18" cy="18" r="3" fill={spec.accent} />
+        </>
+      )}
+
+      {spec.motif === 'shield' && (
+        <>
+          <path
+            d="M18 7 L27 10.5 V18 C27 23.8 23.2 27.6 18 29.5 C12.8 27.6 9 23.8 9 18 V10.5 Z"
+            fill="#ffffff"
+            fillOpacity="0.1"
+            stroke={spec.accent}
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <text x="18" y="21.5" textAnchor="middle" fill="#ffffff" fontSize="8.8" fontWeight="900" fontFamily="ui-sans-serif, system-ui, sans-serif">
+            {spec.mark}
+          </text>
+        </>
+      )}
+
+      {spec.motif === 'bolt' && (
+        <>
+          <rect x="6.5" y="9" width="23" height="18" rx="4" fill="none" stroke={spec.accent} strokeWidth="1.6" />
+          <text x="18" y="21.2" textAnchor="middle" fill="#ffffff" fontSize="9.5" fontWeight="900" fontFamily="ui-sans-serif, system-ui, sans-serif">
+            {spec.mark}
+          </text>
+          <circle cx="27.2" cy="11.8" r="1.8" fill={spec.accent} />
+        </>
+      )}
+
+      {spec.motif === 'crown' && (
+        <>
+          <path d="M9.5 14 L13 9.5 L18 13 L23 9.5 L26.5 14 Z" fill={spec.accent} />
+          <rect x="8.5" y="15.5" width="19" height="12" rx="3" fill="#ffffff" fillOpacity="0.12" stroke={spec.accent} strokeOpacity="0.75" strokeWidth="1.2" />
+          <text x="18" y="24.2" textAnchor="middle" fill="#ffffff" fontSize="8.8" fontWeight="900" fontFamily="ui-sans-serif, system-ui, sans-serif">
+            {spec.mark}
+          </text>
+        </>
+      )}
+
+      {spec.motif === 'cup' && (
+        <>
+          <path d="M12 9.5 H24 V15.5 C24 19 21.3 21.5 18 21.5 C14.7 21.5 12 19 12 15.5 Z" fill={spec.accent} fillOpacity="0.24" stroke={spec.accent} strokeWidth="1.7" />
+          <path d="M18 21.5 V25.5 M13.5 26.5 H22.5" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M12 11.5 H9.5 C9.5 14.5 10.5 16 12 16 M24 11.5 H26.5 C26.5 14.5 25.5 16 24 16" fill="none" stroke={spec.accent} strokeWidth="1.4" strokeLinecap="round" />
+        </>
+      )}
+
+      {spec.motif === 'changsuek' && (
+        <>
+          <path d="M8 10 H28 V14 H8 Z" fill="#dc2626" opacity="0.88" />
+          <path d="M8 22 H28 V26 H8 Z" fill="#dc2626" opacity="0.88" />
+          <path d="M8 14 H28 V22 H8 Z" fill="#f8fafc" opacity="0.94" />
+          <rect x="11" y="15" width="14" height="6" rx="1.8" fill="#172554" />
+          <text x="18" y="19.9" textAnchor="middle" fill={spec.accent} fontSize="5.4" fontWeight="900" fontFamily="ui-sans-serif, system-ui, sans-serif">
+            LIVE
+          </text>
+        </>
+      )}
+
+      {spec.motif === 'globe' && (
+        <>
+          <circle cx="18" cy="18" r="10" fill="none" stroke={spec.accent} strokeWidth="1.8" />
+          <ellipse cx="18" cy="18" rx="4.5" ry="10" fill="none" stroke="#ffffff" strokeOpacity="0.78" strokeWidth="1.3" />
+          <path d="M8.5 15 H27.5 M8.5 21 H27.5" stroke="#ffffff" strokeOpacity="0.55" strokeWidth="1.2" />
+        </>
+      )}
+    </svg>
+  );
+};
+
