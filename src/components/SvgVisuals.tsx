@@ -1026,8 +1026,8 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
             )}
             {(() => {
               const posPal = getPositionCanvasPalette(z.sp);
-              const bw = isMe ? (z.sp.length >= 3 ? 34 : 30) : z.sp.length >= 3 ? 28 : 25;
-              const bh = 12.5;
+              const bw = isMe ? (z.sp.length >= 3 ? 33 : 29) : z.sp.length >= 3 ? 27 : 24;
+              const bh = 11.8;
               return (
                 <>
                   <rect
@@ -1035,17 +1035,17 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
                     y={cy + 9.5}
                     width={bw}
                     height={bh}
-                    rx="3.8"
+                    rx="3.4"
                     fill={posPal.bg}
-                    stroke={isMe ? '#f5c242' : 'rgba(6, 20, 13, 0.88)'}
-                    strokeWidth={isMe ? '1.15' : '0.85'}
+                    stroke={posPal.stroke}
+                    strokeWidth="0.95"
                   />
                   <text
                     x={cx}
                     y={cy + 9.5 + bh / 2 + 0.3}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    fontSize="8"
+                    fontSize="7.6"
                     fontWeight="800"
                     fontFamily="Sarabun"
                     fill={posPal.text}
@@ -1410,33 +1410,26 @@ export const FormationPitch: React.FC<{
             {/* Top Center: Role Badge (in front of avatar, raised cleanly onto top rim to clear hair) */}
             {(() => {
               const posPal = getPositionCanvasPalette(z.sp);
-              const badgeW = isMe ? (z.sp.length >= 3 ? 34 : 30) : z.sp.length >= 3 ? 28 : 25;
-              const badgeH = 12.5;
-              const badgeStroke = isMe
-                ? '#f5c242'
-                : pn >= 2
-                  ? '#ef4444'
-                  : pn === 1
-                    ? '#f59e0b'
-                    : 'rgba(6, 20, 13, 0.88)';
+              const badgeW = isMe ? (z.sp.length >= 3 ? 33 : 29) : z.sp.length >= 3 ? 27 : 24;
+              const badgeH = 11.8;
               return (
                 <g transform={`translate(${cx},${cy - (isTarget ? 20.5 : 17.5)})`}>
                   <rect
                     x={-badgeW / 2}
-                    y="-8.5"
+                    y="-8.2"
                     width={badgeW}
                     height={badgeH}
-                    rx="3.8"
+                    rx="3.4"
                     fill={posPal.bg}
-                    stroke={badgeStroke}
-                    strokeWidth={isMe || pn > 0 ? '1.15' : '0.85'}
+                    stroke={posPal.stroke}
+                    strokeWidth="0.95"
                   />
                   <text
                     x="0"
-                    y={-8.5 + badgeH / 2 + 0.3}
+                    y={-8.2 + badgeH / 2 + 0.3}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    fontSize="8"
+                    fontSize="7.6"
                     fontWeight="800"
                     fontFamily="Sarabun"
                     fill={posPal.text}
@@ -1488,13 +1481,29 @@ export const FormationPitch: React.FC<{
             {/* Top-Right: Cards & Injury (non-overlapping with lowered role badge) */}
             {meta?.isSecondYellowRed ? (
               <g>
-                <rect x={cx + 9.8} y={cy - 17} width="6.4" height="9.2" rx="1.4" fill="#facc15" stroke="#422006" strokeWidth="0.9" />
-                <rect x={cx + 13.6} y={cy - 14.5} width="6.6" height="9.5" rx="1.4" fill="#ef4444" stroke="#fff" strokeWidth="1.05" />
+                <rect x={cx + 9.8} y={cy - 17} width="6.4" height="9.2" rx="1.4" fill="#facc15" stroke="#000000" strokeWidth="1" />
+                <rect x={cx + 13.6} y={cy - 14.5} width="6.6" height="9.5" rx="1.4" fill="#ef4444" stroke="#000000" strokeWidth="1" />
               </g>
             ) : (isRed || isSus) ? (
-              <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#e5484d" stroke="#fff" strokeWidth="1.1" />
+              <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#ef4444" stroke="#000000" strokeWidth="1.05" />
             ) : (meta?.yellowCards || 0) > 0 ? (
-              <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#facc15" stroke="#422006" strokeWidth="0.95" />
+              <g>
+                <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#facc15" stroke="#000000" strokeWidth="1.05" />
+                {(meta?.yellowCards || 0) > 1 && (
+                  <text
+                    x={cx + 15.5}
+                    y={cy - 10.8}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fontSize="6.4"
+                    fontWeight="900"
+                    fontFamily="Kanit, Sarabun, sans-serif"
+                    fill="#111827"
+                  >
+                    {meta?.yellowCards}
+                  </text>
+                )}
+              </g>
             ) : null}
             {isInj && (
               <g transform={`translate(${hasCard ? cx + (meta?.isSecondYellowRed ? 22 : 21) : cx + 14.5},${hasCard ? cy - 6.5 : cy - 11.5})`}>

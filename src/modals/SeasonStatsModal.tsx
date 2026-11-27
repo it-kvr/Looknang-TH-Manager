@@ -541,10 +541,9 @@ export const SeasonStatsModal: React.FC<{
                         </td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center tabular">
                           {pl.yc > 0 || pl.rc > 0 ? (
-                            <span>
-                              {pl.yc > 0 ? `🟨${pl.yc}` : ''}
-                              {pl.yc > 0 && pl.rc > 0 ? ' ' : ''}
-                              {pl.rc > 0 ? `🟥${pl.rc}` : ''}
+                            <span className="inline-flex items-center justify-center gap-0.5">
+                              {pl.yc > 0 && <StatIconBadge kind="yellow" count={pl.yc} size="sm" />}
+                              {pl.rc > 0 && <StatIconBadge kind="red" count={pl.rc} size="sm" />}
                             </span>
                           ) : (
                             <span className="text-[var(--mut)]">-</span>

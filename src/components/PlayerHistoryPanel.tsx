@@ -79,12 +79,18 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
             <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
               สถิติอาชีพตลอดกาล · {player.n}
             </h3>
-            <p className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
-              {player.ro} · อายุ {player.age} ปี
-              {careerP ? ` · ทีมชาติไทย ${careerP.ntCaps || 0} นัด (${careerP.ntGoals || 0} ประตู)` : ''}
-              {(summary.totalYellow > 0 || summary.totalRed > 0)
-                ? ` · วินัย 🟨 ${summary.totalYellow} / 🟥 ${summary.totalRed}`
-                : ''}
+            <p className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular flex flex-wrap items-center gap-x-1 gap-y-0.5">
+              <span>
+                {player.ro} · อายุ {player.age} ปี
+                {careerP ? ` · ทีมชาติไทย ${careerP.ntCaps || 0} นัด (${careerP.ntGoals || 0} ประตู)` : ''}
+              </span>
+              {(summary.totalYellow > 0 || summary.totalRed > 0) && (
+                <span className="inline-flex items-center gap-1">
+                  <span>· วินัย</span>
+                  {summary.totalYellow > 0 && <StatIconBadge kind="yellow" count={summary.totalYellow} size="xs" />}
+                  {summary.totalRed > 0 && <StatIconBadge kind="red" count={summary.totalRed} size="xs" />}
+                </span>
+              )}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

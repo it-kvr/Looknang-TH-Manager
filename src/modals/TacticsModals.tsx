@@ -130,7 +130,7 @@ export const CustomFormationModal: React.FC<{
                           : 'bg-[var(--surface-2)] hover:brightness-95 inline-flex items-center gap-1'
                       }`}
                     >
-                      {!isSel && <span className={`w-2 h-2 rounded-full ${getPositionBadgeClass(p).split(' ')[0]}`} />}
+                      {!isSel && <span className={`w-2 h-2 rounded-full border border-black/80 ${getPositionBadgeClass(p).split(' ')[0]}`} />}
                       <span>{p}</span>
                     </button>
                   );

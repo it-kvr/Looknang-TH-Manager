@@ -158,6 +158,7 @@ export const MatchModal: React.FC<{
   const [clockLabel, setClockLabel] = useState("0'");
   const [stoppageBadge, setStoppageBadge] = useState<number>(0);
   const [matchPhaseUi, setMatchPhaseUi] = useState<LiveMatchWorld['phase']>('play1');
+  const [isSecondHalfUi, setIsSecondHalfUi] = useState(false);
   const [selectedHalftimeTalk, setSelectedHalftimeTalk] = useState<HalftimeTalkTone>(() =>
     state.mode === 'p' ? 'follow_coach' : 'balanced'
   );
@@ -9916,11 +9917,12 @@ export const MatchModal: React.FC<{
       nextLabel = 'FT';
     }
 
-    const clockSig = `${nextMin}|${w.phase}|${nextLabel}|${nextStop}`;
+    const clockSig = `${nextMin}|${w.phase}|${nextLabel}|${nextStop}|${w.secondHalf ? 1 : 0}`;
     if (lastClockSigRef.current !== clockSig) {
       lastClockSigRef.current = clockSig;
       setMinute(nextMin);
       setMatchPhaseUi(w.phase);
+      setIsSecondHalfUi(w.secondHalf);
       setClockLabel(nextLabel);
       setStoppageBadge(nextStop);
       if (w.phase === 'halftime' || w.phase === 'ft') {
@@ -10352,6 +10354,7 @@ export const MatchModal: React.FC<{
     if (talkTone) SFX.coach();
     const sr = simRef.current;
     w.secondHalf = true;
+    setIsSecondHalfUi(true);
     clearWorldCelebration(w, 'RESET');
     const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
     // Halftime stamina recovery (+5%) & switch pitch sides for 2nd half
@@ -11422,6 +11425,7 @@ export const MatchModal: React.FC<{
         for (let m = startMin + 1; m <= 90; m++) {
           if (m === 46) {
             w.secondHalf = true;
+            setIsSecondHalfUi(true);
             w.pendingSetPiece = null;
             w.agents = buildTeamAgents(getLiveHomeTeam(), 'H', simRef.current.homeLu, true).concat(
               buildTeamAgents(getLiveAwayTeam(), 'A', simRef.current.awayLu, true)
@@ -12613,7 +12617,7 @@ export const MatchModal: React.FC<{
         {/* Live Chat Messages Stream */}
         <div
           ref={rightChatScrollRef}
-          className={`flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/45 ${
+          className={`flex-1 min-h-0 overflow-y-auto no-scrollbar divide-y divide-[var(--line)]/45 ${
             isLivePitchFullscreen ? 'p-2 mland:p-1.5' : 'p-2.5 mland:p-2'
           }`}
         >
@@ -12663,7 +12667,7 @@ export const MatchModal: React.FC<{
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-black/88 flex items-center justify-center safe-all overflow-hidden ${
+      className={`match-no-scrollbar fixed inset-0 z-50 bg-black/88 flex items-center justify-center safe-all overflow-hidden ${
         isLivePitchFullscreen ? 'p-0' : 'p-1.5 sm:p-2.5 mland:p-1'
       }`}
     >
@@ -13006,7 +13010,7 @@ export const MatchModal: React.FC<{
               className={
                 isLivePitchFullscreen
                   ? 'min-w-0 min-h-0 flex flex-col overflow-hidden'
-                  : 'space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1'
+                  : 'space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto no-scrollbar pr-1'
               }
             >
               <div
@@ -13048,12 +13052,22 @@ export const MatchModal: React.FC<{
 
                     {/* Live In-Pitch Top Corners (Miracles & Blessings) + Center Commentary Strip */}
                     {matchPhaseUi !== 'halftime' && !done && (() => {
-                      const homeMiracle = miracleBannerUi?.side === 'H' ? miracleBannerUi : null;
-                      const awayMiracle = miracleBannerUi?.side === 'A' ? miracleBannerUi : null;
-                      const homeBlessed = blessedListUi.filter((b) => b.side === 'H');
-                      const awayBlessed = blessedListUi.filter((b) => b.side === 'A');
-                      const hasLeft = Boolean(homeMiracle || homeBlessed.length > 0);
-                      const hasRight = Boolean(awayMiracle || awayBlessed.length > 0);
+                      const leftSide: 'H' | 'A' = isSecondHalfUi ? 'A' : 'H';
+                      const rightSide: 'H' | 'A' = isSecondHalfUi ? 'H' : 'A';
+                      const leftMiracle = miracleBannerUi?.side === leftSide ? miracleBannerUi : null;
+                      const rightMiracle = miracleBannerUi?.side === rightSide ? miracleBannerUi : null;
+                      const leftBlessed = blessedListUi.filter((b) => b.side === leftSide);
+                      const rightBlessed = blessedListUi.filter((b) => b.side === rightSide);
+                      const leftTeamOrig = leftSide === 'H' ? homeOrig : awayOrig;
+                      const rightTeamOrig = rightSide === 'H' ? homeOrig : awayOrig;
+                      const leftKit = leftSide === 'H' ? homeKit : awayKit;
+                      const rightKit = rightSide === 'H' ? homeKit : awayKit;
+                      const leftGkKit = leftSide === 'H' ? homeGkKit : awayGkKit;
+                      const rightGkKit = rightSide === 'H' ? homeGkKit : awayGkKit;
+                      const leftTrim = leftSide === 'H' ? homeTrim : awayTrim;
+                      const rightTrim = rightSide === 'H' ? homeTrim : awayTrim;
+                      const hasLeft = Boolean(leftMiracle || leftBlessed.length > 0);
+                      const hasRight = Boolean(rightMiracle || rightBlessed.length > 0);
                       const getBlessingEmoji = (tag?: string): string => {
                         switch (tag) {
                           case 'พลิกนรก':
@@ -13080,34 +13094,34 @@ export const MatchModal: React.FC<{
                               ref={leftCornerBadgeRef}
                               className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1.5 sm:left-2 mland:left-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-start gap-0.5"
                             >
-                              {homeMiracle && (
+                              {leftMiracle && (
                                 <span
                                   className={`inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] mland:text-[8px] font-extrabold tabular leading-tight ${cornerShadow} ${
-                                    homeMiracle.maxDeficit >= 3 ? 'text-orange-200' : 'text-amber-200'
+                                    leftMiracle.maxDeficit >= 3 ? 'text-orange-200' : 'text-amber-200'
                                   }`}
-                                  title={`${homeMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งเจ้าบ้าน (${homeMiracle.teamName}) เหลือ ${homeMiracle.minsLeft}'`}
+                                  title={`${leftMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}${leftSide === 'H' ? 'ฝั่งเจ้าบ้าน' : 'ฝั่งทีมเยือน'} (${leftMiracle.teamName}) เหลือ ${leftMiracle.minsLeft}'`}
                                 >
-                                  <span>{homeMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
-                                  <span>{homeMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'}</span>
-                                  <span>{homeMiracle.minsLeft}&apos;</span>
+                                  <span>{leftMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+                                  <span>{leftMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'}</span>
+                                  <span>{leftMiracle.minsLeft}&apos;</span>
                                 </span>
                               )}
-                              {homeBlessed.map((bl) => {
-                                const blPlayer = homeOrig.sq.find((q) => q.n === bl.id);
+                              {leftBlessed.map((bl) => {
+                                const blPlayer = leftTeamOrig.sq.find((q) => q.n === bl.id);
                                 const blEmoji = getBlessingEmoji(bl.tag);
                                 return (
                                   <span
                                     key={bl.id}
                                     className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold leading-tight ${cornerShadow}`}
-                                    title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${homeOrig.name}) เหลือ ${bl.minsLeft}'`}
+                                    title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${leftTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
                                   >
                                     {blPlayer && (
                                       <MatchPlayerThumb
                                         player={blPlayer}
-                                        team={homeOrig}
+                                        team={leftTeamOrig}
                                         state={state}
-                                        kitColor={blPlayer.pos === 'GK' ? homeGkKit : homeKit}
-                                        trimColor={blPlayer.pos === 'GK' ? undefined : homeTrim}
+                                        kitColor={blPlayer.pos === 'GK' ? leftGkKit : leftKit}
+                                        trimColor={blPlayer.pos === 'GK' ? undefined : leftTrim}
                                         size="xs"
                                         dark
                                         ringClassName="ring-amber-300/85"
@@ -13150,26 +13164,26 @@ export const MatchModal: React.FC<{
                               ref={rightCornerBadgeRef}
                               className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 right-1.5 sm:right-2 mland:right-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-end gap-0.5"
                             >
-                              {awayMiracle && (
+                              {rightMiracle && (
                                 <span
                                   className={`inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] mland:text-[8px] font-extrabold tabular leading-tight ${cornerShadow} ${
-                                    awayMiracle.maxDeficit >= 3 ? 'text-orange-200' : 'text-amber-200'
+                                    rightMiracle.maxDeficit >= 3 ? 'text-orange-200' : 'text-amber-200'
                                   }`}
-                                  title={`${awayMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งทีมเยือน (${awayMiracle.teamName}) เหลือ ${awayMiracle.minsLeft}'`}
+                                  title={`${rightMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}${rightSide === 'H' ? 'ฝั่งเจ้าบ้าน' : 'ฝั่งทีมเยือน'} (${rightMiracle.teamName}) เหลือ ${rightMiracle.minsLeft}'`}
                                 >
-                                  <span>{awayMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
-                                  <span>{awayMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'}</span>
-                                  <span>{awayMiracle.minsLeft}&apos;</span>
+                                  <span>{rightMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+                                  <span>{rightMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'}</span>
+                                  <span>{rightMiracle.minsLeft}&apos;</span>
                                 </span>
                               )}
-                              {awayBlessed.map((bl) => {
-                                const blPlayer = awayOrig.sq.find((q) => q.n === bl.id);
+                              {rightBlessed.map((bl) => {
+                                const blPlayer = rightTeamOrig.sq.find((q) => q.n === bl.id);
                                 const blEmoji = getBlessingEmoji(bl.tag);
                                 return (
                                   <span
                                     key={bl.id}
                                     className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold leading-tight ${cornerShadow}`}
-                                    title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${awayOrig.name}) เหลือ ${bl.minsLeft}'`}
+                                    title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${rightTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
                                   >
                                     <span className="text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular text-amber-200/95 leading-none">
                                       {bl.minsLeft}&apos;
@@ -13183,10 +13197,10 @@ export const MatchModal: React.FC<{
                                     {blPlayer && (
                                       <MatchPlayerThumb
                                         player={blPlayer}
-                                        team={awayOrig}
+                                        team={rightTeamOrig}
                                         state={state}
-                                        kitColor={blPlayer.pos === 'GK' ? awayGkKit : awayKit}
-                                        trimColor={blPlayer.pos === 'GK' ? undefined : awayTrim}
+                                        kitColor={blPlayer.pos === 'GK' ? rightGkKit : rightKit}
+                                        trimColor={blPlayer.pos === 'GK' ? undefined : rightTrim}
                                         size="xs"
                                         dark
                                         ringClassName="ring-amber-300/85"
@@ -13613,7 +13627,7 @@ export const MatchModal: React.FC<{
                     <span className="hidden xl:inline">ในสนาม</span>
                   </span>
 
-                  <div className="inline-flex flex-nowrap items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs gap-0.5 min-w-0 max-w-full overflow-x-auto ml-auto">
+                  <div className="inline-flex flex-nowrap items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs gap-0.5 min-w-0 max-w-full overflow-x-auto no-scrollbar ml-auto">
                     {(
                       [
                         ['all', 'ทั้งหมด'],
@@ -14105,7 +14119,7 @@ export const MatchModal: React.FC<{
                           </div>
                         </div>
 
-                        <div ref={rightTacticsScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
+                        <div ref={rightTacticsScrollRef} className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
                           {matchPhaseUi === 'halftime' && (
                             <div className="rounded-xl mland:rounded-lg bg-amber-500/10 border border-amber-500/40 p-2.5 mland:p-2 space-y-1.5 mland:space-y-1">
                               <div className="flex items-center justify-between gap-2">
@@ -14270,7 +14284,7 @@ export const MatchModal: React.FC<{
                 ) : mlandMatchTab === 'chat' ? (
                   renderLiveStreamChatPanel()
                 ) : (
-                  <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
+                  <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto no-scrollbar pr-0.5 space-y-1.5">
                     <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
                       <MatchStatsPanel
                         homeOrig={homeOrig}

@@ -194,7 +194,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
 
           <div className="flex items-center gap-1.5 shrink-0">
             {!liveMode && records.length > 1 && onSelectRecord && (
-              <div className="hidden md:inline-flex items-center gap-1 p-0.5 rounded-lg bg-white/6 border border-white/10 max-w-[240px] overflow-x-auto">
+              <div className="hidden md:inline-flex items-center gap-1 p-0.5 rounded-lg bg-white/6 border border-white/10 max-w-[240px] overflow-x-auto no-scrollbar">
                 {records.map((rec) => {
                   const isCur = rec.id === activeRecord.id;
                   return (
@@ -221,6 +221,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
 
             {(!liveMode || pct >= 0.72) ? (
               <span
+                title={activeRecord.verdictLabel}
                 className={`px-2 py-0.5 rounded-md border text-[10px] mland:text-[9px] font-extrabold whitespace-nowrap ${VERDICT_BADGE_CLS[activeRecord.verdictTone]}`}
               >
                 {activeRecord.verdictShort}
@@ -260,7 +261,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
         </div>
 
         {/* Single-Row Playback & Camera Controls */}
-        <div className="shrink-0 px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 bg-[#0b192c] border-t border-white/12 flex items-center gap-1.5 sm:gap-2 overflow-x-auto whitespace-nowrap">
+        <div className="shrink-0 px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 bg-[#0b192c] border-t border-white/12 flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
           <button
             type="button"
             onClick={handleTogglePlay}

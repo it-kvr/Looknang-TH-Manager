@@ -717,6 +717,21 @@ button:not(:disabled):active {
   contain-intrinsic-size: auto 46px;
 }
 
+.no-scrollbar,
+.match-no-scrollbar,
+.match-no-scrollbar * {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.match-no-scrollbar::-webkit-scrollbar,
+.match-no-scrollbar *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .confetti-piece,
   .celebrate-sparkle,

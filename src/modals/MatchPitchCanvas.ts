@@ -257,62 +257,80 @@ const renderVarMonitorPanel = (
     ? vr.kind === 'goal'
       ? sc === 'goal_line_tech'
         ? vr.overturn
-          ? 'ไม่ข้ามเส้น'
-          : 'ข้ามเต็มใบ'
+          ? '❌ บอลยังไม่ข้ามเส้น · ริบประตู!'
+          : '✅ บอลข้ามเส้นเต็มใบ · ให้ประตู!'
         : sc === 'foul_buildup'
           ? vr.overturn
-            ? 'ฟาวล์ก่อนยิง'
-            : 'ปะทะปกติ'
-          : verdictPositiveForCall
-            ? 'ยืนยันประตู'
-            : 'ล้ำหน้า!'
+            ? '❌ ฟาวล์จังหวะขึ้นเกม · ริบประตู!'
+            : '✅ ปะทะปกติ · ยืนยันให้ประตู!'
+          : vr.overturn
+            ? '❌ ล้ำหน้า · ริบประตู!'
+            : '✅ ไม่ล้ำหน้า · ให้ประตู!'
       : vr.kind === 'penalty'
         ? sc === 'handball_box'
           ? vr.overturn
-            ? 'ไม่แฮนด์บอล'
-            : 'แฮนด์บอล!'
+            ? 'แขนแนบตัว/นอกเขต · ไม่จุดโทษ'
+            : '🚨 แฮนด์บอลในเขต · จุดโทษ!'
           : sc === 'gk_clash_box'
             ? vr.overturn
-              ? 'ถึงบอลก่อน'
-              : 'รวบในเขต!'
+              ? 'ผู้รักษาประตูถึงบอลก่อน · ไม่จุดโทษ'
+              : '🚨 รวบในเขตโทษ · จุดโทษ!'
             : vr.overturn
-              ? 'นอกเขตโทษ'
-              : 'จุดโทษ!'
+              ? 'นอกกรอบ · ได้ฟรีคิก'
+              : '🚨 ฟาวล์ในเขต · จุดโทษ!'
         : vr.pendingCardUpgrade === 'R'
-          ? 'ใบแดง!'
-          : 'ใบเหลือง'
+          ? '🟥 ยกระดับเป็นใบแดง!'
+          : '🟨 ให้แค่ใบเหลือง'
     : isFreezePhase
       ? 'หยุดภาพตรวจจุด'
       : 'สโลว์โมชัน';
 
-  ctx.textAlign = 'right';
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = `800 ${isStandalone ? 11 : smallText ? 8 : 9}px "Noto Sans Thai", sans-serif`;
+  const hdrTitleRaw = showVerdict
+    ? '🖥 VAR'
+    : isStandalone
+      ? followBall && cameraMode !== 'full'
+        ? `🖥 VAR · ตามบอล (${cameraMode === 'zoom' ? 'ใกล้' : 'ไกล'})`
+        : cameraMode === 'full'
+          ? '🖥 VAR · ทั้งสนาม'
+          : cameraMode === 'wide'
+            ? '🖥 VAR · ระยะไกล'
+            : '🖥 VAR · ระยะใกล้'
+      : '🖥 VAR REPLAY';
+  const hdrLeftX = monX + (isStandalone ? 22 : 16);
+  const statusFontSize = showVerdict ? (isStandalone ? 11 : smallText ? 7.8 : 8.8) : (isStandalone ? 10.5 : smallText ? 7.8 : 8.8);
+  const titleNaturalW = measureTextCached(ctx, hdrTitleRaw);
+  const titleReservedW = showVerdict
+    ? Math.min(titleNaturalW + 8, isStandalone ? 76 : 58)
+    : Math.min(titleNaturalW + 8, monW * 0.56);
+  const maxTagW = Math.max(48, monW - (hdrLeftX - monX) - titleReservedW - (isStandalone ? 14 : 10));
+
+  ctx.textAlign = 'right';
   ctx.fillStyle = frameAccent;
-  ctx.font = `800 ${isStandalone ? 10.5 : smallText ? 7.8 : 8.8}px "Noto Sans Thai", sans-serif`;
-  const tagW = measureTextCached(ctx, statusTag) + (isStandalone ? 18 : 12);
-  ctx.fillText(statusTag, monX + monW - (isStandalone ? 11 : 8), monY + hdrH / 2 + 0.6);
+  ctx.font = `800 ${statusFontSize}px "Noto Sans Thai", sans-serif`;
+  const fittedTag = fitCanvasText(ctx, statusTag, maxTagW);
+  const fittedTagW = measureTextCached(ctx, fittedTag) + (isStandalone ? 16 : 10);
+  ctx.fillText(fittedTag, monX + monW - (isStandalone ? 11 : 8), monY + hdrH / 2 + 0.6);
 
   ctx.textAlign = 'left';
   ctx.fillStyle = '#f8fafc';
   ctx.font = `800 ${isStandalone ? 11 : smallText ? 8 : 9}px "Noto Sans Thai", sans-serif`;
-  const hdrTitleRaw = isStandalone
-    ? followBall && cameraMode !== 'full'
-      ? `🖥 VAR · ตามบอล (${cameraMode === 'zoom' ? 'ใกล้' : 'ไกล'})`
-      : cameraMode === 'full'
-        ? '🖥 VAR · ทั้งสนาม'
-        : cameraMode === 'wide'
-          ? '🖥 VAR · ระยะไกล'
-          : '🖥 VAR · ระยะใกล้'
-    : '🖥 VAR REPLAY';
-  const hdrLeftX = monX + (isStandalone ? 22 : 16);
-  const hdrMaxW = Math.max(40, monW - (hdrLeftX - monX) - tagW);
+  const hdrMaxW = Math.max(34, monW - (hdrLeftX - monX) - fittedTagW - (isStandalone ? 10 : 8));
   ctx.fillText(fitCanvasText(ctx, hdrTitleRaw, hdrMaxW), hdrLeftX, monY + hdrH / 2 + 0.6);
+
+  if (showVerdict) {
+    ctx.fillStyle = verdictColor;
+    ctx.fillRect(monX + 2, monY + hdrH + 0.5, monW - 4, 1.8);
+  }
 
   const scrPad = isStandalone ? 5 : 3.5;
   const scrX = monX + scrPad;
-  const scrY = monY + hdrH + 2;
+  const scrY = monY + hdrH + (showVerdict ? 3.5 : 2);
   const scrW = monW - scrPad * 2;
-  const scrH = monH - hdrH - scrPad - 2;
+  const scrH = monH - hdrH - scrPad - (showVerdict ? 3.5 : 2);
 
   ctx.save();
   ctx.beginPath();
@@ -1268,14 +1286,14 @@ const renderVarMonitorPanel = (
       const posPal = getPositionCanvasPalette(roleStr);
       const roleFont = isStandalone ? Math.max(7.2, Math.round(r * 0.62)) : smallText ? 5.2 : 6.0;
       ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
-      const rw = Math.max(isStandalone ? 17 : 12.5, measureTextCached(ctx, roleStr) + (isStandalone ? 6 : 4));
-      const rh = isStandalone ? Math.max(9.5, roleFont + 3) : smallText ? 7.2 : 8.2;
+      const rw = Math.max(isStandalone ? 16.5 : 12, measureTextCached(ctx, roleStr) + (isStandalone ? 5.5 : 3.8));
+      const rh = isStandalone ? Math.max(9.2, roleFont + 3) : smallText ? 7.0 : 8.0;
       const leapLift = action === 'leap' ? r * 0.65 * arcEnv : 0;
       const diveShiftY = action === 'gk_dive' ? (opts?.diveDir ?? 1) * arcEnv * r * 0.78 : 0;
       const ry = y - r - rh - 1.5 - leapLift + diveShiftY;
       ctx.fillStyle = posPal.bg;
-      ctx.strokeStyle = ringColor || 'rgba(6, 20, 13, 0.9)';
-      ctx.lineWidth = isStandalone ? 1.05 : 0.8;
+      ctx.strokeStyle = posPal.stroke;
+      ctx.lineWidth = isStandalone ? 1.0 : 0.85;
       ctx.beginPath();
       ctx.roundRect(x - rw / 2, ry, rw, rh, 2.5);
       ctx.fill();
@@ -2542,33 +2560,33 @@ const renderVarMonitorPanel = (
     ctx.stroke();
   }
 
-  // Broadcast Speed / Frame HUD Telemetry (Top-Left in standalone & PiP)
+  // Broadcast Speed / Frame HUD Telemetry (Bottom-Left / Bottom-Right in standalone & PiP)
   if (!smallText || isStandalone) {
     const modeChip = isFreezePhase ? '⏸ FREEZE · 120FPS' : pct < 0.36 ? '▶ SLOW-MO 0.25×' : '▶ CALL · LIVE';
     ctx.save();
     ctx.font = `800 ${isStandalone ? 9.5 : 7.0}px "Noto Sans Thai", sans-serif`;
     const mw = measureTextCached(ctx, modeChip) + (isStandalone ? 10 : 7);
     const mh = isStandalone ? 15 : 11;
+    const hudY = scrY + scrH - mh - 6;
     ctx.fillStyle = 'rgba(6, 12, 24, 0.78)';
     ctx.beginPath();
-    ctx.roundRect(scrX + 6, scrY + scrH - mh - (showVerdict ? (isStandalone ? 27 : 20) : 6), mw, mh, 3);
+    ctx.roundRect(scrX + 6, hudY, mw, mh, 3);
     ctx.fill();
     ctx.fillStyle = isFreezePhase ? '#7dd3fc' : showVerdict ? verdictColor : '#e2e8f0';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(modeChip, scrX + 6 + (isStandalone ? 5 : 3.5), scrY + scrH - mh / 2 - (showVerdict ? (isStandalone ? 27 : 20) : 6) + 0.3);
+    ctx.fillText(modeChip, scrX + 6 + (isStandalone ? 5 : 3.5), hudY + mh / 2 + 0.3);
 
     if (isStandalone) {
       const frmTxt = `FRM ${String(Math.round(pct * 120)).padStart(3, '0')}`;
       const fw = measureTextCached(ctx, frmTxt) + 10;
-      const fyPos = scrY + scrH - mh - (showVerdict ? 27 : 6);
       ctx.fillStyle = 'rgba(6, 12, 24, 0.78)';
       ctx.beginPath();
-      ctx.roundRect(scrX + scrW - fw - 6, fyPos, fw, mh, 3);
+      ctx.roundRect(scrX + scrW - fw - 6, hudY, fw, mh, 3);
       ctx.fill();
       ctx.fillStyle = 'rgba(226, 232, 240, 0.85)';
       ctx.textAlign = 'right';
-      ctx.fillText(frmTxt, scrX + scrW - 11, fyPos + mh / 2 + 0.3);
+      ctx.fillText(frmTxt, scrX + scrW - 11, hudY + mh / 2 + 0.3);
     }
     ctx.restore();
   }
@@ -2592,46 +2610,6 @@ const renderVarMonitorPanel = (
   ctx.lineTo(scrX + scrW - bp, scrY + scrH - bp);
   ctx.lineTo(scrX + scrW - bp, scrY + scrH - bp - br);
   ctx.stroke();
-
-  if (showVerdict) {
-    const verdictBannerText =
-      vr.kind === 'goal'
-        ? sc === 'goal_line_tech'
-          ? vr.overturn
-            ? '❌ บอลยังไม่ข้ามเส้น · ริบประตู!'
-            : '✅ บอลข้ามเส้นเต็มใบ · ให้ประตู!'
-          : sc === 'foul_buildup'
-            ? vr.overturn
-              ? '❌ ฟาวล์จังหวะขึ้นเกม · ริบประตู!'
-              : '✅ ปะทะปกติ · ยืนยันให้ประตู!'
-            : vr.overturn
-              ? '❌ ล้ำหน้า · ริบประตู!'
-              : '✅ ไม่ล้ำหน้า · ให้ประตู!'
-        : vr.kind === 'penalty'
-          ? sc === 'handball_box'
-            ? vr.overturn
-              ? 'แขนแนบตัว/นอกเขต · ไม่จุดโทษ'
-              : '🚨 แฮนด์บอลในเขต · จุดโทษ!'
-            : sc === 'gk_clash_box'
-              ? vr.overturn
-                ? 'ผู้รักษาประตูถึงบอลก่อน · ไม่จุดโทษ'
-                : '🚨 รวบในเขตโทษ · จุดโทษ!'
-              : vr.overturn
-                ? 'นอกกรอบ · ได้ฟรีคิก'
-                : '🚨 ฟาวล์ในเขต · จุดโทษ!'
-          : vr.pendingCardUpgrade === 'R'
-            ? '🟥 ยกระดับเป็นใบแดง!'
-            : '🟨 ให้แค่ใบเหลือง';
-    const vbH = isStandalone ? 23 : smallText ? 16 : 18;
-    ctx.fillStyle = 'rgba(6, 12, 24, 0.93)';
-    ctx.fillRect(scrX, scrY + scrH - vbH, scrW, vbH);
-    ctx.fillStyle = verdictColor;
-    ctx.fillRect(scrX, scrY + scrH - vbH, scrW, 2);
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `800 ${isStandalone ? 11.5 : smallText ? 8.2 : 9.2}px "Noto Sans Thai", sans-serif`;
-    ctx.fillText(fitCanvasText(ctx, verdictBannerText, scrW - 14), scrX + scrW / 2, scrY + scrH - vbH / 2 + 0.5);
-  }
 
   ctx.restore();
   ctx.restore();
@@ -5032,16 +5010,16 @@ export const drawLivePitchToCanvas = (
     if (showPositions && ag.role) {
       const roleStr = String(ag.role);
       const posPal = getPositionCanvasPalette(ag.role || ag.pos);
-      const roleFont = Math.max(6.5, Math.round(playerRadius * 0.58));
+      const roleFont = Math.max(6.4, Math.round(playerRadius * 0.56));
       ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
-      const rw = Math.max(19, measureTextCached(ctx, roleStr) + 6);
-      const rh = Math.max(10, rw * 0.48);
+      const rw = Math.max(17, measureTextCached(ctx, roleStr) + 5.5);
+      const rh = Math.max(9.5, roleFont + 3.2);
       const ry = -playerRadius - rh * 0.72;
       ctx.fillStyle = posPal.bg;
-      ctx.strokeStyle = ag.isMe ? '#facc15' : 'rgba(6, 20, 13, 0.88)';
-      ctx.lineWidth = ag.isMe ? 1.25 : 0.9;
+      ctx.strokeStyle = posPal.stroke;
+      ctx.lineWidth = 0.95;
       ctx.beginPath();
-      ctx.roundRect(-rw / 2, ry, rw, rh, 3);
+      ctx.roundRect(-rw / 2, ry, rw, rh, 2.8);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = posPal.text;
@@ -5053,8 +5031,8 @@ export const drawLivePitchToCanvas = (
     // Yellow card mini indicator on right shoulder (clear of top position badge)
     if (ag.hasYellow) {
       ctx.fillStyle = '#facc15';
-      ctx.strokeStyle = '#111827';
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 0.95;
       ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
       ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
     }
@@ -5504,21 +5482,27 @@ export const drawLivePitchToCanvas = (
     // Mini card icon badge on left (overlapping yellow+red for Y2R, single card for Y/R)
     if (cb.type === 'Y2R') {
       ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.1;
       ctx.beginPath();
       ctx.roundRect(cx - cardW / 2 + 8, cy + 8, 9, 14, 2);
       ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = '#ef4444';
-      ctx.strokeStyle = 'rgba(11, 18, 28, 0.9)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.1;
       ctx.beginPath();
       ctx.roundRect(cx - cardW / 2 + 13, cy + 12, 9, 14, 2);
       ctx.fill();
       ctx.stroke();
     } else {
       ctx.fillStyle = accent;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.roundRect(cx - cardW / 2 + 10, cy + 9, 12, 18, 2.5);
       ctx.fill();
+      ctx.stroke();
     }
 
     ctx.textAlign = 'left';
@@ -7556,16 +7540,16 @@ export const drawHighlightClipToCanvas = (
     if (meta.ro) {
       const roleStr = String(meta.ro);
       const posPal = getPositionCanvasPalette(meta.ro);
-      const roleFont = Math.max(6.5, Math.round(playerRadius * 0.56));
+      const roleFont = Math.max(6.4, Math.round(playerRadius * 0.56));
       ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
-      const rw = Math.max(19, measureTextCached(ctx, roleStr) + 6);
-      const rh = Math.max(10, rw * 0.48);
+      const rw = Math.max(17, measureTextCached(ctx, roleStr) + 5.5);
+      const rh = Math.max(9.5, roleFont + 3.2);
       const ry = -playerRadius - rh * 0.72;
       ctx.fillStyle = posPal.bg;
-      ctx.strokeStyle = isMe || isStarActor ? '#facc15' : 'rgba(6, 20, 13, 0.88)';
-      ctx.lineWidth = isMe || isStarActor ? 1.2 : 0.9;
+      ctx.strokeStyle = posPal.stroke;
+      ctx.lineWidth = 0.95;
       ctx.beginPath();
-      ctx.roundRect(-rw / 2, ry, rw, rh, 3);
+      ctx.roundRect(-rw / 2, ry, rw, rh, 2.8);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = posPal.text;
@@ -7577,8 +7561,8 @@ export const drawHighlightClipToCanvas = (
     // Yellow card mini indicator
     if (meta.yc) {
       ctx.fillStyle = '#facc15';
-      ctx.strokeStyle = '#111827';
-      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 0.95;
       ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
       ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
     }

@@ -2272,7 +2272,7 @@ export const FullTimeMatchStage: React.FC<{
             </button>
           </div>
 
-          <div ref={ftPlayersScrollRef} className="flex-1 min-h-0 overflow-y-auto">
+          <div ref={ftPlayersScrollRef} className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
             <div
               className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
               style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
@@ -2306,7 +2306,7 @@ export const FullTimeMatchStage: React.FC<{
   return (
     <div className="grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
       {/* Left Stage: Full-Time Pitch Ratings + Penalty Shootout + Events Feed Below */}
-      <div ref={leftStageScrollRef} className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
+      <div ref={leftStageScrollRef} className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto no-scrollbar pr-1">
         <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#092818] shadow-xs w-full flex flex-col">
           {/* Full-Time Full-Height SVG Formation Pitch Stage with Inside Logo Switcher */}
           <div className="w-full h-[495px] sm:h-[575px] lg:h-[635px] mland:h-[calc(var(--app-dvh,1dvh)*97-95px)] mland:min-h-[215px] flex items-stretch overflow-hidden bg-[#092818]">
@@ -2501,7 +2501,7 @@ export const FullTimeMatchStage: React.FC<{
 
           {visibleFtSubs.length > 0 && (
             <div className="bg-[#05180e] border-t border-white/12 px-2.5 py-2 mland:px-2 mland:py-1 text-white">
-              <div className="flex flex-nowrap items-stretch gap-2 mland:gap-1.5 overflow-x-auto pb-0.5">
+              <div className="flex flex-nowrap items-stretch gap-2 mland:gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
                 {visibleFtSubs.map((sb, idx) => {
                   const subTeam = sb.t === homeOrig.id ? homeOrig : awayOrig;
                   const subPl = subTeam.sq.find((q) => q.n === sb.inPlayer);
@@ -2662,7 +2662,7 @@ export const FullTimeMatchStage: React.FC<{
               <span className="hidden xl:inline">ในสนาม</span>
             </span>
 
-            <div className="inline-flex flex-nowrap items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs gap-0.5 min-w-0 max-w-full overflow-x-auto ml-auto">
+            <div className="inline-flex flex-nowrap items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs gap-0.5 min-w-0 max-w-full overflow-x-auto no-scrollbar ml-auto">
               {(
                 [
                   { k: 'all', lbl: 'ทั้งหมด', icon: null },
@@ -3319,7 +3319,7 @@ export const FullTimeMatchStage: React.FC<{
                     </div>
                   </div>
 
-                  <div ref={rightChatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
+                  <div ref={rightChatScrollRef} className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
                     {liveComments.map((cm) => (
                       <div
                         key={cm.id}
@@ -3364,7 +3364,7 @@ export const FullTimeMatchStage: React.FC<{
               );
             })()
           ) : (
-            <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
+            <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto no-scrollbar pr-0.5 space-y-1.5">
               <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
                 <MatchStatsPanel
                   homeOrig={homeOrig}

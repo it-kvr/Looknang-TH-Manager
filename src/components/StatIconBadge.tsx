@@ -75,15 +75,15 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ width: px, height: px }}
       >
         <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true">
-          <rect x="3.8" y="1.8" width="12.4" height="16.4" rx="2.5" fill="#facc15" stroke="#713f12" strokeWidth="1.45" />
-          <rect x="5.4" y="3.2" width="3.2" height="10.5" rx="1" fill="#fef08a" opacity="0.55" />
+          <rect x="3.8" y="1.8" width="12.4" height="16.4" rx="2.5" fill="#facc15" stroke="#000000" strokeWidth="1.5" />
+          <rect x="5.4" y="3.2" width="3.0" height="10.5" rx="1" fill="#fef08a" opacity={showNum ? 0.25 : 0.5} />
           {showNum && (
             <text
               x="10"
-              y="10.6"
+              y="10.4"
               textAnchor="middle"
               dominantBaseline="central"
-              fill="#1c1917"
+              fill="#111827"
               fontSize={numFont}
               fontWeight="900"
               fontFamily="Kanit, Sarabun, system-ui, sans-serif"
@@ -104,8 +104,25 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ width: Math.round(px * 1.12), height: px }}
       >
         <svg viewBox="0 0 22 20" width={Math.round(px * 1.12)} height={px} aria-hidden="true">
-          <rect x="2.0" y="1.5" width="9.8" height="13.6" rx="2" fill="#facc15" stroke="#713f12" strokeWidth="1.25" />
-          <rect x="9.6" y="4.8" width="10.2" height="13.8" rx="2.1" fill="#ef4444" stroke="#ffffff" strokeWidth="1.35" />
+          <rect x="2.0" y="1.5" width="9.8" height="13.6" rx="2" fill="#facc15" stroke="#000000" strokeWidth="1.35" />
+          <rect x="9.6" y="4.8" width="10.2" height="13.8" rx="2.1" fill="#ef4444" stroke="#000000" strokeWidth="1.4" />
+          {showNum && (
+            <text
+              x="14.7"
+              y="11.8"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#ffffff"
+              stroke="rgba(0,0,0,0.45)"
+              strokeWidth="0.6"
+              paintOrder="stroke"
+              fontSize={n >= 10 ? 7.4 : 9.2}
+              fontWeight="900"
+              fontFamily="Kanit, Sarabun, system-ui, sans-serif"
+            >
+              {numText}
+            </text>
+          )}
         </svg>
       </span>
     );
@@ -119,15 +136,18 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ width: px, height: px }}
       >
         <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true">
-          <rect x="3.8" y="1.8" width="12.4" height="16.4" rx="2.5" fill="#ef4444" stroke="#ffffff" strokeWidth="1.35" />
-          <rect x="5.4" y="3.2" width="3.0" height="10.5" rx="1" fill="#fca5a5" opacity="0.35" />
+          <rect x="3.8" y="1.8" width="12.4" height="16.4" rx="2.5" fill="#ef4444" stroke="#000000" strokeWidth="1.5" />
+          <rect x="5.4" y="3.2" width="3.0" height="10.5" rx="1" fill="#fca5a5" opacity={showNum ? 0.18 : 0.32} />
           {showNum && (
             <text
               x="10"
-              y="10.6"
+              y="10.4"
               textAnchor="middle"
               dominantBaseline="central"
               fill="#ffffff"
+              stroke="rgba(0,0,0,0.45)"
+              strokeWidth="0.65"
+              paintOrder="stroke"
               fontSize={numFont}
               fontWeight="900"
               fontFamily="Kanit, Sarabun, system-ui, sans-serif"
