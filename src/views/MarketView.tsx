@@ -1390,13 +1390,17 @@ export const MarketView: React.FC<{
                             <span className="inline-flex items-center gap-1 text-[var(--g)] font-semibold">
                               <span>·</span>
                               <span>{cs.apps} นัด</span>
-                              <span>· ⚽ {cs.goals}</span>
+                              <span className="inline-flex items-center gap-0.5">
+                                · <StatIconBadge kind="goal" size="xs" /> {cs.goals}
+                              </span>
                               {q.pos === 'GK' ? (
                                 <span className="inline-flex items-center gap-0.5">
                                   · <StatIconBadge kind="cleansheet" size="xs" /> {cs.cleanSheets}
                                 </span>
                               ) : (
-                                <span>· 👟 {cs.assists}</span>
+                                <span className="inline-flex items-center gap-0.5">
+                                  · <StatIconBadge kind="assist" size="xs" /> {cs.assists}
+                                </span>
                               )}
                               {cs.avgRating > 0 && <span className={`font-bold ${getRatingPalette(cs.avgRating).textCls}`}>· ⭐ {cs.avgRating.toFixed(2)}</span>}
                               {cs.motm > 0 && <span>· 👑 {cs.motm}</span>}

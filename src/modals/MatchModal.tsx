@@ -1999,7 +1999,7 @@ export const MatchModal: React.FC<{
       culprit.sentOff = true;
       sr.sentOff.push(culprit.id);
       adjustLiveForm(culprit.id, -0.7);
-      sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'R' });
+      sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'R', ...(reasonLabel ? { reason: reasonLabel } : {}) });
       if (!isSkippingRef.current) setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       if (!silentLog) {
@@ -2023,13 +2023,13 @@ export const MatchModal: React.FC<{
       culprit.sentOff = true;
       sr.sentOff.push(culprit.id);
       adjustLiveForm(culprit.id, -0.65);
-      sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y2R' });
+      sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y2R', ...(reasonLabel ? { reason: reasonLabel } : {}) });
       if (!isSkippingRef.current) setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       if (!silentLog) {
         pushLog(curMin, `🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) ${cardReason} · โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
       }
-      pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel ? `เหลืองสอง (${reasonLabel})` : 'เหลืองที่สอง', varReplayId);
+      pushTimeline(curMin, culprit.side, 'yellow2red', culprit.id, reasonLabel ? `เหลืองสอง (${reasonLabel})` : 'เหลืองที่สอง', varReplayId);
       if (!isSkippingRef.current) setSentOff(sr.sentOff.slice());
       if (w && !isSkippingRef.current) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
@@ -2043,7 +2043,7 @@ export const MatchModal: React.FC<{
     adjustLiveForm(culprit.id, -0.35);
     const origPl = playerByNameMap.get(culprit.id) || team.sq.find((q) => q.n === culprit.id);
     const totalSeasonY = (origPl?.yc || 0) + 1;
-    sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y' });
+    sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y', ...(reasonLabel ? { reason: reasonLabel } : {}) });
     if (!isSkippingRef.current) setMatchCards(sr.cards.slice());
     if (!silentLog) {
       pushLog(
@@ -11225,7 +11225,7 @@ export const MatchModal: React.FC<{
         case 'full_time':
           return <span className="text-[11px] leading-none shrink-0">🏁</span>;
         case 'goal':
-          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12.5px] leading-none shrink-0">⚽</span>;
+          return <StatIconBadge kind="goal" size="xs" />;
         case 'own_goal':
           return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">🤦</span>;
         case 'pen_goal':
@@ -11236,6 +11236,8 @@ export const MatchModal: React.FC<{
           return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[11.5px] leading-none shrink-0">❌</span>;
         case 'yellow':
           return <StatIconBadge kind="yellow" size="xs" />;
+        case 'yellow2red':
+          return <StatIconBadge kind="yellowRed" size="xs" />;
         case 'red':
           return <StatIconBadge kind="red" size="xs" />;
         case 'injury':
@@ -11280,6 +11282,8 @@ export const MatchModal: React.FC<{
           return 'พลาดจุดโทษ';
         case 'yellow':
           return 'ใบเหลือง';
+        case 'yellow2red':
+          return 'เหลืองที่ 2 → ใบแดง';
         case 'red':
           return 'ใบแดง';
         case 'injury':
@@ -11356,14 +11360,16 @@ export const MatchModal: React.FC<{
               const isHomeSide = item.side === 'H';
               const shortWho = item.who.split(' ')[0] || item.who;
               const isGoal = item.kind === 'goal' || item.kind === 'pen_goal';
-              const isNeg = item.kind === 'red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss' || item.kind === 'own_goal';
+              const isNeg = item.kind === 'red' || item.kind === 'yellow2red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss' || item.kind === 'own_goal';
               const titleCls = isGoal
                 ? isHomeSide
                   ? 'text-[var(--g)] font-extrabold'
                   : 'text-amber-600 dark:text-amber-400 font-extrabold'
                 : isNeg
                   ? 'text-[var(--red)] font-bold'
-                  : 'text-[var(--ink)] font-bold';
+                  : item.kind === 'yellow'
+                    ? 'text-amber-700 dark:text-amber-300 font-bold'
+                    : 'text-[var(--ink)] font-bold';
               const subText = labelForKind(item.kind, item.detail);
               const sideTeam = item.kind === 'own_goal' ? (isHomeSide ? awayOrig : homeOrig) : (isHomeSide ? homeOrig : awayOrig);
               const sideId = sideTeam.id;
@@ -11402,7 +11408,14 @@ export const MatchModal: React.FC<{
                           </div>
                           <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center justify-end gap-1">
                             {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
-                            <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                            {subText.startsWith('👟 ') ? (
+                              <span className="inline-flex items-center gap-1 truncate">
+                                <StatIconBadge kind="assist" size="xs" />
+                                <span className="truncate">{subText.slice(2).trim()}</span>
+                              </span>
+                            ) : (
+                              <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                            )}
                           </div>
                         </div>
                         {iconForKind(item.kind)}
@@ -11420,7 +11433,7 @@ export const MatchModal: React.FC<{
                         : isNeg
                           ? 'bg-[var(--red)] border-[var(--red)] text-white'
                           : item.kind === 'yellow'
-                            ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                            ? 'bg-[#facc15] border-amber-500 text-stone-950 font-black'
                             : isHomeSide
                               ? 'bg-[var(--surface-2)] border-[var(--g)]/45 text-[var(--ink)]'
                               : 'bg-[var(--surface-2)] border-amber-500/45 text-[var(--ink)]'
@@ -11458,7 +11471,14 @@ export const MatchModal: React.FC<{
                           </div>
                           <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
                             {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
-                            <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                            {subText.startsWith('👟 ') ? (
+                              <span className="inline-flex items-center gap-1 truncate">
+                                <StatIconBadge kind="assist" size="xs" />
+                                <span className="truncate">{subText.slice(2).trim()}</span>
+                              </span>
+                            ) : (
+                              <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                            )}
                           </div>
                         </div>
                       </>
@@ -12316,9 +12336,15 @@ export const MatchModal: React.FC<{
                                         />
                                         {htPickedInfo.gl > 0 && <StatIconBadge kind="goal" count={htPickedInfo.gl} size="xs" />}
                                         {htPickedInfo.as > 0 && <StatIconBadge kind="assist" count={htPickedInfo.as} size="xs" />}
-                                        {htPickedInfo.cards.map((c, idx) => (
-                                          <StatIconBadge key={idx} kind={c.type === 'Y' ? 'yellow' : 'red'} size="xs" />
-                                        ))}
+                                        {htPickedInfo.cards
+                                          .slice()
+                                          .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : 1) - (b.type === 'Y' ? 0 : 1))
+                                          .map((c, idx) => (
+                                            <span key={idx} className="inline-flex items-center gap-0.5">
+                                              <StatIconBadge kind={c.type === 'Y' ? 'yellow' : c.type === 'Y2R' ? 'yellowRed' : 'red'} size="xs" />
+                                              <span className="text-[9px] font-bold tabular text-white/80">{c.m}&apos;</span>
+                                            </span>
+                                          ))}
                                         {htPickedInfo.subIn && (
                                           <span className="inline-flex items-center gap-0.5 text-emerald-300 font-bold">
                                             <StatIconBadge kind="subIn" size="xs" />
@@ -12615,7 +12641,7 @@ export const MatchModal: React.FC<{
                     {(
                       [
                         ['all', 'ทั้งหมด'],
-                        ['goal', '⚽ ประตู'],
+                        ['goal', <span key="g-tab" className="inline-flex items-center gap-1"><StatIconBadge kind="goal" size="xs" /><span>ประตู</span></span>],
                         ['card', '🖥 VAR'],
                         ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
                       ] as const

@@ -1100,6 +1100,7 @@ export interface PitchPlayerMeta {
   assists?: number;
   yellowCards?: number;
   isRed?: boolean;
+  isSecondYellowRed?: boolean;
   isInjured?: boolean;
   subInMin?: number;
   subOutMin?: number;
@@ -1485,13 +1486,18 @@ export const FormationPitch: React.FC<{
             })()}
 
             {/* Top-Right: Cards & Injury (non-overlapping with lowered role badge) */}
-            {(isRed || isSus) ? (
+            {meta?.isSecondYellowRed ? (
+              <g>
+                <rect x={cx + 9.8} y={cy - 17} width="6.4" height="9.2" rx="1.4" fill="#facc15" stroke="#422006" strokeWidth="0.9" />
+                <rect x={cx + 13.6} y={cy - 14.5} width="6.6" height="9.5" rx="1.4" fill="#ef4444" stroke="#fff" strokeWidth="1.05" />
+              </g>
+            ) : (isRed || isSus) ? (
               <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#e5484d" stroke="#fff" strokeWidth="1.1" />
             ) : (meta?.yellowCards || 0) > 0 ? (
-              <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#facc15" stroke="#111" strokeWidth="0.9" />
+              <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#facc15" stroke="#422006" strokeWidth="0.95" />
             ) : null}
             {isInj && (
-              <g transform={`translate(${hasCard ? cx + 21 : cx + 14.5},${hasCard ? cy - 6.5 : cy - 11.5})`}>
+              <g transform={`translate(${hasCard ? cx + (meta?.isSecondYellowRed ? 22 : 21) : cx + 14.5},${hasCard ? cy - 6.5 : cy - 11.5})`}>
                 <circle r="5.8" fill="#fff" stroke="#e5484d" strokeWidth="1.2" />
                 <path d="M-2.8 0h5.6M0-2.8v5.6" stroke="#e5484d" strokeWidth="1.9" strokeLinecap="round" />
               </g>
@@ -1519,7 +1525,7 @@ export const FormationPitch: React.FC<{
 
             {/* Mid-Right Edge: Goals & Assists Icons */}
             {(goalsCount > 0 || assistsCount > 0) && (() => {
-              const gW = goalsCount > 1 ? 17.5 : goalsCount > 0 ? 10.5 : 0;
+              const gW = goalsCount > 1 ? 19.5 : goalsCount > 0 ? 12 : 0;
               const aW = assistsCount > 1 ? 19.5 : assistsCount > 0 ? 12 : 0;
               const gap = goalsCount > 0 && assistsCount > 0 ? 2 : 0;
               const totalW = gW + gap + aW;
@@ -1532,30 +1538,54 @@ export const FormationPitch: React.FC<{
                   {goalsCount > 0 && (
                     <g transform={`translate(${gx},${baseY})`}>
                       {goalsCount > 1 ? (
-                        <text
-                          x="0"
-                          y="3.2"
-                          textAnchor="middle"
-                          fontSize="8.8"
-                          fontWeight="900"
-                          fontFamily="Kanit, Sarabun, sans-serif"
-                          fill="#ffffff"
-                          stroke="#06140d"
-                          strokeWidth="2.4"
-                          strokeLinejoin="round"
-                          paintOrder="stroke"
-                        >
-                          {goalsCount}⚽
-                        </text>
+                        <>
+                          <rect
+                            x="-9.5"
+                            y="-5.7"
+                            width="19"
+                            height="11.4"
+                            rx="5.7"
+                            fill="#0f172a"
+                            stroke="#ffffff"
+                            strokeWidth="1.05"
+                          />
+                          <text
+                            x="-4.4"
+                            y="0.4"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize="8.2"
+                            fontWeight="900"
+                            fontFamily="Kanit, Sarabun, sans-serif"
+                            fill="#ffffff"
+                          >
+                            {goalsCount}
+                          </text>
+                          <g transform="translate(4.1, 0)">
+                            <circle r="3.9" fill="#ffffff" stroke="#0f172a" strokeWidth="0.65" />
+                            <polygon points="0,-1.8 1.7,-0.55 1.05,1.45 -1.05,1.45 -1.7,-0.55" fill="#0f172a" />
+                            <line x1="0" y1="-1.8" x2="0" y2="-3.8" stroke="#0f172a" strokeWidth="0.55" />
+                            <line x1="1.7" y1="-0.55" x2="3.6" y2="-1.25" stroke="#0f172a" strokeWidth="0.55" />
+                            <line x1="1.05" y1="1.45" x2="2.3" y2="3.1" stroke="#0f172a" strokeWidth="0.55" />
+                            <line x1="-1.05" y1="1.45" x2="-2.3" y2="3.1" stroke="#0f172a" strokeWidth="0.55" />
+                            <line x1="-1.7" y1="-0.55" x2="-3.6" y2="-1.25" stroke="#0f172a" strokeWidth="0.55" />
+                          </g>
+                        </>
                       ) : (
-                        <text
-                          x="0"
-                          y="3.4"
-                          textAnchor="middle"
-                          fontSize="9.6"
-                        >
-                          ⚽
-                        </text>
+                        <>
+                          <circle
+                            r="5.6"
+                            fill="#ffffff"
+                            stroke="#0f172a"
+                            strokeWidth="1.05"
+                          />
+                          <polygon points="0,-2.5 2.4,-0.8 1.5,2.0 -1.5,2.0 -2.4,-0.8" fill="#0f172a" />
+                          <line x1="0" y1="-2.5" x2="0" y2="-5.4" stroke="#0f172a" strokeWidth="0.75" />
+                          <line x1="2.4" y1="-0.8" x2="5.2" y2="-1.8" stroke="#0f172a" strokeWidth="0.75" />
+                          <line x1="1.5" y1="2.0" x2="3.3" y2="4.4" stroke="#0f172a" strokeWidth="0.75" />
+                          <line x1="-1.5" y1="2.0" x2="-3.3" y2="4.4" stroke="#0f172a" strokeWidth="0.75" />
+                          <line x1="-2.4" y1="-0.8" x2="-5.2" y2="-1.8" stroke="#0f172a" strokeWidth="0.75" />
+                        </>
                       )}
                     </g>
                   )}

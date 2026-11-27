@@ -21,6 +21,7 @@ import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { OvrBadge } from '../components/OvrBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 
 export const PlayerClubTransferView: React.FC<{
   state: GameState;
@@ -398,7 +399,11 @@ export const PlayerClubTransferView: React.FC<{
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
                         <OvrBadge ov={q.ov} size="xs" />
-                        <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">⚽ {q.sg || 0} · 👟 {q.sa || 0}</div>
+                        <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular inline-flex items-center gap-1">
+                          <span className="inline-flex items-center gap-0.5"><StatIconBadge kind="goal" size="xs" /> {q.sg || 0}</span>
+                          <span>·</span>
+                          <span className="inline-flex items-center gap-0.5"><StatIconBadge kind="assist" size="xs" /> {q.sa || 0}</span>
+                        </div>
                       </div>
                     </div>
                   );

@@ -782,8 +782,24 @@ export const CupView: React.FC<{
                   .slice(0, 30);
 
                 const catTabs: { id: CupStatCat; lbl: React.ReactNode }[] = [
-                  { id: 'sg', lbl: '⚽ ประตู' },
-                  { id: 'sa', lbl: '👟 จ่าย' },
+                  {
+                    id: 'sg',
+                    lbl: (
+                      <span className="inline-flex items-center gap-1">
+                        <StatIconBadge kind="goal" size="xs" />
+                        <span>ประตู</span>
+                      </span>
+                    )
+                  },
+                  {
+                    id: 'sa',
+                    lbl: (
+                      <span className="inline-flex items-center gap-1">
+                        <StatIconBadge kind="assist" size="xs" />
+                        <span>จ่าย</span>
+                      </span>
+                    )
+                  },
                   {
                     id: 'cs',
                     lbl: (
@@ -842,18 +858,31 @@ export const CupView: React.FC<{
                         <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
                           {[
                             {
-                              title: '⚽ ดาวซัลโว',
+                              id: 'top-goal',
+                              title: (
+                                <span className="inline-flex items-center gap-1">
+                                  <StatIconBadge kind="goal" size="xs" />
+                                  <span>ดาวซัลโว</span>
+                                </span>
+                              ),
                               entry: topGoal,
                               val: topGoal ? `${topGoal.st.sg} ประตู` : '-',
                               tone: 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/45'
                             },
                             {
-                              title: '👟 จอมแอสซิสต์',
+                              id: 'top-ast',
+                              title: (
+                                <span className="inline-flex items-center gap-1">
+                                  <StatIconBadge kind="assist" size="xs" />
+                                  <span>จอมแอสซิสต์</span>
+                                </span>
+                              ),
                               entry: topAst,
                               val: topAst ? `${topAst.st.sa} ครั้ง` : '-',
                               tone: 'bg-[var(--g-soft)]/55 border-[var(--g)]/35'
                             },
                             {
+                              id: 'top-rt',
                               title: '⭐ เรตติ้งสูงสุด',
                               entry: topRt,
                               val: topRt ? topRt.st.avgRating.toFixed(2) : '-',
@@ -861,7 +890,7 @@ export const CupView: React.FC<{
                             }
                           ].map((box) => (
                             <button
-                              key={box.title}
+                              key={box.id}
                               type="button"
                               disabled={!box.entry}
                               onClick={() => box.entry && handlePickPlayer(box.entry.q, box.entry.t)}

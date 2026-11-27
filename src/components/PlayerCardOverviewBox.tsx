@@ -249,7 +249,10 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
             <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSp}</div>
           </div>
           <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-            <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⚽ ยิง</div>
+            <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none flex items-center justify-center gap-0.5">
+              <StatIconBadge kind="goal" size="xs" />
+              <span>ยิง</span>
+            </div>
             <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSg}</div>
           </div>
           <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
@@ -260,7 +263,10 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
                   <span>คลีน</span>
                 </>
               ) : (
-                '👟 จ่าย'
+                <>
+                  <StatIconBadge kind="assist" size="xs" />
+                  <span>จ่าย</span>
+                </>
               )}
             </div>
             <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{disp3}</div>
@@ -281,13 +287,16 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
                 const st = player.cupStats![ck]!;
                 return (
                   <span key={ck} className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                    <span>{m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น{st.sg > 0 ? `·${st.sg}⚽` : ''}</span>
+                    <span>{m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น</span>
+                    {st.sg > 0 ? (
+                      <span className="inline-flex items-center gap-0.5">·{st.sg}<StatIconBadge kind="goal" size="xs" /></span>
+                    ) : null}
                     {player.pos === 'GK' ? (
                       st.cs > 0 ? (
                         <span className="inline-flex items-center gap-0.5">·{st.cs}<StatIconBadge kind="cleansheet" size="xs" /></span>
                       ) : null
                     ) : st.sa > 0 ? (
-                      <span>·{st.sa}👟</span>
+                      <span className="inline-flex items-center gap-0.5">·{st.sa}<StatIconBadge kind="assist" size="xs" /></span>
                     ) : null}
                     {st.motm > 0 ? <span>·{st.motm}👑</span> : null}
                   </span>

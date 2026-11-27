@@ -679,10 +679,16 @@ export const TeamInspectorModal: React.FC<{
                     </div>
                   )}
                   <div className="flex items-center justify-between gap-2 min-w-0">
-                    <div className="truncate text-[var(--mut)] tabular">
-                      ⚽ <b className="text-[var(--ink)]">{topScorer ? `${topScorer.n.split(' ')[0]} (${topScorer.sg || 0})` : '-'}</b>
-                      <span className="mx-1.5">·</span>
-                      👟 <b className="text-[var(--ink)]">{topAssist ? `${topAssist.n.split(' ')[0]} (${topAssist.sa || 0})` : '-'}</b>
+                    <div className="truncate text-[var(--mut)] tabular flex items-center gap-1 min-w-0">
+                      <span className="inline-flex items-center gap-0.5 shrink-0">
+                        <StatIconBadge kind="goal" size="xs" />
+                        <b className="text-[var(--ink)]">{topScorer ? `${topScorer.n.split(' ')[0]} (${topScorer.sg || 0})` : '-'}</b>
+                      </span>
+                      <span className="mx-0.5">·</span>
+                      <span className="inline-flex items-center gap-0.5 truncate">
+                        <StatIconBadge kind="assist" size="xs" />
+                        <b className="text-[var(--ink)] truncate">{topAssist ? `${topAssist.n.split(' ')[0]} (${topAssist.sa || 0})` : '-'}</b>
+                      </span>
                     </div>
                     {formChars.length > 0 && (
                       <div className="flex items-center gap-0.5 shrink-0" title="ฟอร์ม 5 นัดล่าสุด">

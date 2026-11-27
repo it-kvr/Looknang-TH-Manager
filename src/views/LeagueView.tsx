@@ -955,7 +955,7 @@ export const LeagueView: React.FC<{
     }[] = [
       {
         id: 'golden-boot',
-        icon: '⚽',
+        icon: <StatIconBadge kind="goal" size="md" title="รองเท้าทองคำ" />,
         title: 'รองเท้าทองคำ',
         enTitle: 'Golden Boot',
         shortCriteria: 'ดาวซัลโวสูงสุดประจำลีก',
@@ -1268,7 +1268,7 @@ export const LeagueView: React.FC<{
 
           {/* 6 Complementary Stat Leaderboards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mland:grid-cols-3 gap-2.5 mland:gap-2 items-stretch">
-            {renderLeaderboardCard('👟', 'แอสซิสต์สูงสุด', 'ครั้ง', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
+            {renderLeaderboardCard(<StatIconBadge kind="assist" size="sm" title="แอสซิสต์สูงสุด" />, 'แอสซิสต์สูงสุด', 'ครั้ง', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
             {renderLeaderboardCard('🔥', 'มีส่วนร่วมประตู (G+A)', 'รวม', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
             {renderLeaderboardCard('👑', 'แมนออฟเดอะแมตช์', 'MOTM', (q) => q.motm || 0, (q) => `${q.motm || 0}`)}
             {renderLeaderboardCard(

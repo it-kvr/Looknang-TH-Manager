@@ -421,24 +421,27 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
       });
     });
 
-    cards.forEach((c, idx) => {
-      const tmName = c.t === hTeam.id ? hTeam.name : aTeam.name;
-      const linkedVar = varReplays.find(
-        (v) =>
-          !matchedVarIds.has(v.id) &&
-          Math.abs(v.minute - c.m) <= 1 &&
-          (v.verdictTone === 'red' || v.verdictTone === 'yellow' || v.verdictTone === 'penalty')
-      );
-      if (linkedVar) matchedVarIds.add(linkedVar.id);
-      const cardLbl = c.type === 'Y' ? '🟨 ใบเหลือง' : c.type === 'Y2R' ? '🟨➡🟥 เหลืองแดง' : '🟥 ใบแดง';
-      items.push({
-        id: `rep-c-${idx}-${c.m}`,
-        m: c.m,
-        text: `${cardLbl} นาที ${c.m}': ${c.who} (${tmName})${c.reason ? ` — ${c.reason}` : ''}`,
-        tone: 'card',
-        ...(linkedVar ? { varReplayId: linkedVar.id } : {})
+    cards
+      .slice()
+      .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : a.type === 'Y2R' ? 1 : 2) - (b.type === 'Y' ? 0 : b.type === 'Y2R' ? 1 : 2))
+      .forEach((c, idx) => {
+        const tmName = c.t === hTeam.id ? hTeam.name : aTeam.name;
+        const linkedVar = varReplays.find(
+          (v) =>
+            !matchedVarIds.has(v.id) &&
+            Math.abs(v.minute - c.m) <= 1 &&
+            (v.verdictTone === 'red' || v.verdictTone === 'yellow' || v.verdictTone === 'penalty')
+        );
+        if (linkedVar) matchedVarIds.add(linkedVar.id);
+        const cardLbl = c.type === 'Y' ? '🟨 ใบเหลือง' : c.type === 'Y2R' ? '🟨➡🟥 เหลืองแดง' : '🟥 ใบแดง';
+        items.push({
+          id: `rep-c-${idx}-${c.m}`,
+          m: c.m,
+          text: `${cardLbl} นาที ${c.m}': ${c.who} (${tmName})${c.reason ? ` — ${c.reason}` : ''}`,
+          tone: 'card',
+          ...(linkedVar ? { varReplayId: linkedVar.id } : {})
+        });
       });
-    });
 
     varReplays.forEach((vr, idx) => {
       if (matchedVarIds.has(vr.id)) return;
@@ -498,17 +501,20 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
       });
     });
 
-    cards.forEach((c, idx) => {
-      list.push({
-        id: `tl-c-${idx}`,
-        seq: seq++,
-        m: c.m,
-        side: c.t === hTeam.id ? 'H' : 'A',
-        kind: c.type === 'Y' ? 'yellow' : 'red',
-        who: c.who,
-        detail: c.reason
+    cards
+      .slice()
+      .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : a.type === 'Y2R' ? 1 : 2) - (b.type === 'Y' ? 0 : b.type === 'Y2R' ? 1 : 2))
+      .forEach((c, idx) => {
+        list.push({
+          id: `tl-c-${idx}`,
+          seq: seq++,
+          m: c.m,
+          side: c.t === hTeam.id ? 'H' : 'A',
+          kind: c.type === 'Y' ? 'yellow' : c.type === 'Y2R' ? 'yellow2red' : 'red',
+          who: c.who,
+          detail: c.reason || (c.type === 'Y2R' ? 'เหลืองที่สอง' : undefined)
+        });
       });
-    });
 
     subs.forEach((sb, idx) => {
       list.push({

@@ -437,12 +437,17 @@ export const MatchLogRow = React.memo<{
   const shownCrestTeamIds = new Set<number>();
 
   const renderTextSeg = (seg: string, keyPrefix: string) => {
-    const tokens = seg.split(/(✚|🔼|🔽)/);
+    const tokens = seg.split(/(✚|🔼|🔽|🟨➡🟥|🟨🟥|🟨|🟥|⚽|👟)/);
     if (tokens.length === 1) return seg;
     return tokens.map((tok, i) => {
       if (tok === '✚') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="injury" size="xs" />;
       if (tok === '🔼') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="subIn" size="xs" />;
       if (tok === '🔽') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="subOut" size="xs" />;
+      if (tok === '🟨➡🟥' || tok === '🟨🟥') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="yellowRed" size="xs" />;
+      if (tok === '🟨') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="yellow" size="xs" />;
+      if (tok === '🟥') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="red" size="xs" />;
+      if (tok === '⚽') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="goal" size="xs" />;
+      if (tok === '👟') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="assist" size="xs" />;
       return <React.Fragment key={`${keyPrefix}-${i}`}>{tok}</React.Fragment>;
     });
   };
@@ -516,27 +521,40 @@ export const MatchLogRow = React.memo<{
   const hasInlinePlayer = hits.length > 0;
   const hasInlineTeam = hasInlinePlayer || Boolean(vTeam && l.text.includes(vTeam.name));
 
+  const isYellowOnlyCardLog =
+    l.tone === 'card' &&
+    (l.text.includes('🟨') || l.text.includes('ใบเหลือง')) &&
+    !l.text.includes('🟥') &&
+    !l.text.includes('ใบแดง') &&
+    !l.text.includes('เหลืองที่สอง') &&
+    !l.text.includes('เหลืองแดง') &&
+    !l.text.includes('ติดโทษแบน');
+
   return (
     <div
       className={`text-[11.5px] mland:text-[10px] flex items-center gap-1.5 rounded-lg transition-colors leading-snug ${
         l.tone === 'goal'
           ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--g-soft)] border border-[var(--g)]/25 font-bold text-[var(--g)]'
-          : l.tone === 'card'
-            ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--red-soft)] border border-[var(--red)]/25 font-semibold text-[var(--red)]'
-            : l.tone === 'sub'
-              ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-sky-500/8 border border-sky-500/20 font-semibold text-sky-700 dark:text-sky-300'
-              : l.tone === 'sys'
-                ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--surface-2)]/65 font-medium text-[var(--ink)]'
-                : 'px-2 py-1 mland:px-1.5 mland:py-0.5 text-[var(--mut)] hover:bg-[var(--surface-2)]/40'
+          : isYellowOnlyCardLog
+            ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-amber-500/12 border border-amber-500/35 font-semibold text-amber-900 dark:text-amber-200'
+            : l.tone === 'card'
+              ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--red-soft)] border border-[var(--red)]/25 font-semibold text-[var(--red)]'
+              : l.tone === 'sub'
+                ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-sky-500/8 border border-sky-500/20 font-semibold text-sky-700 dark:text-sky-300'
+                : l.tone === 'sys'
+                  ? 'px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--surface-2)]/65 font-medium text-[var(--ink)]'
+                  : 'px-2 py-1 mland:px-1.5 mland:py-0.5 text-[var(--mut)] hover:bg-[var(--surface-2)]/40'
       }`}
     >
       <span
         className={`min-w-[28px] text-center px-1 py-[1px] rounded-md tabular font-extrabold text-[10px] mland:text-[8.5px] shrink-0 ${
           l.tone === 'goal'
             ? 'bg-[var(--g)] text-white'
-            : l.tone === 'card'
-              ? 'bg-[var(--red)] text-white'
-              : 'bg-black/8 dark:bg-white/10 text-[var(--ink)]/85'
+            : isYellowOnlyCardLog
+              ? 'bg-[#facc15] text-stone-950'
+              : l.tone === 'card'
+                ? 'bg-[var(--red)] text-white'
+                : 'bg-black/8 dark:bg-white/10 text-[var(--ink)]/85'
         }`}
       >
         {l.m}&apos;
@@ -709,6 +727,7 @@ export const MatchTimelinePanel: React.FC<{
   homeTrim: string;
   awayTrim: string;
   standalone?: boolean;
+  defaultChronological?: boolean;
 }> = ({
   timelineEvents,
   homeOrig,
@@ -720,12 +739,20 @@ export const MatchTimelinePanel: React.FC<{
   awayGkKit,
   homeTrim,
   awayTrim,
-  standalone = false
+  standalone = false,
+  defaultChronological = false
 }) => {
+  const [sortAsc, setSortAsc] = useState(defaultChronological);
   const homeId = homeOrig.id;
   const awayId = awayOrig.id;
 
-  const iconForKind = (kind: TimelineKind) => {
+  const isSecondYellowItem = (kind: TimelineKind, detail?: string) =>
+    kind === 'yellow2red' || (kind === 'red' && Boolean(detail?.includes('เหลือง')));
+
+  const iconForKind = (kind: TimelineKind, detail?: string) => {
+    if (isSecondYellowItem(kind, detail)) {
+      return <StatIconBadge kind="yellowRed" size="xs" />;
+    }
     switch (kind) {
       case 'kickoff':
         return <span className="text-[11px] leading-none shrink-0">🚩</span>;
@@ -736,7 +763,7 @@ export const MatchTimelinePanel: React.FC<{
       case 'full_time':
         return <span className="text-[11px] leading-none shrink-0">🏁</span>;
       case 'goal':
-        return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12.5px] leading-none shrink-0">⚽</span>;
+        return <StatIconBadge kind="goal" size="xs" />;
       case 'own_goal':
         return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">🤦</span>;
       case 'pen_goal':
@@ -747,6 +774,8 @@ export const MatchTimelinePanel: React.FC<{
         return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[11.5px] leading-none shrink-0">❌</span>;
       case 'yellow':
         return <StatIconBadge kind="yellow" size="xs" />;
+      case 'yellow2red':
+        return <StatIconBadge kind="yellowRed" size="xs" />;
       case 'red':
         return <StatIconBadge kind="red" size="xs" />;
       case 'injury':
@@ -791,6 +820,8 @@ export const MatchTimelinePanel: React.FC<{
         return 'พลาดจุดโทษ';
       case 'yellow':
         return 'ใบเหลือง';
+      case 'yellow2red':
+        return 'เหลืองที่ 2 → ใบแดง';
       case 'red':
         return 'ใบแดง';
       case 'injury':
@@ -806,7 +837,9 @@ export const MatchTimelinePanel: React.FC<{
     }
   };
 
-  const sortedTimeline = timelineEvents.slice().sort((a, b) => (b.m - a.m) || (b.seq - a.seq));
+  const sortedTimeline = timelineEvents
+    .slice()
+    .sort((a, b) => (sortAsc ? (a.m - b.m) || (a.seq - b.seq) : (b.m - a.m) || (b.seq - a.seq)));
   const keyEventCount = sortedTimeline.filter((t) => t.side !== 'N').length;
 
   return (
@@ -819,9 +852,22 @@ export const MatchTimelinePanel: React.FC<{
             <ClubCrest name={homeOrig.name} size={16} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
           </div>
         </div>
-        <span className="text-[10px] mland:text-[9px] font-extrabold text-[var(--mut)] tabular whitespace-nowrap">
-          ⏱️ ไทม์ไลน์{keyEventCount > 0 ? ` (${keyEventCount})` : ''}
-        </span>
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <span className="text-[10px] mland:text-[9px] font-extrabold text-[var(--mut)] tabular">
+            ⏱️ ไทม์ไลน์{keyEventCount > 0 ? ` (${keyEventCount})` : ''}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              SFX.tap();
+              setSortAsc((prev) => !prev);
+            }}
+            className="px-1.5 py-[1px] rounded bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--ink)]/35 text-[9px] mland:text-[8px] font-bold text-[var(--ink)]/85 tabular cursor-pointer transition-colors"
+            title={sortAsc ? 'เรียงตามเวลา 0 นาที → 90 นาที' : 'เรียงจากเหตุการณ์ล่าสุด 90 นาที → 0 นาที'}
+          >
+            {sortAsc ? "0'→90'" : "90'→0'"}
+          </button>
+        </div>
         <div className="flex items-center justify-start gap-1.5 min-w-0">
           <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
             <ClubCrest name={awayOrig.name} size={16} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
@@ -868,14 +914,16 @@ export const MatchTimelinePanel: React.FC<{
             const isHomeSide = item.side === 'H';
             const shortWho = item.who.split(' ')[0] || item.who;
             const isGoal = item.kind === 'goal' || item.kind === 'pen_goal';
-            const isNeg = item.kind === 'red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss' || item.kind === 'own_goal';
+            const isNeg = item.kind === 'red' || item.kind === 'yellow2red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss' || item.kind === 'own_goal';
             const titleCls = isGoal
               ? isHomeSide
                 ? 'text-[var(--g)] font-extrabold'
                 : 'text-amber-600 dark:text-amber-400 font-extrabold'
               : isNeg
                 ? 'text-[var(--red)] font-bold'
-                : 'text-[var(--ink)] font-bold';
+                : item.kind === 'yellow'
+                  ? 'text-amber-700 dark:text-amber-300 font-bold'
+                  : 'text-[var(--ink)] font-bold';
             const subText = labelForKind(item.kind, item.detail);
             const sideTeam = item.kind === 'own_goal' ? (isHomeSide ? awayOrig : homeOrig) : (isHomeSide ? homeOrig : awayOrig);
             const sideId = sideTeam.id;
@@ -913,10 +961,17 @@ export const MatchTimelinePanel: React.FC<{
                         </div>
                         <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center justify-end gap-1">
                           {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
-                          <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                          {subText.startsWith('👟 ') ? (
+                            <span className="inline-flex items-center gap-1 truncate">
+                              <StatIconBadge kind="assist" size="xs" />
+                              <span className="truncate">{subText.slice(2).trim()}</span>
+                            </span>
+                          ) : (
+                            <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                          )}
                         </div>
                       </div>
-                      {iconForKind(item.kind)}
+                      {iconForKind(item.kind, item.detail)}
                     </>
                   )}
                 </div>
@@ -930,7 +985,7 @@ export const MatchTimelinePanel: React.FC<{
                       : isNeg
                         ? 'bg-[var(--red)] border-[var(--red)] text-white'
                         : item.kind === 'yellow'
-                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                          ? 'bg-[#facc15] border-amber-500 text-stone-950 font-black'
                           : isHomeSide
                             ? 'bg-[var(--surface-2)] border-[var(--g)]/45 text-[var(--ink)]'
                             : 'bg-[var(--surface-2)] border-amber-500/45 text-[var(--ink)]'
@@ -942,7 +997,7 @@ export const MatchTimelinePanel: React.FC<{
                 <div className={`min-w-0 ${!isHomeSide ? 'flex items-center justify-start gap-1.5 text-left pl-1.5 border-l-2 border-amber-500/55' : ''}`}>
                   {!isHomeSide && (
                     <>
-                      {iconForKind(item.kind)}
+                      {iconForKind(item.kind, item.detail)}
                       <div className="min-w-0 leading-tight">
                         <div className={`truncate flex items-center gap-1 ${titleCls}`}>
                           <span className="shrink-0 inline-flex">
@@ -967,7 +1022,14 @@ export const MatchTimelinePanel: React.FC<{
                         </div>
                         <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
                           {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
-                          <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                          {subText.startsWith('👟 ') ? (
+                            <span className="inline-flex items-center gap-1 truncate">
+                              <StatIconBadge kind="assist" size="xs" />
+                              <span className="truncate">{subText.slice(2).trim()}</span>
+                            </span>
+                          ) : (
+                            <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
+                          )}
                         </div>
                       </div>
                     </>
@@ -1201,8 +1263,8 @@ export const MatchBroadcastHeader: React.FC<{
               </div>
               <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
                 {goalFlashInfo?.side === 'H' && (
-                  <span className={`font-black tracking-wide goal-tag-blink ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
-                    {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
+                  <span className={`inline-flex items-center gap-0.5 font-black tracking-wide goal-tag-blink ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
+                    {goalFlashInfo.isOwnGoal ? '🤦 OG' : <><StatIconBadge kind="goal" size="xs" /><span>GOAL!</span></>}
                   </span>
                 )}
                 {goalFlashInfo?.side === 'H' && <span className="text-[var(--mut)]/50">·</span>}
@@ -1328,8 +1390,8 @@ export const MatchBroadcastHeader: React.FC<{
                   {goalFlashInfo.scorer}
                 </span>
                 {goalFlashInfo.assister && !goalFlashInfo.isOwnGoal && (
-                  <span className="hidden sm:inline mland:hidden text-[10px] text-white/70 font-semibold max-w-[115px] truncate">
-                    (👟 {goalFlashInfo.assister.split(' ')[0]})
+                  <span className="hidden sm:inline-flex mland:hidden items-center gap-0.5 text-[10px] text-white/70 font-semibold max-w-[115px] truncate">
+                    (<StatIconBadge kind="assist" size="xs" /><span className="truncate">{goalFlashInfo.assister.split(' ')[0]}</span>)
                   </span>
                 )}
                 {goalFlashInfo.isMeScorer && (
@@ -1364,8 +1426,8 @@ export const MatchBroadcastHeader: React.FC<{
                 <span className="text-[var(--mut)]">เยือน</span>
                 {goalFlashInfo?.side === 'A' && <span className="text-[var(--mut)]/50">·</span>}
                 {goalFlashInfo?.side === 'A' && (
-                  <span className={`font-black tracking-wide goal-tag-blink ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
-                    {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
+                  <span className={`inline-flex items-center gap-0.5 font-black tracking-wide goal-tag-blink ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
+                    {goalFlashInfo.isOwnGoal ? '🤦 OG' : <><StatIconBadge kind="goal" size="xs" /><span>GOAL!</span></>}
                   </span>
                 )}
               </div>
@@ -1499,7 +1561,7 @@ export const FullTimeMatchStage: React.FC<{
   const [ftRosterTeam, setFtRosterTeam] = useState<'H' | 'A'>(() =>
     homeOrig.id === state.me ? 'H' : awayOrig.id === state.me ? 'A' : 'H'
   );
-  const [eventFilter, setEventFilter] = useState<'all' | 'goal' | 'card' | 'sub'>('all');
+  const [eventFilter, setEventFilter] = useState<'all' | 'goal' | 'card' | 'var' | 'sub'>('all');
 
   useEffect(() => {
     const myPitchSide: 'all' | 'H' | 'A' =
@@ -1537,7 +1599,13 @@ export const FullTimeMatchStage: React.FC<{
       const rt = didPlay ? (fullTimeAnalysis.ratings[name] ?? (hasRatingsMap ? undefined : 6.5)) : undefined;
       const goals = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.who === name).length : 0;
       const assists = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.as === name).length : 0;
-      const pCards = didPlay ? fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name) : [];
+      const pCards = didPlay
+        ? fullTimeAnalysis.cards
+            .filter((c) => c.t === team.id && c.who === name)
+            .slice()
+            .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : 1) - (b.type === 'Y' ? 0 : 1))
+        : [];
+      const isSecondYellowRed = pCards.some((c) => c.type === 'Y2R');
       const isRed = pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
       const yellowCards = !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0;
       const subOutEv = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name) : undefined;
@@ -1547,6 +1615,7 @@ export const FullTimeMatchStage: React.FC<{
         goals,
         assists,
         isRed,
+        isSecondYellowRed,
         yellowCards,
         isInjured: didPlay && injuredNames.includes(name),
         subOutMin: subOutEv?.m,
@@ -1588,7 +1657,12 @@ export const FullTimeMatchStage: React.FC<{
         const saves = didPlay ? (playerSavesMap[ftPickedPlayer] || 0) : 0;
         const subIn = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === t.id && s.inPlayer === ftPickedPlayer) : undefined;
         const subOut = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === t.id && s.outPlayer === ftPickedPlayer) : undefined;
-        const cards = didPlay ? fullTimeAnalysis.cards.filter((c) => c.t === t.id && c.who === ftPickedPlayer) : [];
+        const cards = didPlay
+          ? fullTimeAnalysis.cards
+              .filter((c) => c.t === t.id && c.who === ftPickedPlayer)
+              .slice()
+              .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : 1) - (b.type === 'Y' ? 0 : 1))
+          : [];
         const isMotm = didPlay && fullTimeAnalysis.motm === ftPickedPlayer;
         return { name: ftPickedPlayer, team: t, pl: p, role, no, didPlay, rt, gl, as, cleanSheet, saves, subIn, subOut, cards, isMotm };
       })()
@@ -1651,6 +1725,7 @@ export const FullTimeMatchStage: React.FC<{
       saves: number;
       yellowCards: number;
       redCards: number;
+      cardEvents: MatchCardEvent[];
       subIn?: MatchSubEvent;
       subOut?: MatchSubEvent;
       isMotm: boolean;
@@ -1685,7 +1760,12 @@ export const FullTimeMatchStage: React.FC<{
           const assists = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.as === name).length : 0;
           const cleanSheet = didPlay && oppGoals === 0 && Boolean(linePos === 'GK' || linePos === 'DF');
           const saves = didPlay ? (playerSavesMap[name] || 0) : 0;
-          const pCards = didPlay ? fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name) : [];
+          const pCards = didPlay
+            ? fullTimeAnalysis.cards
+                .filter((c) => c.t === team.id && c.who === name)
+                .slice()
+                .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : 1) - (b.type === 'Y' ? 0 : 1))
+            : [];
           const yellowCards = pCards.filter((c) => c.type === 'Y').length;
           const redCards = pCards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
           const subIn = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === team.id && s.inPlayer === name) : undefined;
@@ -1713,6 +1793,7 @@ export const FullTimeMatchStage: React.FC<{
             saves,
             yellowCards,
             redCards,
+            cardEvents: pCards,
             subIn,
             subOut,
             isMotm,
@@ -1891,8 +1972,14 @@ export const FullTimeMatchStage: React.FC<{
                     OG{item.ownGoals > 1 ? item.ownGoals : ''}
                   </span>
                 )}
-                {item.yellowCards > 0 && <StatIconBadge kind="yellow" count={item.yellowCards} size="xs" />}
-                {item.redCards > 0 && <StatIconBadge kind="red" count={item.redCards} size="xs" />}
+                {item.cardEvents.map((c, cIdx) => (
+                  <StatIconBadge
+                    key={`${c.m}-${c.type}-${cIdx}`}
+                    kind={c.type === 'Y' ? 'yellow' : c.type === 'Y2R' ? 'yellowRed' : 'red'}
+                    size="xs"
+                    title={`${c.type === 'Y' ? 'ใบเหลือง' : c.type === 'Y2R' ? 'เหลืองที่ 2 → แดง' : 'ใบแดงโดยตรง'} นาที ${c.m}'${c.reason ? ` (${c.reason})` : ''}`}
+                  />
+                ))}
                 {item.isInjured && <StatIconBadge kind="injury" size="xs" />}
               </>
             ) : (
@@ -2092,7 +2179,14 @@ export const FullTimeMatchStage: React.FC<{
                         {pickedInfo.cleanSheet && <StatIconBadge kind="cleansheet" count={1} size="xs" title={pickedInfo.saves > 0 ? `คลีนชีต · เซฟ ${pickedInfo.saves} ครั้ง` : 'คลีนชีต'} />}
                         {!pickedInfo.cleanSheet && pickedInfo.saves > 0 && <StatIconBadge kind="save" count={pickedInfo.saves} size="xs" title={`เซฟ ${pickedInfo.saves} ครั้ง`} />}
                         {pickedInfo.cards.map((c, idx) => (
-                          <StatIconBadge key={idx} kind={c.type === 'Y' ? 'yellow' : 'red'} size="xs" />
+                          <span key={idx} className="inline-flex items-center gap-0.5">
+                            <StatIconBadge
+                              kind={c.type === 'Y' ? 'yellow' : c.type === 'Y2R' ? 'yellowRed' : 'red'}
+                              size="xs"
+                              title={`${c.type === 'Y' ? 'ใบเหลือง' : c.type === 'Y2R' ? 'เหลืองที่ 2 → แดง' : 'ใบแดงโดยตรง'} นาที ${c.m}'`}
+                            />
+                            <span className="text-[9.5px] font-bold tabular text-white/80">{c.m}&apos;</span>
+                          </span>
                         ))}
                         {pickedInfo.subOut && <span className="inline-flex items-center gap-0.5 text-rose-300 font-bold"><StatIconBadge kind="subOut" size="xs" />ออก {pickedInfo.subOut.m}&apos;</span>}
                         {pickedInfo.subIn && <span className="inline-flex items-center gap-0.5 text-emerald-300 font-bold"><StatIconBadge kind="subIn" size="xs" />เข้า {pickedInfo.subIn.m}&apos;</span>}
@@ -2191,7 +2285,10 @@ export const FullTimeMatchStage: React.FC<{
                   const isPicked = ftPickedPlayer === sb.inPlayer;
                   const subGl = evs.filter((e) => !e.og && e.t === subTeam.id && e.who === sb.inPlayer).length;
                   const subAs = evs.filter((e) => !e.og && e.t === subTeam.id && e.as === sb.inPlayer).length;
-                  const subCards = fullTimeAnalysis.cards.filter((c) => c.t === subTeam.id && c.who === sb.inPlayer);
+                  const subCards = fullTimeAnalysis.cards
+                    .filter((c) => c.t === subTeam.id && c.who === sb.inPlayer)
+                    .slice()
+                    .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : 1) - (b.type === 'Y' ? 0 : 1));
                   const subTeamKit = subTeam.id === homeId ? homeKit : awayKit;
                   return (
                     <button
@@ -2255,7 +2352,12 @@ export const FullTimeMatchStage: React.FC<{
                               {subGl > 0 && <StatIconBadge kind="goal" count={subGl} size="xs" />}
                               {subAs > 0 && <StatIconBadge kind="assist" count={subAs} size="xs" />}
                               {subCards.map((c, cIdx) => (
-                                <StatIconBadge key={cIdx} kind={c.type === 'Y' ? 'yellow' : 'red'} size="xs" />
+                                <StatIconBadge
+                                  key={cIdx}
+                                  kind={c.type === 'Y' ? 'yellow' : c.type === 'Y2R' ? 'yellowRed' : 'red'}
+                                  size="xs"
+                                  title={`${c.type === 'Y' ? 'ใบเหลือง' : c.type === 'Y2R' ? 'เหลืองที่ 2 → แดง' : 'ใบแดงโดยตรง'} นาที ${c.m}'`}
+                                />
                               ))}
                             </span>
                           )}
@@ -2339,23 +2441,34 @@ export const FullTimeMatchStage: React.FC<{
             <div className="inline-flex flex-nowrap items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs gap-0.5 min-w-0 max-w-full overflow-x-auto ml-auto">
               {(
                 [
-                  ['all', 'ทั้งหมด'],
-                  ['goal', '⚽ ประตู'],
-                  ['card', '🖥 VAR'],
-                  ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
+                  { k: 'all', lbl: 'ทั้งหมด', icon: null },
+                  { k: 'goal', lbl: 'ประตู', icon: <StatIconBadge kind="goal" size="xs" /> },
+                  {
+                    k: 'card',
+                    lbl: `ใบเหลือง/แดง${matchCards.length ? ` (${matchCards.length})` : ''}`,
+                    icon: (
+                      <span className="inline-flex items-center -space-x-1">
+                        <StatIconBadge kind="yellow" size="xs" />
+                        <StatIconBadge kind="red" size="xs" />
+                      </span>
+                    )
+                  },
+                  { k: 'var', lbl: '🖥 VAR', icon: null },
+                  { k: 'sub', lbl: `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`, icon: null }
                 ] as const
-              ).map(([k, lbl]) => (
+              ).map((tab) => (
                 <button
-                  key={k}
+                  key={tab.k}
                   type="button"
-                  onClick={() => setEventFilter(k)}
+                  onClick={() => setEventFilter(tab.k)}
                   className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
-                    eventFilter === k
+                    eventFilter === tab.k
                       ? 'bg-[var(--g)] text-white shadow-2xs'
                       : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
                   }`}
                 >
-                  {lbl}
+                  {tab.icon}
+                  <span>{tab.lbl}</span>
                 </button>
               ))}
             </div>
@@ -2513,7 +2626,12 @@ export const FullTimeMatchStage: React.FC<{
                                 </div>
 
                                 {/* 5. นาทีที่ทำประตู */}
-                                <div className="flex items-center justify-end">
+                                <div className="flex items-center justify-end gap-1 shrink-0">
+                                  <StatIconBadge
+                                    kind="goal"
+                                    size="xs"
+                                    title={ev.og ? 'ทำเข้าประตูตัวเอง' : isPenGoal ? 'ประตูจุดโทษ' : 'ทำประตู'}
+                                  />
                                   <span
                                     className={`min-w-[24px] mland:min-w-[20px] h-4.5 mland:h-4 px-1 rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
                                       ev.og
@@ -2533,8 +2651,8 @@ export const FullTimeMatchStage: React.FC<{
                                   title={`ผู้จ่ายบอล: ${ev.as}`}
                                   className="grid grid-cols-[22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-tight min-w-0"
                                 >
-                                  <span className="flex items-center justify-center leading-none shrink-0" aria-label="ผู้จ่ายบอล">
-                                    👟
+                                  <span className="flex items-center justify-center leading-none shrink-0">
+                                    <StatIconBadge kind="assist" size="xs" title="ผู้จ่ายบอล" />
                                   </span>
                                   <div className="flex items-center justify-start">
                                     {assisterRole ? <PositionBadge role={assisterRole} size="2xs" /> : <span className="text-[9px] text-[var(--mut)]">—</span>}
@@ -2571,7 +2689,7 @@ export const FullTimeMatchStage: React.FC<{
                 <div className="rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
                   <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
-                      <span>⚽</span>
+                      <StatIconBadge kind="goal" size="xs" />
                       <span>สรุปผู้ทำประตู</span>
                     </span>
                     <span className="inline-flex items-center gap-1.5 text-[10.5px] mland:text-[9px] font-extrabold tabular text-[var(--ink)]">
@@ -2588,6 +2706,222 @@ export const FullTimeMatchStage: React.FC<{
                     <div className="grid grid-cols-2 divide-x divide-[var(--line)]/70">
                       {renderSideColumn(homeOrig, homeGoals, true)}
                       {renderSideColumn(awayOrig, awayGoals, false)}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {(eventFilter === 'card' || (eventFilter === 'all' && matchCards.length > 0)) && (() => {
+              const cardRank = (tp: MatchCardEvent['type']) => (tp === 'Y' ? 0 : tp === 'Y2R' ? 1 : 2);
+              const sortedCards = matchCards
+                .slice()
+                .sort((a, b) => (a.m - b.m) || (cardRank(a.type) - cardRank(b.type)));
+
+              const yellowOrdMap = new Map<MatchCardEvent, number>();
+              const playerYellowCounts: Record<string, number> = {};
+              sortedCards.forEach((c) => {
+                if (c.type === 'Y' || c.type === 'Y2R') {
+                  const key = `${c.t}:${c.who}`;
+                  playerYellowCounts[key] = (playerYellowCounts[key] || 0) + 1;
+                  yellowOrdMap.set(c, playerYellowCounts[key]);
+                }
+              });
+
+              const homeCards = sortedCards.filter((c) => c.t === homeOrig.id);
+              const awayCards = sortedCards.filter((c) => c.t === awayOrig.id);
+              const hYTotal = homeCards.filter((c) => c.type === 'Y' || c.type === 'Y2R').length;
+              const hRTotal = homeCards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
+              const aYTotal = awayCards.filter((c) => c.type === 'Y' || c.type === 'Y2R').length;
+              const aRTotal = awayCards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
+
+              const renderCardColumn = (team: Team, sideCards: MatchCardEvent[], isHomeSide: boolean) => {
+                const sideKit = isHomeSide ? homeKit : awayKit;
+                const yCount = isHomeSide ? hYTotal : aYTotal;
+                const rCount = isHomeSide ? hRTotal : aRTotal;
+                return (
+                  <div className="min-w-0 flex flex-col">
+                    <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/65 flex items-center justify-between gap-1.5 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-1 h-3 rounded-full shrink-0" style={{ backgroundColor: sideKit }} />
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest
+                            name={team.name}
+                            size={13}
+                            team={team}
+                            club={state.club}
+                            isMyClub={team.id === state.me && state.mode === 'm'}
+                          />
+                        </span>
+                        <span className="font-extrabold text-[10.5px] mland:text-[9px] text-[var(--ink)] truncate">
+                          {team.name}
+                        </span>
+                        {team.id === state.me && <MyTeamBadge size="2xs" />}
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0">
+                        {yCount > 0 && <StatIconBadge kind="yellow" count={yCount} size="xs" />}
+                        {rCount > 0 && <StatIconBadge kind="red" count={rCount} size="xs" />}
+                        {yCount === 0 && rCount === 0 && <span className="text-[var(--mut)]">0</span>}
+                      </span>
+                    </div>
+
+                    {sideCards.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center px-2 py-2.5 mland:py-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)] text-center">
+                        ไม่มีใบคาดโทษ
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-[var(--line)]/45">
+                        {sideCards.map((c, cIdx) => {
+                          const pl = team.sq.find((q) => q.n === c.who) || null;
+                          const no = pl ? getShirtNo(team, pl) : null;
+                          const slotRole = playedSlots?.[team.id]?.[c.who];
+                          const role = pl?.ro || slotRole || null;
+                          const teamCaptain = team.id === homeId ? captains.H : captains.A;
+                          const isCap = teamCaptain === c.who;
+                          const isCardMe = Boolean(pl?.me || (isPlayerMode && myPlayerName === c.who));
+                          const isCardMotm = fullTimeAnalysis.motm === c.who;
+                          const isPicked = ftPickedPlayer === c.who;
+                          const totalPlayerCards = playerYellowCounts[`${c.t}:${c.who}`] || 0;
+                          const ord = yellowOrdMap.get(c) || 1;
+                          const typeLabel =
+                            c.type === 'Y2R'
+                              ? 'เหลืองที่ 2 → ใบแดง'
+                              : c.type === 'R'
+                                ? 'ใบแดงโดยตรง'
+                                : totalPlayerCards >= 2
+                                  ? `ใบเหลือง #${ord}`
+                                  : 'ใบเหลือง';
+                          const isRedCard = c.type === 'R' || c.type === 'Y2R';
+                          return (
+                            <button
+                              key={`${c.m}-${c.t}-${c.who}-${c.type}-${cIdx}`}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                setFtPickedPlayer((prev) => (prev === c.who ? null : c.who));
+                                if (ftPitchMode !== 'all') {
+                                  setFtPitchMode(isHomeSide ? 'H' : 'A');
+                                }
+                              }}
+                              className={`w-full text-left px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors flex flex-col gap-0.5 cursor-pointer ${
+                                isPicked ? 'bg-[var(--g-soft)]/75' : 'hover:bg-[var(--surface-2)]/65'
+                              }`}
+                            >
+                              <div className="grid grid-cols-[22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 min-w-0">
+                                <div className="flex items-center justify-start">
+                                  {pl ? (
+                                    <MatchPlayerThumb
+                                      player={pl}
+                                      team={team}
+                                      state={state}
+                                      kitColor={isHomeSide ? (pl.pos === 'GK' ? homeGkKit : homeKit) : (pl.pos === 'GK' ? awayGkKit : awayKit)}
+                                      trimColor={pl.pos === 'GK' ? undefined : (isHomeSide ? homeTrim : awayTrim)}
+                                      size="xs"
+                                      ringClassName={isCardMotm ? 'ring-2 ring-amber-400' : undefined}
+                                      isMotm={isCardMotm}
+                                    />
+                                  ) : (
+                                    <span className="w-[20px] h-[21px] rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/60 inline-block" />
+                                  )}
+                                </div>
+
+                                <div className="flex items-center justify-start">
+                                  {role ? <PositionBadge role={role} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
+                                </div>
+
+                                <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+                                  {no != null ? `#${no}` : '—'}
+                                </div>
+
+                                <div className="flex items-center justify-start gap-1 min-w-0">
+                                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
+                                    {c.who}
+                                  </span>
+                                  {isCap && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
+                                  {isCardMe && (
+                                    <span
+                                      title="ตัวคุณ"
+                                      aria-label="ตัวคุณ"
+                                      className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8px] font-black shrink-0"
+                                    >
+                                      ★
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center justify-end gap-1 shrink-0">
+                                  <StatIconBadge
+                                    kind={c.type === 'Y' ? 'yellow' : c.type === 'Y2R' ? 'yellowRed' : 'red'}
+                                    size="xs"
+                                  />
+                                  <span
+                                    className={`min-w-[24px] mland:min-w-[20px] h-4.5 mland:h-4 px-1 rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
+                                      isRedCard
+                                        ? 'bg-[var(--red)] text-white'
+                                        : 'bg-[#facc15] text-stone-950'
+                                    }`}
+                                  >
+                                    {c.m}&apos;
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="pl-[82px] mland:pl-[73px] text-[9.5px] mland:text-[8px] leading-tight truncate flex items-center gap-1">
+                                <span
+                                  className={`font-bold ${
+                                    isRedCard
+                                      ? 'text-[var(--red)]'
+                                      : 'text-amber-700 dark:text-amber-300'
+                                  }`}
+                                >
+                                  {typeLabel}
+                                </span>
+                                {c.reason && <span className="text-[var(--mut)] truncate">· {c.reason}</span>}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+
+              return (
+                <div className="rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
+                  <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
+                      <span className="inline-flex items-center -space-x-1">
+                        <StatIconBadge kind="yellow" size="xs" />
+                        <StatIconBadge kind="red" size="xs" />
+                      </span>
+                      <span>สรุปใบเหลือง / ใบแดง</span>
+                      <span className="hidden sm:inline text-[9.5px] font-semibold text-[var(--mut)]">(เรียงตามเวลา 0&apos; → 90&apos;)</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-[10px] mland:text-[8.5px] font-extrabold tabular text-[var(--ink)]">
+                      <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                      <span className="inline-flex items-center gap-1">
+                        {hYTotal > 0 && <StatIconBadge kind="yellow" count={hYTotal} size="xs" />}
+                        {hRTotal > 0 && <StatIconBadge kind="red" count={hRTotal} size="xs" />}
+                        {hYTotal === 0 && hRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
+                      </span>
+                      <span className="text-[var(--mut)]">-</span>
+                      <span className="inline-flex items-center gap-1">
+                        {aYTotal > 0 && <StatIconBadge kind="yellow" count={aYTotal} size="xs" />}
+                        {aRTotal > 0 && <StatIconBadge kind="red" count={aRTotal} size="xs" />}
+                        {aYTotal === 0 && aRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
+                      </span>
+                      <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+                    </span>
+                  </div>
+                  {sortedCards.length === 0 ? (
+                    <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] text-center">
+                      ไม่มีใบเหลืองหรือใบแดงในเกมนี้
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 divide-x divide-[var(--line)]/70">
+                      {renderCardColumn(homeOrig, homeCards, true)}
+                      {renderCardColumn(awayOrig, awayCards, false)}
                     </div>
                   )}
                 </div>
@@ -2632,13 +2966,18 @@ export const FullTimeMatchStage: React.FC<{
             ) : (() => {
               const filteredLogs = logs.filter((l) => {
                 if (eventFilter === 'goal') return l.tone === 'goal';
-                if (eventFilter === 'card') return Boolean(l.varReplayId) || l.tone === 'card' || l.text.includes('VAR') || l.text.includes('จุดโทษ');
+                if (eventFilter === 'card') return l.tone === 'card';
+                if (eventFilter === 'var') return Boolean(l.varReplayId) || l.text.includes('VAR') || l.text.includes('จุดโทษ');
                 return true;
               });
-              if (!filteredLogs.length) {
+              const displayLogs =
+                eventFilter === 'card'
+                  ? filteredLogs.slice().sort((a, b) => a.m - b.m)
+                  : filteredLogs;
+              if (!displayLogs.length) {
                 return <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีเหตุการณ์ในหมวดนี้</div>;
               }
-              return filteredLogs.map((l) => (
+              return displayLogs.map((l) => (
                 <MatchLogRow
                   key={l.id}
                   l={l}
@@ -2831,6 +3170,7 @@ export const FullTimeMatchStage: React.FC<{
                   awayGkKit={awayGkKit}
                   homeTrim={homeTrim}
                   awayTrim={awayTrim}
+                  defaultChronological={true}
                 />
               </div>
             </div>

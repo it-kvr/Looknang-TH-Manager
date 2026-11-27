@@ -488,20 +488,33 @@ export const SeasonEndModal: React.FC<{
               <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5">
                 {[
                   {
-                    label: '⚽ ดาวซัลโวทีม',
+                    id: 'scorer',
+                    label: (
+                      <span className="inline-flex items-center gap-1">
+                        <StatIconBadge kind="goal" size="xs" />
+                        <span>ดาวซัลโวทีม</span>
+                      </span>
+                    ),
                     name: arc.topScorer?.name,
                     stat: arc.topScorer ? `${arc.topScorer.sg} ประตู (${arc.topScorer.sp} นัด)` : '-',
                     player: scorerPlayer,
                     accent: 'border-[var(--g)]/35'
                   },
                   {
-                    label: '👟 จอมแอสซิสต์ทีม',
+                    id: 'assist',
+                    label: (
+                      <span className="inline-flex items-center gap-1">
+                        <StatIconBadge kind="assist" size="xs" />
+                        <span>จอมแอสซิสต์ทีม</span>
+                      </span>
+                    ),
                     name: arc.topAssist?.name,
                     stat: arc.topAssist ? `${arc.topAssist.sa} แอสซิสต์ (${arc.topAssist.sp} นัด)` : '-',
                     player: assistPlayer,
                     accent: 'border-sky-500/35'
                   },
                   {
+                    id: 'rating',
                     label: '⭐ นักเตะยอดเยี่ยมทีม',
                     name: arc.topRating?.name,
                     stat: arc.topRating ? `เฉลี่ย ${arc.topRating.avgRating.toFixed(2)} (${arc.topRating.motm} MOTM)` : '-',
@@ -510,7 +523,7 @@ export const SeasonEndModal: React.FC<{
                   }
                 ].map((item) => (
                   <div
-                    key={item.label}
+                    key={item.id}
                     className={`p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/55 border ${item.accent} flex items-center gap-2.5 mland:gap-1.5 min-w-0`}
                   >
                     {item.player ? (
@@ -542,13 +555,15 @@ export const SeasonEndModal: React.FC<{
                     🏅 รางวัลดาวเด่นประจำลีก ({TN[summary.mt]})
                   </div>
                   {summary.bestScorer && (
-                    <div className="truncate text-[var(--ink)]">
-                      ⚽ ดาวซัลโว: <b>{summary.bestScorer}</b>
+                    <div className="truncate text-[var(--ink)] flex items-center gap-1">
+                      <StatIconBadge kind="goal" size="xs" />
+                      <span className="truncate">ดาวซัลโว: <b>{summary.bestScorer}</b></span>
                     </div>
                   )}
                   {summary.bestAssist && (
-                    <div className="truncate text-[var(--ink)]">
-                      👟 จอมแอสซิสต์: <b>{summary.bestAssist}</b>
+                    <div className="truncate text-[var(--ink)] flex items-center gap-1">
+                      <StatIconBadge kind="assist" size="xs" />
+                      <span className="truncate">จอมแอสซิสต์: <b>{summary.bestAssist}</b></span>
                     </div>
                   )}
                 </div>

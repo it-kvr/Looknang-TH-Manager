@@ -152,10 +152,26 @@ export const SeasonStatsModal: React.FC<{
         ? 'bg-[var(--red)] text-white'
         : 'bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)]';
 
-  const sortOptions: { key: SortKey; label: string }[] = [
+  const sortOptions: { key: SortKey; label: React.ReactNode }[] = [
     { key: 'avgRating', label: '⭐ คะแนนเฉลี่ย' },
-    { key: 'sg', label: '⚽ ประตู' },
-    { key: 'sa', label: '👟 แอสซิสต์' },
+    {
+      key: 'sg',
+      label: (
+        <span className="inline-flex items-center gap-1">
+          <StatIconBadge kind="goal" size="xs" />
+          <span>ประตู</span>
+        </span>
+      )
+    },
+    {
+      key: 'sa',
+      label: (
+        <span className="inline-flex items-center gap-1">
+          <StatIconBadge kind="assist" size="xs" />
+          <span>แอสซิสต์</span>
+        </span>
+      )
+    },
     { key: 'sp', label: '👕 ลงเล่น' },
     { key: 'motm', label: '👑 MOTM' },
     { key: 'ov', label: 'OVR' }
@@ -299,13 +315,15 @@ export const SeasonStatsModal: React.FC<{
                   </span>
                 )}
                 {rec.leagueBestScorer && (
-                  <span>
-                    ⚽ ดาวซัลโวลีก: <b className="text-[var(--ink)]">{rec.leagueBestScorer}</b>
+                  <span className="inline-flex items-center gap-1">
+                    <StatIconBadge kind="goal" size="xs" />
+                    <span>ดาวซัลโวลีก: <b className="text-[var(--ink)]">{rec.leagueBestScorer}</b></span>
                   </span>
                 )}
                 {rec.leagueBestAssist && (
-                  <span>
-                    👟 แอสซิสต์สูงสุดลีก: <b className="text-[var(--ink)]">{rec.leagueBestAssist}</b>
+                  <span className="inline-flex items-center gap-1">
+                    <StatIconBadge kind="assist" size="xs" />
+                    <span>แอสซิสต์สูงสุดลีก: <b className="text-[var(--ink)]">{rec.leagueBestAssist}</b></span>
                   </span>
                 )}
               </div>
@@ -315,8 +333,9 @@ export const SeasonStatsModal: React.FC<{
           {/* Team Player Leaders */}
           <section className="grid grid-cols-2 lg:grid-cols-4 mland:grid-cols-4 gap-2 mland:gap-1.5">
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--lamp-soft)]/55 border border-[var(--lamp)]/45 space-y-0.5">
-              <div className="text-[11px] mland:text-[9px] font-bold text-[#9a6300] dark:text-[var(--lamp)]">
-                ⚽ ดาวยิงสูงสุดในทีม
+              <div className="text-[11px] mland:text-[9px] font-bold text-[#9a6300] dark:text-[var(--lamp)] flex items-center gap-1">
+                <StatIconBadge kind="goal" size="xs" />
+                <span>ดาวยิงสูงสุดในทีม</span>
               </div>
               {scopedTopScorer ? (
                 <>
@@ -331,7 +350,10 @@ export const SeasonStatsModal: React.FC<{
             </div>
 
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--g-soft)]/60 border border-[var(--g)]/35 space-y-0.5">
-              <div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)]">👟 แอสซิสต์สูงสุดในทีม</div>
+              <div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] flex items-center gap-1">
+                <StatIconBadge kind="assist" size="xs" />
+                <span>แอสซิสต์สูงสุดในทีม</span>
+              </div>
               {scopedTopAssist ? (
                 <>
                   <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{scopedTopAssist.name}</div>
@@ -487,8 +509,8 @@ export const SeasonStatsModal: React.FC<{
                             <span className="font-bold truncate">{pl.name}</span>
                             {pl.isMe && <span className="text-[var(--lamp)] shrink-0">★</span>}
                             {isTopRt && <span className="shrink-0" title="คะแนนเฉลี่ยสูงสุดในทีม">⭐</span>}
-                            {isTopGoal && <span className="shrink-0" title="ดาวซัลโวทีม">⚽</span>}
-                            {isTopAst && <span className="shrink-0" title="แอสซิสต์สูงสุดทีม">👟</span>}
+                            {isTopGoal && <StatIconBadge kind="goal" size="xs" title="ดาวซัลโวทีม" />}
+                            {isTopAst && <StatIconBadge kind="assist" size="xs" title="แอสซิสต์สูงสุดทีม" />}
                           </div>
                         </td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center">

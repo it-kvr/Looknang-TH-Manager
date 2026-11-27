@@ -29,7 +29,7 @@ const METRIC_COLUMNS: {
   {
     key: 'goals',
     label: 'ประตู',
-    icon: '⚽',
+    icon: <StatIconBadge kind="goal" size="xs" />,
     unit: 'ประตู',
     accentCls: 'text-emerald-700 dark:text-emerald-300',
     headerBgCls: 'bg-emerald-500/10'
@@ -37,7 +37,7 @@ const METRIC_COLUMNS: {
   {
     key: 'assists',
     label: 'แอสซิสต์',
-    icon: '👟',
+    icon: <StatIconBadge kind="assist" size="xs" />,
     unit: 'ครั้ง',
     accentCls: 'text-sky-700 dark:text-sky-300',
     headerBgCls: 'bg-sky-500/10'

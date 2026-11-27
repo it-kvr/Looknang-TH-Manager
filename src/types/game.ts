@@ -805,6 +805,7 @@ export type TimelineKind =
   | 'pen_awarded'
   | 'pen_miss'
   | 'yellow'
+  | 'yellow2red'
   | 'red'
   | 'injury'
   | 'miss'
