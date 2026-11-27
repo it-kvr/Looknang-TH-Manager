@@ -5804,10 +5804,12 @@ export const drawLivePitchToCanvas = (
   const ballR = clamp(cssW * 0.0092, 4.8, 6.8) * ballScale;
 
   // Ground shadow
+  ctx.save();
   ctx.fillStyle = `rgba(0, 0, 0, ${clamp(0.42 - b.z * 0.012, 0.12, 0.42)})`;
   ctx.beginPath();
   ctx.ellipse(bx + b.z * 0.22, by + 3.2 + b.z * 0.28, ballR * 0.94, ballR * 0.46, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
 
   // Elevated 3D match ball
   const drawBy = by - b.z * 0.78;
@@ -6209,14 +6211,18 @@ export const drawLivePitchToCanvas = (
     coachSpeechDrawQueue.forEach(({ c, cx, cy, cr, warmupPhase }) => {
       if ((c.shoutText && c.shoutTimer > 0) || !c.moodEmoji || (c.moodTimer || 0) <= 0) return;
       const mTimer = c.moodTimer || 0;
-      const mAlpha = clamp(mTimer / 0.35, 0, 1);
+      const mAlpha = clamp(mTimer / 0.2, 0, 1);
       const bob = Math.sin(warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
-      const emSize = Math.round(clamp(cr * 1.65, 12, 15));
+      const emSize = Math.round(clamp(cr * 1.75, 13, 16));
       const emX = clamp(cx, 12, cssW - 12);
       const emY = clamp(cy - cr - emSize * 0.58 + bob, emSize * 0.55, cssH - emSize * 0.55);
 
       ctx.save();
       ctx.globalAlpha = mAlpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.68)';
+      ctx.shadowBlur = 3;
+      ctx.shadowOffsetY = 1;
       ctx.font = `${emSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", Sarabun, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';

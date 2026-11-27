@@ -1575,12 +1575,15 @@ export const MatchBroadcastHeader = React.memo<{
             className="pointer-events-none absolute inset-x-0 top-0 h-[2px]"
             style={{ background: `linear-gradient(90deg, ${headerBrand.bg}, ${headerBrand.accent})` }}
           />
-          <div
-            className="w-full min-w-0 truncate text-[10.5px] sm:text-[11px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight"
-            title={compTitle}
-          >
-            <span className="md:hidden">{compShortTitle}</span>
-            <span className="hidden md:inline">{compTitle}</span>
+          <div className="w-full min-w-0 flex items-center justify-between gap-1.5">
+            <div
+              className="min-w-0 truncate text-[10.5px] sm:text-[11px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight"
+              title={compTitle}
+            >
+              <span className="md:hidden">{compShortTitle}</span>
+              <span className="hidden md:inline">{compTitle}</span>
+            </div>
+            {!done && <LiveStreamBadge animated={!paused && matchPhaseUi !== 'halftime'} />}
           </div>
           <div className="w-full min-w-0 flex items-center gap-1.5 mland:gap-1 leading-none">
             <div className="relative shrink-0">
