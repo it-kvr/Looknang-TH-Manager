@@ -15,9 +15,8 @@ import { AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
-import { Check } from 'lucide-react';
 import { FormationPitch, PlayerFace, ClubCrest, type PitchPlayerMeta } from '../components/SvgVisuals';
-import { MatchPlayerThumb } from './MatchSharedComponents';
+import { LiveStreamBadge, MatchPlayerThumb } from './MatchSharedComponents';
 import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
@@ -993,8 +992,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             onClick={() => (onCloseToChat ? onCloseToChat() : onCloseToStats())}
             className="seg-btn w-full whitespace-nowrap"
           >
-            <span>🎥</span>
-            <span>ออนไลน์</span>
+            <LiveStreamBadge animated={true} active={false} />
             {liveViewers != null && (
               <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
                 {fmtFansShort(liveViewers)}
@@ -1024,65 +1022,64 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
         {/* Scrollable Halftime Talk (at Halftime) + Bench + Tactical Orders */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-2 mland:space-y-1.5">
           {matchPhaseUi === 'halftime' && onSetHalftimeTalk && (() => {
-            const htTalkOptions: { id: ManagerHalftimeTalk; icon: string; title: string; desc: string }[] = [
-              { id: 'attack', icon: '🔥', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
-              { id: 'press', icon: '⚡', title: 'เพรสซิ่งสูงบีบพื้นที่', desc: 'เร่งจังหวะ ไล่บีบแย่งบอลทันที' },
-              { id: 'balanced', icon: '⚖️', title: 'รักษาทรงคุมจังหวะ', desc: 'นิ่งและสม่ำเสมอ รอจังหวะเจาะ' },
-              { id: 'counter', icon: '🚀', title: 'ตั้งรับรอโต้กลับเร็ว', desc: 'รัดกุมหลังแล้ววางบอลสวนฉับพลัน' },
-              { id: 'defend', icon: '🛡️', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
+            const htTalkOptions: {
+              id: ManagerHalftimeTalk;
+              icon: string;
+              short: string;
+              title: string;
+              desc: string;
+            }[] = [
+              { id: 'attack', icon: '🔥', short: 'เปิดบุก', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
+              { id: 'press', icon: '⚡', short: 'เพรสซิ่ง', title: 'เพรสซิ่งสูงบีบพื้นที่', desc: 'เร่งจังหวะ ไล่บีบแย่งบอลทันที' },
+              { id: 'balanced', icon: '⚖️', short: 'คุมจังหวะ', title: 'รักษาทรงคุมจังหวะ', desc: 'นิ่งและสม่ำเสมอ รอจังหวะเจาะ' },
+              { id: 'counter', icon: '🚀', short: 'โต้กลับ', title: 'ตั้งรับรอโต้กลับเร็ว', desc: 'รัดกุมหลังแล้ววางบอลสวนฉับพลัน' },
+              { id: 'defend', icon: '🛡️', short: 'เกมรับ', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
             ];
+            const activeOpt = htTalkOptions.find((o) => o.id === selectedHalftimeTalk) ?? htTalkOptions[2];
             return (
-              <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-amber-500/8 border border-amber-500/40 space-y-1.5 mland:space-y-1">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-extrabold text-[11.5px] mland:text-[9.5px] text-[#b45309] dark:text-[#fde047] flex items-center gap-1.5">
-                      <span>🗣️ สั่งการครึ่งหลัง</span>
-                    </div>
-                    <p className="text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-snug">
-                      เลือกคำสั่งปลุกใจ/แท็กติกทีม แล้วกดเริ่มครึ่งหลังด้านบน
-                    </p>
+              <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-amber-500/8 border border-amber-500/40 space-y-1.5 mland:space-y-1">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="font-extrabold text-[11px] mland:text-[9px] text-[#b45309] dark:text-[#fde047] flex items-center gap-1 shrink-0">
+                    <span>🗣️ สั่งการครึ่งหลัง</span>
                   </div>
-                  <div className="shrink-0">
-                    <ClubCrest
-                      name={meTeamOrig.name}
-                      size={20}
-                      team={meTeamOrig}
-                      club={state.club}
-                      isMyClub={true}
-                    />
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)] truncate text-right">
+                      {activeOpt.desc}
+                    </span>
+                    <div className="shrink-0">
+                      <ClubCrest
+                        name={meTeamOrig.name}
+                        size={16}
+                        team={meTeamOrig}
+                        club={state.club}
+                        isMyClub={true}
+                      />
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-1">
+                <div className="grid grid-cols-5 gap-1">
                   {htTalkOptions.map((opt) => {
                     const active = selectedHalftimeTalk === opt.id;
                     return (
                       <button
                         key={opt.id}
                         type="button"
+                        aria-pressed={active}
+                        title={`${opt.title} — ${opt.desc}`}
                         onClick={() => {
                           SFX.tap();
                           onSetHalftimeTalk(opt.id);
                         }}
-                        className={`w-full text-left px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                        className={`w-full min-w-0 px-1 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 text-center ${
                           active
-                            ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
+                            ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs ring-1 ring-emerald-300/45'
                             : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/60'
                         }`}
                       >
-                        <div className="min-w-0">
-                          <div className="font-bold text-[10.5px] mland:text-[9px] flex items-center gap-1.5 leading-tight">
-                            <span>{opt.icon}</span>
-                            <span className="truncate">{opt.title}</span>
-                          </div>
-                          <div className={`text-[9px] mland:text-[7.5px] truncate mt-0.5 ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
-                            {opt.desc}
-                          </div>
-                        </div>
-                        {active && (
-                          <span className="w-4 h-4 rounded-full bg-white text-[var(--g)] flex items-center justify-center shrink-0">
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
-                          </span>
-                        )}
+                        <span className="text-[12px] mland:text-[10px] leading-none">{opt.icon}</span>
+                        <span className="font-bold text-[9.5px] mland:text-[8px] leading-tight whitespace-nowrap truncate max-w-full">
+                          {opt.short}
+                        </span>
                       </button>
                     );
                   })}

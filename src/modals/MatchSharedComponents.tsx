@@ -52,6 +52,25 @@ export interface MatchLogItem {
   subInfo?: MatchSubLogInfo;
 }
 
+export const LiveStreamBadge: React.FC<{ animated?: boolean; active?: boolean }> = ({
+  animated = true,
+  active = false,
+}) => (
+  <span
+    className={`inline-flex items-center gap-1 px-1.5 py-[2px] mland:px-1 mland:py-[1.5px] rounded-md bg-gradient-to-b from-[#ef4444] to-[#dc2626] text-white font-badge-latin font-extrabold text-[9.5px] mland:text-[8px] leading-none tracking-tight shrink-0 shadow-2xs ${
+      active ? 'border border-white/45' : 'border border-red-400/55'
+    }`}
+  >
+    <span className="relative inline-flex items-center justify-center w-1.5 h-1.5 shrink-0">
+      {animated && (
+        <span className="live-dot-ring absolute inset-0 rounded-full bg-white/85 pointer-events-none" />
+      )}
+      <span className={`relative w-1.5 h-1.5 rounded-full bg-white ${animated ? 'live-dot-core' : ''}`} />
+    </span>
+    <span>Live</span>
+  </span>
+);
+
 export function isCardLogEntry(l: MatchLogItem): boolean {
   return (
     l.text.includes('ใบเหลือง') ||
@@ -3265,8 +3284,7 @@ export const FullTimeMatchStage: React.FC<{
             onClick={() => onChangeRightTab('chat')}
             className={`seg-btn w-full whitespace-nowrap ${rightTab === 'chat' ? 'seg-btn-active' : ''}`}
           >
-            <span>🎥</span>
-            <span>ออนไลน์</span>
+            <LiveStreamBadge animated={false} active={rightTab === 'chat'} />
             <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
               {fmtFansShort(liveViewers)}
             </span>

@@ -53,6 +53,7 @@ import {
   FullTimeMatchStage,
   isCardLogEntry,
   isVarLogEntry,
+  LiveStreamBadge,
   MatchBroadcastHeader,
   MatchLogRow,
   MatchPlayerThumb,
@@ -14495,8 +14496,7 @@ export const MatchModal: React.FC<{
                   onClick={() => setMlandMatchTab('chat')}
                   className={`seg-btn w-full min-w-0 overflow-hidden whitespace-nowrap px-1 mland:px-0.5 ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
                 >
-                  <span className="shrink-0">🎥</span>
-                  <span className="truncate">ออนไลน์</span>
+                  <LiveStreamBadge animated={!done} active={mlandMatchTab === 'chat'} />
                   <span className="tabular font-extrabold text-[9.5px] mland:text-[8px] opacity-85 shrink-0">
                     {fmtFansShort(liveViewers)}
                   </span>
