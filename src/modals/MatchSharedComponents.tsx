@@ -2123,7 +2123,7 @@ export const FullTimeMatchStage: React.FC<{
           </div>
 
           {/* 3. ตำแหน่ง */}
-          <div className="flex items-center justify-start">
+          <div className="flex items-center justify-center">
             {item.role ? <PositionBadge role={item.role} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
           </div>
 
@@ -2787,7 +2787,7 @@ export const FullTimeMatchStage: React.FC<{
                                 </div>
 
                                 {/* 3. ตำแหน่ง */}
-                                <div className="flex items-center justify-start">
+                                <div className="flex items-center justify-center">
                                   {scorerRole ? <PositionBadge role={scorerRole} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
                                 </div>
 
@@ -2884,7 +2884,7 @@ export const FullTimeMatchStage: React.FC<{
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center justify-start">
+                                  <div className="flex items-center justify-center">
                                     {assisterRole ? <PositionBadge role={assisterRole} size="2xs" /> : <span className="text-[9px] text-[var(--mut)]">—</span>}
                                   </div>
                                   <div className="text-left text-[9.5px] mland:text-[8px] font-extrabold text-[#b45309]/85 dark:text-[var(--lamp)]/85 tabular whitespace-nowrap">
@@ -3055,7 +3055,7 @@ export const FullTimeMatchStage: React.FC<{
                                   )}
                                 </div>
 
-                                <div className="flex items-center justify-start">
+                                <div className="flex items-center justify-center">
                                   {role ? <PositionBadge role={role} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
                                 </div>
 

@@ -1260,7 +1260,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
-                        className="flex items-center justify-start"
+                        className="flex items-center justify-center"
                       >
                         <PositionBadge role={pl.ro} size="2xs" />
                       </div>

@@ -13,7 +13,7 @@ import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
@@ -555,8 +555,8 @@ export default function App() {
               d.trophies.push({ season: d.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
             }
             if (d.mode === 'm') {
-              d.money += 250;
-              logFin(d, 'รางวัลแชมป์ถ้วยประชาชน', 250);
+              d.money += FA_CUP_PRIZE;
+              logFin(d, 'รางวัลแชมป์ถ้วยประชาชน', FA_CUP_PRIZE);
               d.mgrRep = (d.mgrRep || 50) + 75;
             } else if (d.p) {
               const meSq = me.sq.find((q) => q.me);
@@ -756,8 +756,8 @@ export default function App() {
               d.trophies.push({ season: d.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
             }
             if (d.mode === 'm') {
-              d.money += 500;
-              logFin(d, 'รางวัลแชมป์ทวีป', 500);
+              d.money += ASIA_CUP_PRIZE;
+              logFin(d, 'รางวัลแชมป์ทวีป', ASIA_CUP_PRIZE);
               d.mgrRep = (d.mgrRep || 50) + 120;
             } else if (d.p) {
               const meSq = me.sq.find((q) => q.me);

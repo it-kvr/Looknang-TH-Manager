@@ -4222,8 +4222,8 @@ export function simulateCpuAsiaRound(s: GameState) {
         s.trophies.push({ season: s.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
       }
       if (s.mode === 'm') {
-        s.money += 500;
-        logFin(s, 'รางวัลแชมป์ทวีป', 500);
+        s.money += ASIA_CUP_PRIZE;
+        logFin(s, 'รางวัลแชมป์ทวีป', ASIA_CUP_PRIZE);
         s.mgrRep = (s.mgrRep || 50) + 120;
       }
     }
@@ -4265,13 +4265,16 @@ export function simulateCpuCupRound(s: GameState) {
         s.trophies.push({ season: s.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
       }
       if (s.mode === 'm') {
-        s.money += 250;
-        logFin(s, 'รางวัลแชมป์ถ้วยประชาชน', 250);
+        s.money += FA_CUP_PRIZE;
+        logFin(s, 'รางวัลแชมป์ถ้วยประชาชน', FA_CUP_PRIZE);
         s.mgrRep = (s.mgrRep || 50) + 75;
       }
     }
   }
 }
+
+export const FA_CUP_PRIZE = 400;
+export const ASIA_CUP_PRIZE = 1200;
 
 export const EXTRA_CUP_META: Record<
   'lc' | 'sc' | 'dc',
@@ -4283,7 +4286,7 @@ export const EXTRA_CUP_META: Record<
     icon: '🥇',
     trophyTitle: 'แชมป์ไทยลีก คัพ',
     trophyType: 'league_cup',
-    prize: 200,
+    prize: 320,
     rep: 60
   },
   sc: {
@@ -4292,7 +4295,7 @@ export const EXTRA_CUP_META: Record<
     icon: '🏅',
     trophyTitle: 'แชมป์แชมเปี้ยนส์ คัพ',
     trophyType: 'super_cup',
-    prize: 120,
+    prize: 200,
     rep: 45
   },
   dc: {
@@ -4301,7 +4304,7 @@ export const EXTRA_CUP_META: Record<
     icon: '🛡️',
     trophyTitle: 'แชมป์ถ้วยดิวิชั่น',
     trophyType: 'div_cup',
-    prize: 140,
+    prize: 220,
     rep: 45
   }
 };
@@ -6295,21 +6298,21 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
 export function getLeaguePrizeMoney(tier: number, rank: number, totalTeams = 16): number {
   const r = Math.max(1, Math.min(totalTeams, Math.round(rank || 1)));
   if (tier >= 2) {
-    // ลีกในประเทศ 1 (ลีกสูงสุด): แชมป์ 600k -> อันดับ 16 = 100k
-    const top = [600, 460, 380, 320, 280, 250];
+    // ลีกในประเทศ 1 (ลีกสูงสุด): แชมป์ 1m -> อันดับ 16 = 160k
+    const top = [1000, 750, 600, 500, 420, 360];
     if (r <= top.length) return top[r - 1];
-    return Math.max(100, 250 - (r - 6) * 15);
+    return Math.max(160, 360 - (r - 6) * 20);
   }
   if (tier === 1) {
-    // ลีกในประเทศ 2: แชมป์ 350k -> อันดับ 16 = 55k
-    const top = [350, 270, 220, 180, 160, 145];
+    // ลีกในประเทศ 2: แชมป์ 550k -> อันดับ 16 = 90k
+    const top = [550, 420, 340, 280, 240, 210];
     if (r <= top.length) return top[r - 1];
-    return Math.max(55, Math.round((145 - (r - 6) * 9) / 5) * 5);
+    return Math.max(90, Math.round((210 - (r - 6) * 12) / 5) * 5);
   }
-  // ลีกจังหวัด: แชมป์ 200k -> อันดับ 16 = 30k
-  const top = [200, 155, 125, 105, 90, 80];
+  // ลีกจังหวัด: แชมป์ 300k -> อันดับ 16 = 45k
+  const top = [300, 230, 185, 150, 125, 105];
   if (r <= top.length) return top[r - 1];
-  return Math.max(30, 80 - (r - 6) * 5);
+  return Math.max(45, Math.round((105 - (r - 6) * 6) / 5) * 5);
 }
 
 export interface NationalTeamCandidateRow {

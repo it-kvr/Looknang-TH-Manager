@@ -686,7 +686,7 @@ export const SquadTacticsView: React.FC<{
         <div
           data-drag-grip={isMgr ? '1' : undefined}
           style={isMgr ? { touchAction: 'none' } : undefined}
-          className={`flex items-center justify-start ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+          className={`flex items-center justify-center ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
         >
           <PositionBadge role={slotSp || q.ro} size="2xs" />
         </div>

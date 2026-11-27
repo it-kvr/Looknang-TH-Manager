@@ -545,7 +545,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           />
         </div>
 
-        <div className="flex items-center justify-start">
+        <div className="flex items-center justify-center">
           <PositionBadge role={slotLabel} size="2xs" />
         </div>
 
@@ -656,7 +656,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   </span>
                 </div>
                 <div className="mt-0.5 text-[9.5px] mland:text-[7.5px] text-[var(--mut)] flex items-center justify-end gap-1 tabular">
-                  <span className="hidden xl:inline-flex items-center">
+                  <span className="hidden xl:inline-flex items-center justify-center leading-none">
                     {renderFormDots(homeTeam.fm)}
                   </span>
                   <span>{isNeutralVenue ? 'กลาง' : 'เหย้า'}</span>
@@ -709,7 +709,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   <span>#{ranks.get(awayTeam.id) ?? '-'}</span>
                   <span>·</span>
                   <span>{isNeutralVenue ? 'กลาง' : 'เยือน'}</span>
-                  <span className="hidden xl:inline-flex items-center">
+                  <span className="hidden xl:inline-flex items-center justify-center leading-none">
                     {renderFormDots(awayTeam.fm)}
                   </span>
                 </div>

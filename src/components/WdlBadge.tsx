@@ -32,7 +32,7 @@ export const WdlCharBadge: React.FC<{
   return (
     <span
       title={label}
-      className={`inline-flex items-center justify-center font-black leading-none shrink-0 select-none ${sizeCls} ${getWdlBadgeClass(kind)} ${className}`}
+      className={`font-badge-latin inline-flex items-center justify-center text-center font-black leading-none shrink-0 select-none align-middle ${sizeCls} ${getWdlBadgeClass(kind)} ${className}`}
     >
       {kind}
     </span>
@@ -50,11 +50,18 @@ export const WdlFormStrip: React.FC<{
     .split('')
     .filter((c): c is WdlKind => c === 'W' || c === 'D' || c === 'L');
   if (!chars.length) {
-    return <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">{emptyText}</span>;
+    return (
+      <span className="inline-flex items-center justify-center leading-none text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+        {emptyText}
+      </span>
+    );
   }
   const thaiForm = chars.map((c) => (c === 'W' ? 'ชนะ' : c === 'D' ? 'เสมอ' : 'แพ้')).join(' · ');
   return (
-    <span className={`inline-flex items-center gap-0.5 shrink-0 ${className}`} title={`ฟอร์ม 5 นัดล่าสุด: ${thaiForm}`}>
+    <span
+      className={`inline-flex items-center justify-center gap-0.5 leading-none shrink-0 ${className}`}
+      title={`ฟอร์ม 5 นัดล่าสุด: ${thaiForm}`}
+    >
       {chars.map((c, idx) => (
         <WdlCharBadge key={idx} kind={c} size={size} />
       ))}
@@ -70,16 +77,16 @@ export const WdlRecordBadges: React.FC<{
   countClassName?: string;
   className?: string;
 }> = ({ w, d, l, size = '2xs', countClassName = 'text-[var(--ink)]', className = '' }) => (
-  <span className={`inline-flex items-center gap-1.5 tabular shrink-0 ${className}`}>
-    <span className="inline-flex items-center gap-[3px]">
+  <span className={`inline-flex items-center justify-center gap-1.5 tabular leading-none shrink-0 ${className}`}>
+    <span className="inline-flex items-center justify-center gap-[3px] leading-none">
       <WdlCharBadge kind="W" size={size} />
       <span className={`font-extrabold leading-none ${countClassName}`}>{w}</span>
     </span>
-    <span className="inline-flex items-center gap-[3px]">
+    <span className="inline-flex items-center justify-center gap-[3px] leading-none">
       <WdlCharBadge kind="D" size={size} />
       <span className={`font-extrabold leading-none ${countClassName}`}>{d}</span>
     </span>
-    <span className="inline-flex items-center gap-[3px]">
+    <span className="inline-flex items-center justify-center gap-[3px] leading-none">
       <WdlCharBadge kind="L" size={size} />
       <span className={`font-extrabold leading-none ${countClassName}`}>{l}</span>
     </span>

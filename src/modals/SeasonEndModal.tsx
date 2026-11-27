@@ -414,7 +414,7 @@ export const SeasonEndModal: React.FC<{
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold">
                 ผลงานลีก ({arc?.played ?? me.p} นัด)
               </div>
-              <div className="font-extrabold text-sm mland:text-xs tabular text-[var(--ink)] pt-0.5">
+              <div className="font-extrabold text-sm mland:text-xs tabular text-[var(--ink)] pt-0.5 flex items-center">
                 <WdlRecordBadges w={arc?.won ?? me.w} d={arc?.drawn ?? me.d} l={arc?.lost ?? me.l} size="xs" />
               </div>
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">

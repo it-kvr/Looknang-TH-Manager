@@ -782,7 +782,7 @@ export const TeamInspectorModal: React.FC<{
                             />
                           </div>
 
-                          <div className="flex items-center justify-start">
+                          <div className="flex items-center justify-center">
                             <PositionBadge role={slotRole as any} size="2xs" />
                           </div>
 

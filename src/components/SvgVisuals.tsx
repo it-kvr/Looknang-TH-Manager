@@ -1042,12 +1042,12 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
                   />
                   <text
                     x={cx}
-                    y={cy + 9.5 + bh / 2 + 0.3}
+                    y={cy + 9.5 + bh / 2}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize="7.6"
                     fontWeight="800"
-                    fontFamily="Sarabun"
+                    fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
                     fill={posPal.text}
                   >
                     {isMe && <tspan fill="#fde047">★ </tspan>}
@@ -1426,12 +1426,12 @@ export const FormationPitch: React.FC<{
                   />
                   <text
                     x="0"
-                    y={-8.2 + badgeH / 2 + 0.3}
+                    y={-8.2 + badgeH / 2}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fontSize="7.6"
                     fontWeight="800"
-                    fontFamily="Sarabun"
+                    fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
                     fill={posPal.text}
                   >
                     {isMe && <tspan fill="#fde047">★ </tspan>}

@@ -1285,7 +1285,7 @@ const renderVarMonitorPanel = (
       if (opts?.dimmed) ctx.globalAlpha = 0.88;
       const posPal = getPositionCanvasPalette(roleStr);
       const roleFont = isStandalone ? Math.max(7.2, Math.round(r * 0.62)) : smallText ? 5.2 : 6.0;
-      ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
+      ctx.font = `800 ${roleFont}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       const rw = Math.max(isStandalone ? 16.5 : 12, measureTextCached(ctx, roleStr) + (isStandalone ? 5.5 : 3.8));
       const rh = isStandalone ? Math.max(9.2, roleFont + 3) : smallText ? 7.0 : 8.0;
       const leapLift = action === 'leap' ? r * 0.65 * arcEnv : 0;
@@ -1301,7 +1301,7 @@ const renderVarMonitorPanel = (
       ctx.fillStyle = posPal.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(roleStr, x, ry + rh / 2 + 0.3);
+      ctx.fillText(roleStr, x, ry + rh / 2);
       ctx.restore();
     }
 
@@ -2696,9 +2696,9 @@ export const drawLivePitchToCanvas = (
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const padX = Math.max(20, cssW * 0.042);
-  const padTop = Math.max(22, cssH * 0.082);
-  const padBottom = Math.max(32, cssH * 0.11);
-  const padY = padTop;
+  const padY = Math.max(30, cssH * 0.102);
+  const padTop = padY;
+  const padBottom = padY;
   const pw = cssW - padX * 2;
   const ph = cssH - padTop - padBottom;
   const px = (x: number) => padX + (x / 100) * pw;
@@ -2758,11 +2758,10 @@ export const drawLivePitchToCanvas = (
         bctx.save();
         if (stadiumStyle === 'open_track') {
           const trackPadX = Math.max(4, padX * 0.2);
-          const trackPadTop = Math.max(4, padTop * 0.2);
-          const trackPadBottom = Math.max(6, padBottom * 0.25);
+          const trackPadY = Math.max(5, padY * 0.18);
           bctx.fillStyle = isNight ? 'rgba(138, 62, 46, 0.55)' : 'rgba(176, 82, 58, 0.58)';
           bctx.beginPath();
-          bctx.roundRect(trackPadX, trackPadTop, cssW - trackPadX * 2, cssH - trackPadTop - trackPadBottom, 26);
+          bctx.roundRect(trackPadX, trackPadY, cssW - trackPadX * 2, cssH - trackPadY * 2, 26);
           bctx.fill();
           bctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
           bctx.lineWidth = 1;
@@ -2771,9 +2770,9 @@ export const drawLivePitchToCanvas = (
             bctx.beginPath();
             bctx.roundRect(
               trackPadX + inset,
-              trackPadTop + inset,
+              trackPadY + inset,
               cssW - (trackPadX + inset) * 2,
-              cssH - trackPadTop - trackPadBottom - inset * 2,
+              cssH - (trackPadY + inset) * 2,
               Math.max(8, 26 - inset)
             );
             bctx.stroke();
@@ -2803,8 +2802,10 @@ export const drawLivePitchToCanvas = (
           bctx.strokeStyle = isNight ? 'rgba(125, 211, 252, 0.48)' : 'rgba(186, 230, 253, 0.56)';
           bctx.lineWidth = 2.5;
           bctx.strokeRect(padX - 6, padY - 6, pw + 12, ph + 12);
+          const glassH = Math.max(6, padY - 11);
           bctx.fillStyle = 'rgba(125, 211, 252, 0.12)';
-          bctx.fillRect(padX - 12, 3, pw + 24, Math.max(8, padY - 11));
+          bctx.fillRect(padX - 12, 3, pw + 24, glassH);
+          bctx.fillRect(padX - 12, cssH - 3 - glassH, pw + 24, glassH);
         } else if (stadiumStyle === 'cyber_dome') {
           bctx.strokeStyle = isNight ? 'rgba(34, 211, 238, 0.65)' : 'rgba(56, 189, 248, 0.5)';
           bctx.lineWidth = 3;
@@ -3272,8 +3273,8 @@ export const drawLivePitchToCanvas = (
     const sl = world.sideline;
     const touchBot = padY + ph;
     const apronH = Math.max(26, cssH - touchBot);
-    const zoneTop = touchBot + 3;
-    const zoneH = clamp(apronH - 5, 22, 31);
+    const zoneH = clamp(apronH - 6, 20, 30);
+    const zoneTop = touchBot + Math.max(2.5, (apronH - zoneH) * 0.5);
     const techH = zoneH;
 
     // Left (Home) & Right (Away) Technical Areas (FIFA-style dashed coach boxes flanking halfway line)
@@ -5011,7 +5012,7 @@ export const drawLivePitchToCanvas = (
       const roleStr = String(ag.role);
       const posPal = getPositionCanvasPalette(ag.role || ag.pos);
       const roleFont = Math.max(6.4, Math.round(playerRadius * 0.56));
-      ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
+      ctx.font = `800 ${roleFont}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       const rw = Math.max(17, measureTextCached(ctx, roleStr) + 5.5);
       const rh = Math.max(9.5, roleFont + 3.2);
       const ry = -playerRadius - rh * 0.72;
@@ -5025,7 +5026,7 @@ export const drawLivePitchToCanvas = (
       ctx.fillStyle = posPal.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(roleStr, 0, ry + rh / 2 + 0.3);
+      ctx.fillText(roleStr, 0, ry + rh / 2);
     }
 
     // Yellow card mini indicator on right shoulder (clear of top position badge)
@@ -5654,8 +5655,8 @@ let hlPitchBgCache: { key: string; canvas: HTMLCanvasElement } | null = null;
 const HL_BG_W = 1360;
 const HL_BG_H = 820;
 const HL_PAD_X = 58;
-const HL_PAD_TOP = 68;
-const HL_PAD_BOT = 92;
+const HL_PAD_TOP = 80;
+const HL_PAD_BOT = 80;
 const HL_PW = HL_BG_W - HL_PAD_X * 2;
 const HL_PH = HL_BG_H - HL_PAD_TOP - HL_PAD_BOT;
 
@@ -5737,11 +5738,10 @@ const getHighlightWorldBgCache = (
   bctx.save();
   if (stadiumStyle === 'open_track') {
     const trackPadX = Math.max(8, padX * 0.2);
-    const trackPadTop = Math.max(8, padY * 0.2);
-    const trackPadBottom = Math.max(12, HL_PAD_BOT * 0.25);
+    const trackPadY = Math.max(10, padY * 0.18);
     bctx.fillStyle = isNight ? 'rgba(138, 62, 46, 0.55)' : 'rgba(176, 82, 58, 0.58)';
     bctx.beginPath();
-    bctx.roundRect(trackPadX, trackPadTop, HL_BG_W - trackPadX * 2, HL_BG_H - trackPadTop - trackPadBottom, 48);
+    bctx.roundRect(trackPadX, trackPadY, HL_BG_W - trackPadX * 2, HL_BG_H - trackPadY * 2, 48);
     bctx.fill();
     bctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
     bctx.lineWidth = 2;
@@ -5750,9 +5750,9 @@ const getHighlightWorldBgCache = (
       bctx.beginPath();
       bctx.roundRect(
         trackPadX + inset,
-        trackPadTop + inset,
+        trackPadY + inset,
         HL_BG_W - (trackPadX + inset) * 2,
-        HL_BG_H - trackPadTop - trackPadBottom - inset * 2,
+        HL_BG_H - (trackPadY + inset) * 2,
         Math.max(16, 48 - inset)
       );
       bctx.stroke();
@@ -5782,8 +5782,10 @@ const getHighlightWorldBgCache = (
     bctx.strokeStyle = isNight ? 'rgba(125, 211, 252, 0.48)' : 'rgba(186, 230, 253, 0.56)';
     bctx.lineWidth = 5;
     bctx.strokeRect(padX - 12, padY - 12, pw + 24, ph + 24);
+    const glassH = Math.max(12, padY - 22);
     bctx.fillStyle = 'rgba(125, 211, 252, 0.12)';
-    bctx.fillRect(padX - 24, 6, pw + 48, Math.max(16, padY - 22));
+    bctx.fillRect(padX - 24, 6, pw + 48, glassH);
+    bctx.fillRect(padX - 24, HL_BG_H - 6 - glassH, pw + 48, glassH);
   } else if (stadiumStyle === 'cyber_dome') {
     bctx.strokeStyle = isNight ? 'rgba(34, 211, 238, 0.65)' : 'rgba(56, 189, 248, 0.5)';
     bctx.lineWidth = 6;
@@ -6151,9 +6153,9 @@ const getHighlightWorldBgCache = (
 
   // 4. Sideline Technical Areas, Dugouts & Warm-up Mats (matches real live pitch!)
   const touchBot = padY + ph;
-  const zoneTop = touchBot + 6;
   const zoneH = 56;
-  const techH = 28;
+  const zoneTop = touchBot + Math.round((HL_PAD_BOT - zoneH) * 0.5);
+  const techH = zoneH;
 
   const drawHlTechArea = (x0Pct: number, x1Pct: number, kit: string, trim: string) => {
     const tx0 = pxW(x0Pct);
@@ -6553,8 +6555,9 @@ export const drawHighlightClipToCanvas = (
 
   // Camera framing
   const basePadX = Math.max(20, cssW * 0.042);
-  const basePadTop = Math.max(22, cssH * 0.082);
-  const basePadBottom = Math.max(32, cssH * 0.11);
+  const basePadY = Math.max(30, cssH * 0.102);
+  const basePadTop = basePadY;
+  const basePadBottom = basePadY;
   const basePw = cssW - basePadX * 2;
   const basePh = cssH - basePadTop - basePadBottom;
 
@@ -6607,7 +6610,7 @@ export const drawHighlightClipToCanvas = (
 
   // Animated Sideline Coaches in technical areas when bottom apron is visible
   if (pBot < cssH + 22) {
-    const coachY = pBot + clamp((cssH - pBot) * 0.34, 9, 22);
+    const coachY = pBot + (HL_PAD_BOT * 0.5) * (pitchH / HL_PH);
     if (coachY > 0 && coachY < cssH + 14) {
       const cr = clamp(Math.min(cssW * 0.015, pitchH * 0.028) * Math.sqrt(zoom), 5.6, 8.6);
       const drawHlCoach = (pctX: number, kit: string, trim: string, phaseOff: number) => {
@@ -7541,7 +7544,7 @@ export const drawHighlightClipToCanvas = (
       const roleStr = String(meta.ro);
       const posPal = getPositionCanvasPalette(meta.ro);
       const roleFont = Math.max(6.4, Math.round(playerRadius * 0.56));
-      ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
+      ctx.font = `800 ${roleFont}px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
       const rw = Math.max(17, measureTextCached(ctx, roleStr) + 5.5);
       const rh = Math.max(9.5, roleFont + 3.2);
       const ry = -playerRadius - rh * 0.72;
@@ -7555,7 +7558,7 @@ export const drawHighlightClipToCanvas = (
       ctx.fillStyle = posPal.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(roleStr, 0, ry + rh / 2 + 0.3);
+      ctx.fillText(roleStr, 0, ry + rh / 2);
     }
 
     // Yellow card mini indicator

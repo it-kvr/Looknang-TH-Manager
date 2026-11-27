@@ -337,7 +337,7 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                   <div className="font-extrabold text-xs sm:text-sm tabular text-[var(--ink)]">
                     {careerTotals.matches} นัด
                   </div>
-                  <div className="text-[10px] text-[var(--mut)] tabular pt-0.5">
+                  <div className="text-[10px] text-[var(--mut)] tabular pt-0.5 flex items-center">
                     <WdlRecordBadges w={careerTotals.wins} d={careerTotals.draws} l={careerTotals.losses} size="2xs" />
                   </div>
                 </div>

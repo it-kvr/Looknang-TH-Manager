@@ -35,22 +35,22 @@ export const PositionBadge: React.FC<{
 }> = ({ role, size = 'xs', fixedWidth = true, className = '', title }) => {
   const sizeCls = fixedWidth
     ? size === '2xs'
-      ? 'w-[28px] mland:w-[25px] h-[14px] mland:h-[12.5px] px-[2px] rounded-[4px] text-[8px] mland:text-[7px] tracking-tight'
+      ? 'w-[28px] mland:w-[25px] h-[14px] mland:h-[12.5px] px-[2px] rounded-[4px] text-[8px] mland:text-[7px]'
       : size === 'sm'
-        ? 'w-[36px] mland:w-[31px] h-[18px] mland:h-[15.5px] px-1 rounded-[5px] text-[10px] mland:text-[8.5px] tracking-tight'
-        : 'w-[32px] mland:w-[28px] h-[16px] mland:h-[14px] px-[2px] rounded-[4px] text-[9px] mland:text-[7.5px] tracking-tight'
+        ? 'w-[36px] mland:w-[31px] h-[18px] mland:h-[15.5px] px-1 rounded-[5px] text-[10px] mland:text-[8.5px]'
+        : 'w-[32px] mland:w-[28px] h-[16px] mland:h-[14px] px-[2px] rounded-[4px] text-[9px] mland:text-[7.5px]'
     : size === '2xs'
-      ? 'h-[14px] mland:h-[12.5px] min-w-[22px] px-1 rounded-[4px] text-[8px] mland:text-[7px] tracking-tight'
+      ? 'h-[14px] mland:h-[12.5px] min-w-[22px] px-1 rounded-[4px] text-[8px] mland:text-[7px]'
       : size === 'sm'
-        ? 'h-[18px] mland:h-[15.5px] min-w-[28px] px-1.5 mland:px-1 rounded-[5px] text-[10px] mland:text-[8.5px] tracking-tight'
-        : 'h-[16px] mland:h-[14px] min-w-[25px] px-1 rounded-[4px] text-[9px] mland:text-[7.5px] tracking-tight';
+        ? 'h-[18px] mland:h-[15.5px] min-w-[28px] px-1.5 mland:px-1 rounded-[5px] text-[10px] mland:text-[8.5px]'
+        : 'h-[16px] mland:h-[14px] min-w-[25px] px-1 rounded-[4px] text-[9px] mland:text-[7.5px]';
 
   const resolvedTitle = title ?? SPN[role] ?? role;
 
   return (
     <span
       title={resolvedTitle}
-      className={`inline-flex items-center justify-center font-extrabold leading-none shrink-0 tabular whitespace-nowrap select-none ${sizeCls} ${getPositionBadgeClass(role)} ${className}`}
+      className={`font-badge-latin inline-flex items-center justify-center text-center font-extrabold leading-none shrink-0 tabular whitespace-nowrap select-none align-middle ${sizeCls} ${getPositionBadgeClass(role)} ${className}`}
     >
       {role}
     </span>

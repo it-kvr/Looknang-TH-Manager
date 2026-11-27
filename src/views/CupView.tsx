@@ -3,7 +3,7 @@ import { Calendar, ChevronRight, Coins, Trophy } from 'lucide-react';
 import type { ArchivedMatchReport, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { RN, TN } from '../data/thaiFootballData';
-import { EXTRA_CUP_META, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
+import { ASIA_CUP_PRIZE, EXTRA_CUP_META, FA_CUP_PRIZE, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
 import { xi } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
@@ -112,7 +112,7 @@ export const CupView: React.FC<{
         title: 'ถ้วยประชาชน (16 ทีม)',
         subtitle: 'รวมสโมสรทุกระดับลีก แข่งน็อกเอาต์นัดเดียวรู้ผล',
         scheduleHint: 'นัด 6, 13, 20, 27',
-        prize: 250,
+        prize: FA_CUP_PRIZE,
         queued: Boolean(state.pc),
         notStartedMsg: 'รายการถ้วยประชาชนจะเริ่มประกบคู่ในฤดูกาลนี้',
         data: state.cup
@@ -161,7 +161,7 @@ export const CupView: React.FC<{
         title: 'ชิงแชมป์สโมสรทวีป (16 ทีม)',
         subtitle: 'ตัวแทนลีกสูงสุดไทยดวลยอดทีมต่างแดนทั่วเอเชีย',
         scheduleHint: 'นัด 3, 10, 17, 24',
-        prize: 500,
+        prize: ASIA_CUP_PRIZE,
         queued: Boolean(state.pa),
         notStartedMsg: 'รายการชิงแชมป์สโมสรทวีปจะเปิดฉากในฤดูกาลนี้',
         data: state.ac
