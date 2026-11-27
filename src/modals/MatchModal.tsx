@@ -12151,17 +12151,130 @@ export const MatchModal: React.FC<{
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
 
-                    {/* Live In-Pitch Broadcast Commentary Strip */}
-                    {matchPhaseUi !== 'halftime' && !done && !liveVarActive && actionBanner.label && (
-                      <div className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1/2 -translate-x-1/2 z-20 max-w-[94%] flex items-center justify-center">
-                        <span
-                          className={`inline-flex items-center justify-center max-w-full px-2.5 sm:px-3.5 mland:px-2 py-0.5 sm:py-1 mland:py-[2px] rounded-lg border text-[11px] sm:text-xs mland:text-[9.5px] leading-tight font-bold whitespace-nowrap overflow-hidden backdrop-blur-[2px] ${bannerCls}`}
-                          title={actionBanner.label}
-                        >
-                          {actionBannerContent}
-                        </span>
-                      </div>
-                    )}
+                    {/* Live In-Pitch Top Corners (Miracles & Blessings) + Center Commentary Strip */}
+                    {matchPhaseUi !== 'halftime' && !done && (() => {
+                      const homeMiracle = miracleBannerUi?.side === 'H' ? miracleBannerUi : null;
+                      const awayMiracle = miracleBannerUi?.side === 'A' ? miracleBannerUi : null;
+                      const homeBlessed = blessedListUi.filter((b) => b.side === 'H');
+                      const awayBlessed = blessedListUi.filter((b) => b.side === 'A');
+                      const hasLeft = Boolean(homeMiracle || homeBlessed.length > 0);
+                      const hasRight = Boolean(awayMiracle || awayBlessed.length > 0);
+                      const hasCornerBadges = hasLeft || hasRight;
+                      return (
+                        <>
+                          {hasLeft && (
+                            <div className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1.5 sm:left-2 mland:left-1.5 z-20 max-w-[29%] sm:max-w-[27%] flex flex-wrap items-center gap-1">
+                              {homeMiracle && (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md border text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold tabular backdrop-blur-[2px] shadow-sm shrink-0 ${
+                                    homeMiracle.maxDeficit >= 3
+                                      ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
+                                      : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
+                                  }`}
+                                  title={`${homeMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งเจ้าบ้าน (${homeMiracle.teamName}) เหลือ ${homeMiracle.minsLeft}'`}
+                                >
+                                  <span>{homeMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+                                  <span className="hidden md:inline">ปาฏิหาริย์</span>
+                                  <span>{homeMiracle.minsLeft}&apos;</span>
+                                </span>
+                              )}
+                              {homeBlessed.map((bl) => {
+                                const blPlayer = homeOrig.sq.find((q) => q.n === bl.id);
+                                return (
+                                  <span
+                                    key={bl.id}
+                                    className="inline-flex items-center gap-1 px-1 py-[1px] rounded-md bg-[#071f13]/88 border border-amber-300/65 backdrop-blur-[2px] shadow-sm shrink-0"
+                                    title={`✨ พร: ${bl.tag} · ${bl.id} (#${bl.no} ${homeOrig.name}) เหลือ ${bl.minsLeft}'`}
+                                  >
+                                    {blPlayer && (
+                                      <MatchPlayerThumb
+                                        player={blPlayer}
+                                        team={homeOrig}
+                                        state={state}
+                                        kitColor={blPlayer.pos === 'GK' ? homeGkKit : homeKit}
+                                        trimColor={blPlayer.pos === 'GK' ? undefined : homeTrim}
+                                        size="xs"
+                                        dark
+                                        ringClassName="ring-amber-300/80"
+                                      />
+                                    )}
+                                    <span className="text-[9.5px] sm:text-[10px] mland:text-[8px] font-black tabular text-[#fde047] leading-none">
+                                      #{bl.no}
+                                    </span>
+                                    <span className="text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular text-amber-200/85 leading-none">
+                                      ✨{bl.minsLeft}&apos;
+                                    </span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {!liveVarActive && actionBanner.label && (
+                            <div
+                              className={`pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1/2 -translate-x-1/2 z-20 ${
+                                hasCornerBadges ? 'max-w-[40%] sm:max-w-[44%]' : 'max-w-[94%]'
+                              } flex items-center justify-center`}
+                            >
+                              <span
+                                className={`inline-flex items-center justify-center max-w-full px-2.5 sm:px-3.5 mland:px-2 py-0.5 sm:py-1 mland:py-[2px] rounded-lg border text-[11px] sm:text-xs mland:text-[9.5px] leading-tight font-bold whitespace-nowrap overflow-hidden backdrop-blur-[2px] ${bannerCls}`}
+                                title={actionBanner.label}
+                              >
+                                {actionBannerContent}
+                              </span>
+                            </div>
+                          )}
+
+                          {hasRight && (
+                            <div className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 right-1.5 sm:right-2 mland:right-1.5 z-20 max-w-[29%] sm:max-w-[27%] flex flex-wrap items-center justify-end gap-1">
+                              {awayBlessed.map((bl) => {
+                                const blPlayer = awayOrig.sq.find((q) => q.n === bl.id);
+                                return (
+                                  <span
+                                    key={bl.id}
+                                    className="inline-flex items-center gap-1 px-1 py-[1px] rounded-md bg-[#071f13]/88 border border-amber-300/65 backdrop-blur-[2px] shadow-sm shrink-0"
+                                    title={`✨ พร: ${bl.tag} · ${bl.id} (#${bl.no} ${awayOrig.name}) เหลือ ${bl.minsLeft}'`}
+                                  >
+                                    {blPlayer && (
+                                      <MatchPlayerThumb
+                                        player={blPlayer}
+                                        team={awayOrig}
+                                        state={state}
+                                        kitColor={blPlayer.pos === 'GK' ? awayGkKit : awayKit}
+                                        trimColor={blPlayer.pos === 'GK' ? undefined : awayTrim}
+                                        size="xs"
+                                        dark
+                                        ringClassName="ring-amber-300/80"
+                                      />
+                                    )}
+                                    <span className="text-[9.5px] sm:text-[10px] mland:text-[8px] font-black tabular text-[#fde047] leading-none">
+                                      #{bl.no}
+                                    </span>
+                                    <span className="text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular text-amber-200/85 leading-none">
+                                      ✨{bl.minsLeft}&apos;
+                                    </span>
+                                  </span>
+                                );
+                              })}
+                              {awayMiracle && (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md border text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold tabular backdrop-blur-[2px] shadow-sm shrink-0 ${
+                                    awayMiracle.maxDeficit >= 3
+                                      ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
+                                      : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
+                                  }`}
+                                  title={`${awayMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งทีมเยือน (${awayMiracle.teamName}) เหลือ ${awayMiracle.minsLeft}'`}
+                                >
+                                  <span>{awayMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+                                  <span className="hidden md:inline">ปาฏิหาริย์</span>
+                                  <span>{awayMiracle.minsLeft}&apos;</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
 
                     {/* Live Substitution Animated Broadcast Strip */}
                     {subFlashInfo && !liveVarActive && !done && matchPhaseUi !== 'halftime' && (
@@ -12451,119 +12564,6 @@ export const MatchModal: React.FC<{
                     })()}
                   </div>
 
-                  {/* Fixed-Height Below-Pitch Miracles & Blessings Strip (Constant Height Always) */}
-                  {matchPhaseUi !== 'halftime' && !done && (() => {
-                    const homeMiracle = miracleBannerUi?.side === 'H' ? miracleBannerUi : null;
-                    const awayMiracle = miracleBannerUi?.side === 'A' ? miracleBannerUi : null;
-                    const homeBlessed = blessedListUi.filter((b) => b.side === 'H');
-                    const awayBlessed = blessedListUi.filter((b) => b.side === 'A');
-                    const hasLeft = Boolean(homeMiracle || homeBlessed.length > 0);
-                    const hasRight = Boolean(awayMiracle || awayBlessed.length > 0);
-                    const hasAny = hasLeft || hasRight;
-                    return (
-                      <div className="bg-[#06190f] border-t border-white/12 px-2 sm:px-2.5 mland:px-1.5 h-[36px] sm:h-[38px] mland:h-[28px] shrink-0 flex items-center justify-between gap-2 min-w-0 overflow-hidden">
-                        {!hasAny ? (
-                          <div className="w-full flex items-center justify-center text-[10px] sm:text-[11px] mland:text-[8.5px] text-white/38 font-semibold tracking-wide select-none truncate">
-                            ✨ ปาฏิหาริย์ &amp; พรในสนาม — ยังไม่มีผลพิเศษที่กำลังทำงาน
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex-1 min-w-0 flex items-center justify-start gap-1 overflow-x-auto no-scrollbar">
-                              {homeMiracle && (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md border text-[9.5px] sm:text-[10.5px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${
-                                    homeMiracle.maxDeficit >= 3
-                                      ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
-                                      : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
-                                  }`}
-                                  title={`${homeMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งเจ้าบ้าน (${homeMiracle.teamName}) เหลือ ${homeMiracle.minsLeft}'`}
-                                >
-                                  <span>{homeMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
-                                  <span className="hidden sm:inline">ปาฏิหาริย์</span>
-                                  <span>{homeMiracle.minsLeft}&apos;</span>
-                                </span>
-                              )}
-                              {homeBlessed.map((bl) => {
-                                const blPlayer = homeOrig.sq.find((q) => q.n === bl.id);
-                                return (
-                                  <span
-                                    key={bl.id}
-                                    className="inline-flex items-center gap-1 px-1 py-[1px] rounded-md bg-[#0f291c] border border-amber-300/60 shadow-2xs shrink-0"
-                                    title={`✨ พร: ${bl.tag} · ${bl.id} (#${bl.no} ${homeOrig.name}) เหลือ ${bl.minsLeft}'`}
-                                  >
-                                    {blPlayer && (
-                                      <MatchPlayerThumb
-                                        player={blPlayer}
-                                        team={homeOrig}
-                                        state={state}
-                                        kitColor={blPlayer.pos === 'GK' ? homeGkKit : homeKit}
-                                        trimColor={blPlayer.pos === 'GK' ? undefined : homeTrim}
-                                        size="xs"
-                                        dark
-                                        ringClassName="ring-amber-300/80"
-                                      />
-                                    )}
-                                    <span className="text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-black tabular text-[#fde047] leading-none">
-                                      #{bl.no}
-                                    </span>
-                                    <span className="text-[8.5px] sm:text-[9px] mland:text-[7.5px] font-bold tabular text-amber-200/85 leading-none">
-                                      ✨{bl.minsLeft}&apos;
-                                    </span>
-                                  </span>
-                                );
-                              })}
-                            </div>
-
-                            <div className="flex-1 min-w-0 flex items-center justify-end gap-1 overflow-x-auto no-scrollbar">
-                              {awayBlessed.map((bl) => {
-                                const blPlayer = awayOrig.sq.find((q) => q.n === bl.id);
-                                return (
-                                  <span
-                                    key={bl.id}
-                                    className="inline-flex items-center gap-1 px-1 py-[1px] rounded-md bg-[#0f291c] border border-amber-300/60 shadow-2xs shrink-0"
-                                    title={`✨ พร: ${bl.tag} · ${bl.id} (#${bl.no} ${awayOrig.name}) เหลือ ${bl.minsLeft}'`}
-                                  >
-                                    {blPlayer && (
-                                      <MatchPlayerThumb
-                                        player={blPlayer}
-                                        team={awayOrig}
-                                        state={state}
-                                        kitColor={blPlayer.pos === 'GK' ? awayGkKit : awayKit}
-                                        trimColor={blPlayer.pos === 'GK' ? undefined : awayTrim}
-                                        size="xs"
-                                        dark
-                                        ringClassName="ring-amber-300/80"
-                                      />
-                                    )}
-                                    <span className="text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-black tabular text-[#fde047] leading-none">
-                                      #{bl.no}
-                                    </span>
-                                    <span className="text-[8.5px] sm:text-[9px] mland:text-[7.5px] font-bold tabular text-amber-200/85 leading-none">
-                                      ✨{bl.minsLeft}&apos;
-                                    </span>
-                                  </span>
-                                );
-                              })}
-                              {awayMiracle && (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md border text-[9.5px] sm:text-[10.5px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${
-                                    awayMiracle.maxDeficit >= 3
-                                      ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
-                                      : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
-                                  }`}
-                                  title={`${awayMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งทีมเยือน (${awayMiracle.teamName}) เหลือ ${awayMiracle.minsLeft}'`}
-                                >
-                                  <span>{awayMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
-                                  <span className="hidden sm:inline">ปาฏิหาริย์</span>
-                                  <span>{awayMiracle.minsLeft}&apos;</span>
-                                </span>
-                              )}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })()}
               </div>
 
               {/* Live Penalty Shootout Strip */}
