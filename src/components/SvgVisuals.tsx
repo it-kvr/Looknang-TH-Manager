@@ -454,18 +454,16 @@ export const KitJersey: React.FC<{
           : SHIRT_SPONSOR_BRANDS[0];
 
   const isDarkShirt = colLum(c) < 0.44;
-  const plateBg = isDarkShirt ? '#ffffff' : '#0f172a';
-  const plateInk = isDarkShirt ? '#0f172a' : '#ffffff';
-  const spCode = resolvedBrand ? resolvedBrand.code.trim() : '';
-  const plateY = hideNumber ? 45.5 : 40.5;
-  const plateH = hideNumber ? 16.5 : 12.5;
-  const emblemBoxSize = hideNumber ? 11.5 : 9;
-  const emblemBoxX = 26.5;
-  const emblemBoxY = plateY + (plateH - emblemBoxSize) / 2;
-  const emblemScale = (emblemBoxSize - 1.5) / 16;
-  const spFontSize = hideNumber
-    ? spCode.length >= 8 ? 5.9 : spCode.length >= 6 ? 6.6 : 7.3
-    : spCode.length >= 8 ? 5.2 : spCode.length >= 6 ? 5.8 : 6.5;
+  const spCenterX = 50;
+  const spCenterY = hideNumber ? 53.5 : 46.2;
+  const spBoxSize = hideNumber ? 23 : 15.5;
+  const spBoxX = spCenterX - spBoxSize / 2;
+  const spBoxY = spCenterY - spBoxSize / 2;
+  const spBoxRx = hideNumber ? 6 : 4.2;
+  const spEmblemDrawSize = hideNumber ? 16.8 : 11.2;
+  const spEmblemScale = spEmblemDrawSize / 16;
+  const spEmblemX = spCenterX - spEmblemDrawSize / 2;
+  const spEmblemY = spCenterY - spEmblemDrawSize / 2;
 
   return (
     <svg width={size} height={size} viewBox="5 7 90 81" className="shrink-0" aria-hidden="true">
@@ -477,6 +475,12 @@ export const KitJersey: React.FC<{
           <linearGradient id={`kg-${uid}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={c} />
             <stop offset="100%" stopColor={d} />
+          </linearGradient>
+        )}
+        {resolvedBrand && (
+          <linearGradient id={`ksp-${uid}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={resolvedBrand.badgeBg} />
+            <stop offset="100%" stopColor="#090d16" stopOpacity="0.96" />
           </linearGradient>
         )}
       </defs>
@@ -517,46 +521,63 @@ export const KitJersey: React.FC<{
         dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(resolveCrestSpec(club.name || team?.name || 'Club', team, club, true), `${uid}-jc`) }}
       />
 
-      {/* Printed Main Sponsor Chest Logo (high-contrast legible plate) */}
+      {/* Screen-Printed Center-Chest Sponsor Emblem (text-free, centered) */}
       {resolvedBrand && (
         <g>
           <rect
-            x="24.5"
-            y={plateY}
-            width="51"
-            height={plateH}
-            rx={hideNumber ? 3.3 : 2.7}
-            fill={plateBg}
-            fillOpacity={isDarkShirt ? 0.94 : 0.9}
-            stroke={resolvedBrand.accent}
-            strokeWidth="0.75"
+            x={spBoxX}
+            y={spBoxY + 0.85}
+            width={spBoxSize}
+            height={spBoxSize}
+            rx={spBoxRx}
+            fill="#000000"
+            fillOpacity="0.24"
           />
           <rect
-            x={emblemBoxX}
-            y={emblemBoxY}
-            width={emblemBoxSize}
-            height={emblemBoxSize}
-            rx="2"
+            x={spBoxX - 0.65}
+            y={spBoxY - 0.65}
+            width={spBoxSize + 1.3}
+            height={spBoxSize + 1.3}
+            rx={spBoxRx + 0.65}
+            fill="none"
+            stroke={isDarkShirt ? '#ffffff' : '#0f172a'}
+            strokeOpacity={isDarkShirt ? 0.52 : 0.32}
+            strokeWidth="0.9"
+          />
+          <rect
+            x={spBoxX}
+            y={spBoxY}
+            width={spBoxSize}
+            height={spBoxSize}
+            rx={spBoxRx}
             fill={resolvedBrand.badgeBg}
           />
+          <rect
+            x={spBoxX}
+            y={spBoxY}
+            width={spBoxSize}
+            height={spBoxSize}
+            rx={spBoxRx}
+            fill={`url(#ksp-${uid})`}
+            opacity="0.42"
+          />
+          <rect
+            x={spBoxX + 0.45}
+            y={spBoxY + 0.45}
+            width={spBoxSize - 0.9}
+            height={spBoxSize - 0.9}
+            rx={Math.max(2, spBoxRx - 0.45)}
+            fill="none"
+            stroke={resolvedBrand.accent}
+            strokeOpacity="0.72"
+            strokeWidth="0.75"
+          />
           <g
-            transform={`translate(${(emblemBoxX + 0.75).toFixed(2)}, ${(emblemBoxY + 0.75).toFixed(2)}) scale(${emblemScale.toFixed(3)})`}
+            transform={`translate(${spEmblemX.toFixed(2)}, ${spEmblemY.toFixed(2)}) scale(${spEmblemScale.toFixed(3)})`}
             dangerouslySetInnerHTML={{
               __html: buildSponsorEmblemSvg(resolvedBrand.motif, '#ffffff', resolvedBrand.accent)
             }}
           />
-          <text
-            x="56.5"
-            y={plateY + plateH * 0.66}
-            textAnchor="middle"
-            fontSize={spFontSize}
-            fontWeight="900"
-            letterSpacing="0.25"
-            fontFamily="ui-sans-serif, system-ui, sans-serif"
-            fill={plateInk}
-          >
-            {spCode}
-          </text>
         </g>
       )}
 

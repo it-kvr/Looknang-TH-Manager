@@ -33,8 +33,6 @@ export const MainSponsorLogo: React.FC<{
     (sponsorSeed != null ? resolveMainSponsorBrand(idx, sponsorSeed) : null) ||
     SHIRT_SPONSOR_BRANDS[((idx % SHIRT_SPONSOR_BRANDS.length) + SHIRT_SPONSOR_BRANDS.length) % SHIRT_SPONSOR_BRANDS.length] ||
     SHIRT_SPONSOR_BRANDS[0];
-  const shortTag = resolved.code.replace(/\s+/g, '').slice(0, 6);
-
   return (
     <svg
       width={size}
@@ -51,24 +49,11 @@ export const MainSponsorLogo: React.FC<{
       </defs>
       <rect width="36" height="36" rx="8" fill={resolved.badgeBg} />
       <rect width="36" height="36" rx="8" fill={`url(#msp-${uid})`} opacity="0.45" />
-      <rect x="0.75" y="0.75" width="34.5" height="34.5" rx="7.25" fill="none" stroke={resolved.accent} strokeOpacity="0.55" strokeWidth="1" />
+      <rect x="0.75" y="0.75" width="34.5" height="34.5" rx="7.25" fill="none" stroke={resolved.accent} strokeOpacity="0.58" strokeWidth="1" />
       <g
-        transform="translate(8, 4.5) scale(1.25)"
+        transform="translate(6, 6) scale(1.5)"
         dangerouslySetInnerHTML={{ __html: buildSponsorEmblemSvg(resolved.motif, '#ffffff', resolved.accent) }}
       />
-      <rect x="3.5" y="25.5" width="29" height="7.5" rx="2.5" fill="#000000" fillOpacity="0.48" />
-      <text
-        x="18"
-        y="31"
-        textAnchor="middle"
-        fill="#ffffff"
-        fontSize={shortTag.length >= 6 ? '5.3' : '6'}
-        fontWeight="900"
-        letterSpacing="0.35"
-        fontFamily="ui-sans-serif, system-ui, sans-serif"
-      >
-        {shortTag}
-      </text>
     </svg>
   );
 };

@@ -837,7 +837,7 @@ export const FinanceClubView = React.memo<{
                   {/* Line Items */}
                   <div className="divide-y divide-[var(--line)]/50 tabular">
                     <div className="grid grid-cols-[1fr_78px_78px] sm:grid-cols-[1fr_92px_92px] gap-2 px-3 py-1.5 items-center">
-                      <span className="text-[var(--mut)] truncate">
+                      <span className="text-[var(--mut)] leading-tight">
                         ค่าตั๋ว (~{est.estAtt.toLocaleString()} คน · {est.ticketPlan.priceBaht}฿)
                       </span>
                       <span className="text-right font-semibold text-[var(--g)]">+{fmtMoneyNum(est.estTicket)}</span>
@@ -1134,7 +1134,7 @@ export const FinanceClubView = React.memo<{
         {finTab === 'commercial' && (
           <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
             {/* Left Column: Sponsor & Partner Contracts */}
-            <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
+            <div className="space-y-2.5 mland:space-y-2 pb-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
               {/* Main Sponsors */}
               {(() => {
                 const activeSpIdx = clamp(activeFinanceValues.sp ?? 0, 0, MAIN_SPONSOR_PACKAGES.length - 1);
@@ -1157,7 +1157,7 @@ export const FinanceClubView = React.memo<{
                       <div className="min-w-0">
                         <h3 className="font-bold text-sm mland:text-xs">🤝 สปอนเซอร์หลักคาดอกเสื้อ</h3>
                         <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">
-                          โลโก้คมชัดพิมพ์ลงหน้าอกเสื้อจริง · สุ่มจาก 32 แบรนด์ไม่ซ้ำ
+                          โลโก้สกรีนกลางหน้าอกเสื้อจริง · สุ่มจาก 32 แบรนด์ไม่ซ้ำ
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -1179,7 +1179,7 @@ export const FinanceClubView = React.memo<{
                     </div>
 
                     {/* Live Home & Away Shirt Print Preview + 3-Column Active Summary */}
-                    <div className="p-2 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)]/65 flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)]/65 flex flex-wrap sm:flex-nowrap items-center gap-2.5">
                       <div className="flex items-center gap-1 shrink-0 px-1.5 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)]/70">
                         <KitJersey club={clubK} away={false} size={46} hideNumber sponsorBrand={activeBrand} />
                         <KitJersey club={clubK} away={true} size={46} hideNumber sponsorBrand={activeBrand} />
@@ -1188,8 +1188,8 @@ export const FinanceClubView = React.memo<{
                         <div className="px-1.5 flex items-center justify-center gap-1.5 min-w-0">
                           <MainSponsorLogo idx={activePkg.idx} brand={activeBrand} size={28} />
                           <div className="min-w-0 text-left">
-                            <div className="text-[9px] text-[var(--mut)] leading-none">พิมพ์บนอกเสื้อ</div>
-                            <div className="font-extrabold text-[10.5px] text-[var(--ink)] truncate mt-0.5">
+                            <div className="text-[9px] text-[var(--mut)] leading-none">สกรีนกลางอก</div>
+                            <div className="font-extrabold text-[10.5px] text-[var(--ink)] leading-tight mt-0.5 break-words">
                               {activeBrand.thName}
                             </div>
                           </div>
@@ -1199,14 +1199,14 @@ export const FinanceClubView = React.memo<{
                           <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--g)] mt-0.5">
                             +{fmtMoneyNum(activeCalc.base)}
                           </div>
-                          <div className="text-[9px] text-[var(--mut)] truncate">{activePkg.tag}</div>
+                          <div className="text-[9px] text-[var(--mut)] leading-tight">{activePkg.tag}</div>
                         </div>
                         <div className="px-1">
                           <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">เงื่อนไขโบนัส</div>
-                          <div className="font-bold text-[10.5px] text-[var(--ink)] mt-0.5 truncate">
+                          <div className="font-bold text-[10.5px] text-[var(--ink)] mt-0.5 leading-tight">
                             {activeMerchPct > 0 ? `สโตร์ +${activeMerchPct}%` : activePkg.tag}
                           </div>
-                          <div className="text-[9px] text-[var(--mut)] truncate">{activePkg.title}</div>
+                          <div className="text-[9px] text-[var(--mut)] leading-tight">{activePkg.title}</div>
                         </div>
                       </div>
                     </div>
@@ -1444,7 +1444,7 @@ export const FinanceClubView = React.memo<{
             </div>
 
             {/* Right Column: Ticket Pricing + Live Broadcast Rights + Slim Megastore Shortcut */}
-            <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
+            <div className="space-y-2.5 mland:space-y-2 pb-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
               {/* Ticket Pricing Manager */}
               {(() => {
                 const stLv = state.st ?? 1;
@@ -1453,7 +1453,7 @@ export const FinanceClubView = React.memo<{
                   currentTicketPlan.fanMoodDelta > 0
                     ? `ขวัญแฟน +${currentTicketPlan.fanMoodDelta}/เหย้า`
                     : currentTicketPlan.fanMoodDelta < 0
-                      ? `ขวัญแฟน ${currentTicketPlan.fanMoodDelta}/เหย้า`
+                      ? `ขวัญแฟน ${currentTicketPlan.fanMoodDelta} (เมื่อไม่ชนะ)`
                       : 'ขวัญแฟนคงที่';
 
                 return (
@@ -1471,47 +1471,64 @@ export const FinanceClubView = React.memo<{
                         </span>
                       ) : (
                         <span className="text-[10.5px] font-bold text-[var(--g)] tabular shrink-0">
-                          สนาม Lv.{stLv}
+                          สนาม Lv.{stLv} · จุ {est.cap.toLocaleString()}
                         </span>
                       )}
                     </div>
 
-                    {/* 3-Column Live Projection Strip */}
-                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular items-center">
-                      <div className="px-1.5 flex items-center justify-center gap-2 min-w-0">
-                        <TicketPlanLogo id={currentTicketPlan.id} size={28} />
-                        <div className="min-w-0 text-left">
-                          <div className="text-[9.5px] text-[var(--mut)] leading-none">ราคาตั๋ว / ใบ</div>
-                          <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5 truncate">
-                            {currentTicketPlan.priceBaht}฿
+                    {/* Active Ticket Plan Header + 3-Column Live Projection Strip */}
+                    <div className="rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/65 overflow-hidden">
+                      <div className="px-2.5 py-2 flex items-center justify-between gap-2 border-b border-[var(--line)]/55">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <TicketPlanLogo id={currentTicketPlan.id} size={30} />
+                          <div className="min-w-0">
+                            <div className="text-xs font-extrabold text-[var(--ink)] leading-snug">
+                              {currentTicketPlan.label}
+                            </div>
+                            <div className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                              {currentTicketPlan.desc}
+                            </div>
                           </div>
-                          <div className="text-[9px] text-[var(--mut)] truncate">{currentTicketPlan.label}</div>
                         </div>
+                        <span className="shrink-0 px-2 py-0.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30 text-xs font-extrabold text-[var(--g)] tabular">
+                          {currentTicketPlan.priceBaht}฿/ใบ
+                        </span>
                       </div>
-                      <div className="px-1">
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">คาดการณ์ผู้ชม</div>
-                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5">
-                          ~{est.estAtt.toLocaleString()} <span className="text-[10px] font-semibold text-[var(--mut)]">({est.attPct}%)</span>
+                      <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 text-center tabular items-center">
+                        <div className="px-1.5">
+                          <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)] leading-tight">ความต้องการเข้าชม</div>
+                          <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5">
+                            ×{Math.round(currentTicketPlan.attMult * 100)}%
+                          </div>
+                          <div className="text-[9.5px] text-[var(--mut)] leading-tight">
+                            ตัวคูณรายได้ ×{Math.round(currentTicketPlan.revMult * 100)}%
+                          </div>
                         </div>
-                        <div
-                          className={`text-[9.5px] font-semibold truncate ${
-                            currentTicketPlan.fanMoodDelta > 0
-                              ? 'text-[var(--g)]'
-                              : currentTicketPlan.fanMoodDelta < 0
-                                ? 'text-[#9a6700] dark:text-[var(--lamp)]'
-                                : 'text-[var(--mut)]'
-                          }`}
-                        >
-                          {moodLabel}
+                        <div className="px-1.5">
+                          <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)] leading-tight">คาดการณ์ผู้ชม / ความจุ</div>
+                          <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5">
+                            ~{est.estAtt.toLocaleString()} <span className="text-[10px] font-semibold text-[var(--mut)]">({est.attPct}%)</span>
+                          </div>
+                          <div
+                            className={`text-[9.5px] font-semibold leading-tight ${
+                              currentTicketPlan.fanMoodDelta > 0
+                                ? 'text-[var(--g)]'
+                                : currentTicketPlan.fanMoodDelta < 0
+                                  ? 'text-[#9a6700] dark:text-[var(--lamp)]'
+                                  : 'text-[var(--mut)]'
+                            }`}
+                          >
+                            {moodLabel}
+                          </div>
                         </div>
-                      </div>
-                      <div className="px-1">
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">รายได้ตั๋ว / นัดเหย้า</div>
-                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--g)] mt-0.5">
-                          +{fmtMoneyNum(est.estTicket)}
-                        </div>
-                        <div className="text-[9.5px] text-[var(--mut)] truncate">
-                          {merchBonusPct > 0 ? `สโตร์ +${merchBonusPct}%` : 'สโตร์มาตรฐาน'}
+                        <div className="px-1.5">
+                          <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)] leading-tight">รายได้ตั๋ว / นัดเหย้า</div>
+                          <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--g)] mt-0.5">
+                            +{fmtMoneyNum(est.estTicket)}
+                          </div>
+                          <div className="text-[9.5px] text-[var(--mut)] leading-tight">
+                            {merchBonusPct > 0 ? `สโตร์ +${merchBonusPct}%` : 'สโตร์มาตรฐาน'}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1528,6 +1545,16 @@ export const FinanceClubView = React.memo<{
                               me
                             );
                         const planMerchPct = Math.round((plan.merchMult - 1) * 100);
+                        const planEffectText = [
+                          plan.fanMoodDelta > 0
+                            ? `ขวัญแฟน +${plan.fanMoodDelta}/เหย้า`
+                            : plan.fanMoodDelta < 0
+                              ? `ขวัญแฟน ${plan.fanMoodDelta} (เมื่อไม่ชนะ)`
+                              : 'ขวัญแฟนคงที่',
+                          planMerchPct > 0 ? `สโตร์ +${planMerchPct}%` : null
+                        ]
+                          .filter(Boolean)
+                          .join(' · ');
                         return (
                           <button
                             key={plan.id}
@@ -1541,15 +1568,15 @@ export const FinanceClubView = React.memo<{
                             }}
                             className={`w-full px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2.5 text-left transition-colors ${
                               locked
-                                ? 'opacity-50 cursor-not-allowed'
+                                ? 'opacity-60 cursor-not-allowed'
                                 : active
                                   ? 'bg-[var(--g-soft)] cursor-pointer'
                                   : 'hover:bg-[var(--surface-2)]/75 cursor-pointer'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
                               <span
-                                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 ${
+                                className={`mt-1 w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 ${
                                   active
                                     ? 'bg-[var(--g)] border-[var(--g)] text-white'
                                     : 'border-[var(--line)] bg-[var(--surface)]'
@@ -1557,37 +1584,31 @@ export const FinanceClubView = React.memo<{
                               >
                                 {active && <Check className="w-2.5 h-2.5" />}
                               </span>
-                              <TicketPlanLogo id={plan.id} size={30} />
-                              <div className="min-w-0">
-                                <div className="text-xs font-bold text-[var(--ink)] truncate">
+                              <TicketPlanLogo id={plan.id} size={30} className="mt-0.5" />
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <div className="text-xs font-bold text-[var(--ink)] leading-snug">
                                   <span className={`font-extrabold tabular mr-1.5 ${active ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                                     {plan.priceBaht}฿
                                   </span>
                                   <span>{plan.label}</span>
                                 </div>
+                                <div className="text-[10px] text-[var(--mut)] leading-snug">
+                                  {plan.desc}
+                                </div>
                                 <div
-                                  className={`text-[10px] truncate tabular ${
+                                  className={`text-[10px] leading-snug tabular ${
                                     locked ? 'text-[var(--red)] font-semibold' : 'text-[var(--mut)]'
                                   }`}
                                 >
                                   {locked
-                                    ? `ปลดล็อกเมื่อสนามเหย้า Lv.${plan.minStadiumLv}+`
-                                    : [
-                                        plan.fanMoodDelta > 0
-                                          ? `ขวัญ +${plan.fanMoodDelta}`
-                                          : plan.fanMoodDelta < 0
-                                            ? `ขวัญ ${plan.fanMoodDelta} (เมื่อไม่ชนะ)`
-                                            : 'ขวัญคงที่',
-                                        planMerchPct > 0 ? `สโตร์ +${planMerchPct}%` : null
-                                      ]
-                                        .filter(Boolean)
-                                        .join(' · ')}
+                                    ? `🔒 ปลดล็อกเมื่ออัปเกรดสนามเหย้า Lv.${plan.minStadiumLv}+ (ปัจจุบัน Lv.${stLv}) · ${planEffectText}`
+                                    : planEffectText}
                                 </div>
                               </div>
                             </div>
 
                             <div className="text-right shrink-0 tabular">
-                              {previewEst ? (
+                              {!locked && previewEst ? (
                                 <>
                                   <div className={`text-xs font-extrabold ${active ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                                     +{fmtMoneyNum(previewEst.estTicket)}
@@ -1597,7 +1618,14 @@ export const FinanceClubView = React.memo<{
                                   </div>
                                 </>
                               ) : (
-                                <span className="text-[10px] font-semibold text-[var(--red)]">ล็อก</span>
+                                <>
+                                  <div className="text-[10.5px] font-bold text-[var(--red)]">
+                                    ล็อก (Lv.{plan.minStadiumLv}+)
+                                  </div>
+                                  <div className="text-[9.5px] text-[var(--mut)]">
+                                    ตัวคูณรายได้ ×{Math.round(plan.revMult * 100)}%
+                                  </div>
+                                </>
                               )}
                             </div>
                           </button>
