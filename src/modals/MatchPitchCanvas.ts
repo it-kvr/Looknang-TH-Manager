@@ -147,6 +147,18 @@ const measureTextCached = (ctx: CanvasRenderingContext2D, text: string): number 
   return w;
 };
 
+const fitCanvasText = (ctx: CanvasRenderingContext2D, text: string, maxW: number): string => {
+  if (measureTextCached(ctx, text) <= maxW) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (measureTextCached(ctx, `${text.slice(0, mid)}…`) <= maxW) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo > 0 ? `${text.slice(0, lo)}…` : '…';
+};
+
 export type VarCameraMode = 'wide' | 'zoom';
 
 const renderVarMonitorPanel = (
@@ -226,7 +238,7 @@ const renderVarMonitorPanel = (
   ctx.fill();
   ctx.stroke();
 
-  const hdrH = isStandalone ? clamp(monH * 0.105, 22, 28) : smallText ? 15 : 17;
+  const hdrH = isStandalone ? clamp(monH * 0.085, 20, 24) : smallText ? 16 : 19;
   ctx.fillStyle = 'rgba(15, 23, 42, 0.98)';
   ctx.beginPath();
   ctx.roundRect(monX + 1.5, monY + 1.5, monW - 3, hdrH, isStandalone ? [10, 10, 0, 0] : [7.5, 7.5, 0, 0]);
@@ -235,22 +247,8 @@ const renderVarMonitorPanel = (
   const recBlink = pct < 0.72 ? 0.55 + 0.45 * Math.sin(pct * Math.PI * 14) : 1;
   ctx.fillStyle = showVerdict ? frameAccent : `rgba(239, 68, 68, ${recBlink.toFixed(2)})`;
   ctx.beginPath();
-  ctx.arc(monX + (isStandalone ? 13 : 9), monY + hdrH / 2 + 0.5, isStandalone ? 3.5 : 2.6, 0, Math.PI * 2);
+  ctx.arc(monX + (isStandalone ? 13 : 9.5), monY + hdrH / 2 + 0.5, isStandalone ? 3.5 : 2.8, 0, Math.PI * 2);
   ctx.fill();
-
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = `800 ${isStandalone ? 11.5 : smallText ? 7.5 : 8.5}px Sarabun, sans-serif`;
-  ctx.fillText(
-    isStandalone
-      ? cameraMode === 'wide'
-        ? '🖥 จอภาพช้า VAR · กล้องระยะไกล'
-        : '🖥 จอภาพช้า VAR · กล้องระยะใกล้'
-      : 'จอภาพช้า VAR',
-    monX + (isStandalone ? 22 : 15),
-    monY + hdrH / 2 + 0.8
-  );
 
   const statusTag = showVerdict
     ? vr.kind === 'goal'
@@ -283,10 +281,25 @@ const renderVarMonitorPanel = (
     : isFreezePhase
       ? 'หยุดภาพตรวจจุด'
       : 'สโลว์โมชัน';
+
   ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
   ctx.fillStyle = frameAccent;
-  ctx.font = `800 ${isStandalone ? 11 : smallText ? 7.2 : 8}px Sarabun, sans-serif`;
-  ctx.fillText(statusTag, monX + monW - (isStandalone ? 11 : 7), monY + hdrH / 2 + 0.8);
+  ctx.font = `800 ${isStandalone ? 10.5 : smallText ? 7.8 : 8.8}px "Noto Sans Thai", sans-serif`;
+  const tagW = measureTextCached(ctx, statusTag) + (isStandalone ? 18 : 12);
+  ctx.fillText(statusTag, monX + monW - (isStandalone ? 11 : 8), monY + hdrH / 2 + 0.6);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = `800 ${isStandalone ? 11 : smallText ? 8 : 9}px "Noto Sans Thai", sans-serif`;
+  const hdrTitleRaw = isStandalone
+    ? cameraMode === 'wide'
+      ? '🖥 VAR · กล้องระยะไกล'
+      : '🖥 VAR · กล้องระยะใกล้'
+    : '🖥 VAR REPLAY';
+  const hdrLeftX = monX + (isStandalone ? 22 : 16);
+  const hdrMaxW = Math.max(40, monW - (hdrLeftX - monX) - tagW);
+  ctx.fillText(fitCanvasText(ctx, hdrTitleRaw, hdrMaxW), hdrLeftX, monY + hdrH / 2 + 0.6);
 
   const scrPad = isStandalone ? 5 : 3.5;
   const scrX = monX + scrPad;
@@ -1119,14 +1132,14 @@ const renderVarMonitorPanel = (
 
     if (shortName) {
       ctx.save();
-      const fSize = isStandalone ? 10 : smallText ? 6.5 : 7.2;
-      const pillH = isStandalone ? 13 : 8.5;
-      ctx.font = `700 ${fSize}px Sarabun, sans-serif`;
+      const fSize = isStandalone ? 10 : smallText ? 7.0 : 7.8;
+      const pillH = isStandalone ? 13 : 9.5;
+      ctx.font = `700 ${fSize}px "Noto Sans Thai", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = 'rgba(6, 12, 22, 0.84)';
       const lbl = `#${no} ${shortName}`;
-      const lw = measureTextCached(ctx, lbl) + (isStandalone ? 9 : 5);
+      const lw = measureTextCached(ctx, lbl) + (isStandalone ? 9 : 6);
       ctx.beginPath();
       ctx.roundRect(x - lw / 2, y + r + 2, lw, pillH, 3);
       ctx.fill();
@@ -1217,9 +1230,9 @@ const renderVarMonitorPanel = (
 
   const drawTopPillBadge = (label: string, fgColor: string, cx?: number, borderColor?: string) => {
     ctx.save();
-    ctx.font = `800 ${isStandalone ? 10.5 : smallText ? 6.8 : 7.6}px Sarabun, sans-serif`;
-    const bw = measureTextCached(ctx, label) + (isStandalone ? 14 : 8);
-    const bh = isStandalone ? 18 : 11.5;
+    ctx.font = `800 ${isStandalone ? 10.5 : smallText ? 7.2 : 8.0}px "Noto Sans Thai", sans-serif`;
+    const bw = measureTextCached(ctx, label) + (isStandalone ? 14 : 9);
+    const bh = isStandalone ? 18 : 12.5;
     const xPos = clamp(cx ?? scrX + scrW / 2, scrX + bw / 2 + 5, scrX + scrW - bw / 2 - 5);
     ctx.fillStyle = 'rgba(8, 15, 28, 0.9)';
     ctx.beginPath();
@@ -2388,17 +2401,17 @@ const renderVarMonitorPanel = (
   if (!smallText || isStandalone) {
     const modeChip = isFreezePhase ? '⏸ FREEZE · 120FPS' : pct < 0.36 ? '▶ SLOW-MO 0.25×' : '▶ CALL · LIVE';
     ctx.save();
-    ctx.font = `800 ${isStandalone ? 9.5 : 6.4}px Sarabun, sans-serif`;
-    const mw = measureTextCached(ctx, modeChip) + (isStandalone ? 10 : 6);
-    const mh = isStandalone ? 15 : 10;
+    ctx.font = `800 ${isStandalone ? 9.5 : 7.0}px "Noto Sans Thai", sans-serif`;
+    const mw = measureTextCached(ctx, modeChip) + (isStandalone ? 10 : 7);
+    const mh = isStandalone ? 15 : 11;
     ctx.fillStyle = 'rgba(6, 12, 24, 0.78)';
     ctx.beginPath();
-    ctx.roundRect(scrX + 6, scrY + scrH - mh - (showVerdict ? (isStandalone ? 27 : 18) : 6), mw, mh, 3);
+    ctx.roundRect(scrX + 6, scrY + scrH - mh - (showVerdict ? (isStandalone ? 27 : 20) : 6), mw, mh, 3);
     ctx.fill();
     ctx.fillStyle = isFreezePhase ? '#7dd3fc' : showVerdict ? verdictColor : '#e2e8f0';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(modeChip, scrX + 6 + (isStandalone ? 5 : 3), scrY + scrH - mh / 2 - (showVerdict ? (isStandalone ? 27 : 18) : 6) + 0.3);
+    ctx.fillText(modeChip, scrX + 6 + (isStandalone ? 5 : 3.5), scrY + scrH - mh / 2 - (showVerdict ? (isStandalone ? 27 : 20) : 6) + 0.3);
 
     if (isStandalone) {
       const frmTxt = `FRM ${String(Math.round(pct * 120)).padStart(3, '0')}`;
@@ -2464,15 +2477,15 @@ const renderVarMonitorPanel = (
           : vr.pendingCardUpgrade === 'R'
             ? '🟥 ยกระดับเป็นใบแดง!'
             : '🟨 ให้แค่ใบเหลือง';
-    const vbH = isStandalone ? 24 : smallText ? 15 : 17;
+    const vbH = isStandalone ? 23 : smallText ? 16 : 18;
     ctx.fillStyle = 'rgba(6, 12, 24, 0.93)';
     ctx.fillRect(scrX, scrY + scrH - vbH, scrW, vbH);
     ctx.fillStyle = verdictColor;
     ctx.fillRect(scrX, scrY + scrH - vbH, scrW, 2);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `800 ${isStandalone ? 12 : smallText ? 7.8 : 8.8}px Sarabun, sans-serif`;
-    ctx.fillText(verdictBannerText, scrX + scrW / 2, scrY + scrH - vbH / 2 + 0.5);
+    ctx.font = `800 ${isStandalone ? 11.5 : smallText ? 8.2 : 9.2}px "Noto Sans Thai", sans-serif`;
+    ctx.fillText(fitCanvasText(ctx, verdictBannerText, scrW - 14), scrX + scrW / 2, scrY + scrH - vbH / 2 + 0.5);
   }
 
   ctx.restore();
@@ -2515,7 +2528,7 @@ export const drawVarReplayToCanvas = (
     1,
     cssW - 2,
     cssH - 2,
-    1.85,
+    1.65,
     homeKit,
     awayKit,
     homeGkKit,
@@ -3588,29 +3601,31 @@ export const drawLivePitchToCanvas = (
       if (c.shoutText && c.shoutTimer > 0) {
         const sAlpha = clamp(c.shoutTimer / 0.4, 0, 1);
         ctx.globalAlpha = sAlpha;
-        ctx.font = '800 8px Sarabun, sans-serif';
-        const sw = measureTextCached(ctx, c.shoutText) + 10;
+        ctx.font = '700 8.5px "Noto Sans Thai", sans-serif';
+        const shoutStr = fitCanvasText(ctx, c.shoutText, Math.max(60, cssW * 0.28));
+        const sw = measureTextCached(ctx, shoutStr) + 12;
+        const sh = 14.5;
         const bx0 = clamp(-sw / 2, -cx + 6, cssW - cx - sw - 6);
-        const by0 = -cr - 17;
-        ctx.fillStyle = 'rgba(7, 19, 13, 0.95)';
+        const by0 = -cr - 18.5;
+        ctx.fillStyle = 'rgba(7, 19, 13, 0.94)';
         ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
-        ctx.lineWidth = 1.15;
+        ctx.lineWidth = 1.1;
         ctx.beginPath();
-        ctx.roundRect(bx0, by0, sw, 13.5, 5);
+        ctx.roundRect(bx0, by0, sw, sh, 5);
         ctx.fill();
         ctx.stroke();
         // Bubble pointer tail
         ctx.beginPath();
-        ctx.moveTo(-2.5, by0 + 13);
-        ctx.lineTo(0, by0 + 16.5);
-        ctx.lineTo(2.5, by0 + 13);
+        ctx.moveTo(-2.5, by0 + sh - 0.5);
+        ctx.lineTo(0, by0 + sh + 3);
+        ctx.lineTo(2.5, by0 + sh - 0.5);
         ctx.closePath();
         ctx.fill();
 
         ctx.fillStyle = c.isUserCoach ? '#fde047' : '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(c.shoutText, bx0 + sw / 2, by0 + 7);
+        ctx.fillText(shoutStr, bx0 + sw / 2, by0 + sh / 2 + 0.3);
       } else if (c.moodEmoji && (c.moodTimer || 0) > 0) {
         const mTimer = c.moodTimer || 0;
         const mAlpha = Math.min(clamp(mTimer / 0.35, 0, 1), 1);
@@ -3664,15 +3679,18 @@ export const drawLivePitchToCanvas = (
     const midWallX = (px(wallPts[0].x) + px(wallPts[wallPts.length - 1].x)) * 0.5;
     const topWallY = Math.min(py(wallPts[0].y), py(wallPts[wallPts.length - 1].y)) - 15;
     ctx.setLineDash([]);
-    ctx.font = '800 8.5px Sarabun, sans-serif';
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.font = '700 8.5px "Noto Sans Thai", sans-serif';
+    ctx.fillStyle = 'rgba(8, 20, 14, 0.9)';
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
+    ctx.lineWidth = 0.85;
     ctx.beginPath();
-    ctx.roundRect(midWallX - 24, topWallY - 7, 48, 13, 5);
+    ctx.roundRect(midWallX - 25, topWallY - 7, 50, 14, 4.5);
     ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = '#fef08a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🧱 กำแพง', midWallX, topWallY);
+    ctx.fillText('🧱 กำแพง', midWallX, topWallY + 0.3);
     ctx.restore();
   }
   if (world.pendingSetPiece?.type === 'throwin') {
@@ -3686,15 +3704,20 @@ export const drawLivePitchToCanvas = (
     ctx.beginPath();
     ctx.arc(tx, ty, 8, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.font = '800 8.5px Sarabun, sans-serif';
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.font = '700 8.5px "Noto Sans Thai", sans-serif';
+    ctx.fillStyle = 'rgba(8, 20, 14, 0.9)';
+    ctx.strokeStyle = 'rgba(125, 211, 252, 0.45)';
+    ctx.lineWidth = 0.85;
+    const thX = clamp(tx - 22, 6, cssW - 50);
+    const thY = ty + (isTop ? 10 : -23);
     ctx.beginPath();
-    ctx.roundRect(tx - 21, ty + (isTop ? 10 : -22), 42, 13, 5);
+    ctx.roundRect(thX, thY, 44, 14, 4.5);
     ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = '#7dd3fc';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('🤲 ทุ่ม', tx, ty + (isTop ? 16.5 : -15.5));
+    ctx.fillText('🤲 ทุ่ม', thX + 22, thY + 7.3);
     ctx.restore();
   }
   world.fx.forEach((fx) => {
@@ -4983,24 +5006,35 @@ export const drawLivePitchToCanvas = (
             ? '✨ '
             : '';
       const label = ag.isMe ? `${prefix}★ ${ag.shortName} ${Math.round(ag.fit)}%` : `${prefix}${ag.shortName}`;
-      ctx.font = `700 ${Math.max(9, Math.round(playerRadius * 0.86))}px Sarabun, sans-serif`;
+      ctx.font = `700 ${Math.max(9.5, Math.round(playerRadius * 0.86))}px "Noto Sans Thai", sans-serif`;
       const tw = measureTextCached(ctx, label);
-      const bw = tw + 8;
-      const by = playerRadius + 11.5;
+      const bw = tw + 10;
+      const bh = 13.5;
+      const by = playerRadius + 13;
+      const lxOff = clamp(cx, bw / 2 + 4, cssW - bw / 2 - 4) - cx;
       ctx.fillStyle = isBlessed
         ? 'rgba(245, 158, 11, 0.94)'
         : ag.isMe
-          ? 'rgba(250, 204, 21, 0.92)'
+          ? 'rgba(250, 204, 21, 0.93)'
           : ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
-            ? 'rgba(16, 185, 129, 0.92)'
-            : 'rgba(8, 22, 15, 0.78)';
+            ? 'rgba(16, 185, 129, 0.94)'
+            : 'rgba(6, 18, 12, 0.84)';
+      ctx.strokeStyle = isBlessed
+        ? 'rgba(254, 240, 138, 0.85)'
+        : ag.isMe
+          ? 'rgba(254, 240, 138, 0.9)'
+          : ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
+            ? 'rgba(167, 243, 208, 0.7)'
+            : 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.roundRect(-bw / 2, by - 6.5, bw, 13, 4);
+      ctx.roundRect(lxOff - bw / 2, by - bh / 2, bw, bh, 4);
       ctx.fill();
+      ctx.stroke();
       ctx.fillStyle = isBlessed || ag.isMe ? '#1a1200' : '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, 0, by);
+      ctx.fillText(label, lxOff, by + 0.3);
     }
 
     ctx.restore();
@@ -5152,37 +5186,52 @@ export const drawLivePitchToCanvas = (
     const alpha = clamp(fx.ttl / fx.maxTtl, 0, 1);
     ctx.save();
     ctx.globalAlpha = Math.min(1, alpha * 1.4);
-    const fxX = clamp(px(fx.x), 58, cssW - 58);
-    const fxY = clamp(py(fx.y) - 22 - (1 - alpha) * 10, 18, cssH - 18);
     const hasMedCross = fx.label.startsWith('✚ ');
     const textLabel = hasMedCross ? fx.label.slice(2) : fx.label;
-    ctx.font = '800 11px Sarabun, sans-serif';
-    const tw = measureTextCached(ctx, textLabel);
-    const bw = tw + (hasMedCross ? 28 : 14);
-    ctx.fillStyle = 'rgba(10, 24, 17, 0.9)';
+    ctx.font = '700 10.5px "Noto Sans Thai", sans-serif';
+    const maxCalloutW = Math.max(120, cssW - 24);
+    const safeLabel = fitCanvasText(ctx, textLabel, maxCalloutW - (hasMedCross ? 26 : 18));
+    const tw = measureTextCached(ctx, safeLabel);
+    const bw = tw + (hasMedCross ? 26 : 18);
+    const bh = 20;
+    const fxX = clamp(px(fx.x), bw / 2 + 8, cssW - bw / 2 - 8);
+    const fxY = clamp(py(fx.y) - 23 - (1 - alpha) * 9, 16, cssH - 16);
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = 'rgba(7, 19, 13, 0.92)';
     ctx.strokeStyle = fx.color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.25;
     ctx.beginPath();
-    ctx.roundRect(fxX - bw / 2, fxY - 10, bw, 20, 999);
+    ctx.roundRect(fxX - bw / 2, fxY - bh / 2, bw, bh, 6);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
+
     if (hasMedCross) {
       const cxIcon = fxX - bw / 2 + 11;
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = 1.05;
       ctx.beginPath();
-      ctx.arc(cxIcon, fxY, 5.5, 0, Math.PI * 2);
+      ctx.arc(cxIcon, fxY, 5.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#ef4444';
-      ctx.fillRect(cxIcon - 3.1, fxY - 1.05, 6.2, 2.1);
-      ctx.fillRect(cxIcon - 1.05, fxY - 3.1, 2.1, 6.2);
+      ctx.fillRect(cxIcon - 3.0, fxY - 1.0, 6.0, 2.0);
+      ctx.fillRect(cxIcon - 1.0, fxY - 3.0, 2.0, 6.0);
+    } else {
+      ctx.fillStyle = fx.color;
+      ctx.beginPath();
+      ctx.roundRect(fxX - bw / 2 + 4, fxY - 5, 2.5, 10, 1.25);
+      ctx.fill();
     }
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(textLabel, hasMedCross ? fxX + 7 : fxX, fxY);
+    ctx.fillText(safeLabel, hasMedCross ? fxX + 7 : fxX + 2.5, fxY + 0.3);
     ctx.restore();
   });
 
@@ -5210,23 +5259,26 @@ export const drawLivePitchToCanvas = (
     const alpha = Math.min(clamp(enterT * 2.4, 0, 1), fadeOut);
     ctx.save();
     ctx.globalAlpha = alpha;
-    const title = gb.isOwnGoal
+    const rawTitle = gb.isOwnGoal
       ? `🤦 เข้าประตูตัวเอง!! (OG) · ${gb.scorer}`
       : gb.isMeScorer
         ? `🌟 คุณยิงประตู!! ${gb.scorer}`
         : `⚽ GOAL!! ${gb.scorer} (${gb.teamName})`;
-    const sub = gb.isOwnGoal
+    const rawSub = gb.isOwnGoal
       ? `${gb.teamName} ได้ประตูส้มหล่น!`
       : gb.assister
         ? `👟 แอสซิสต์: ${gb.assister}`
         : gb.isMyGoal
           ? '🎉 เฮลั่นสนาม!'
           : '🔥 ตุงตาข่าย!';
-    ctx.font = '800 13px Sarabun, sans-serif';
+    const maxBannerW = cssW - 24;
+    ctx.font = '800 12.5px "Noto Sans Thai", sans-serif';
+    const title = fitCanvasText(ctx, rawTitle, maxBannerW - 34);
     const w1 = measureTextCached(ctx, title);
-    ctx.font = '600 10px Sarabun, sans-serif';
+    ctx.font = '600 10px "Noto Sans Thai", sans-serif';
+    const sub = fitCanvasText(ctx, rawSub, maxBannerW - 34);
     const w2 = measureTextCached(ctx, sub);
-    const cardW = clamp(Math.max(w1, w2) + 38, 180, cssW - 24);
+    const cardW = clamp(Math.max(w1, w2) + 40, 184, maxBannerW);
     const cardH = 40;
     const targetY = Math.round(padTop + 6);
     const startY = -(cardH + 12);
@@ -5234,11 +5286,14 @@ export const drawLivePitchToCanvas = (
     const cx = cssW / 2;
 
     ctx.save();
-    ctx.fillStyle = gb.isOwnGoal ? 'rgba(28, 10, 16, 0.95)' : 'rgba(9, 23, 16, 0.94)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = gb.isOwnGoal ? 'rgba(28, 10, 16, 0.95)' : 'rgba(8, 22, 15, 0.94)';
     ctx.strokeStyle = gb.isOwnGoal ? '#fb7185' : gb.isMyGoal ? '#facc15' : '#4ade80';
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 12);
+    ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 10);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -5246,16 +5301,16 @@ export const drawLivePitchToCanvas = (
     // Team color accent strip on left
     ctx.fillStyle = gb.kit;
     ctx.beginPath();
-    ctx.roundRect(cx - cardW / 2 + 5, cy + 5, 5, cardH - 10, 3);
+    ctx.roundRect(cx - cardW / 2 + 5, cy + 5, 4.5, cardH - 10, 2.5);
     ctx.fill();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = gb.isOwnGoal ? '#fda4af' : gb.isMyGoal ? '#fde047' : '#ffffff';
-    ctx.font = '800 12.5px Sarabun, sans-serif';
+    ctx.font = '800 12.5px "Noto Sans Thai", sans-serif';
     ctx.fillText(title, cx + 3, cy + 14);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.86)';
-    ctx.font = '600 10px Sarabun, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+    ctx.font = '600 10px "Noto Sans Thai", sans-serif';
     ctx.fillText(sub, cx + 3, cy + 29);
     ctx.restore();
   }
@@ -5269,30 +5324,38 @@ export const drawLivePitchToCanvas = (
     const alpha = Math.min(clamp(enterT * 2.5, 0, 1), fadeOut);
     const isRed = cb.type === 'R' || cb.type === 'Y2R';
     const accent = isRed ? '#ef4444' : '#facc15';
-    const title =
+    const rawTitle =
       cb.type === 'R'
         ? `ใบแดงไล่ออก!! ${cb.shortName}`
         : cb.type === 'Y2R'
           ? `เหลืองที่สอง (ใบแดง)!! ${cb.shortName}`
           : `ใบเหลือง · ${cb.shortName}`;
-    const sub = isRed ? `${cb.teamName} เหลือผู้เล่นน้อยกว่า` : `${cb.teamName} · เตือนจังหวะเข้าหนัก`;
+    const rawSub = isRed ? `${cb.teamName} เหลือผู้เล่นน้อยกว่า` : `${cb.teamName} · เตือนจังหวะเข้าหนัก`;
+    const maxBannerW = cssW - 24;
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.font = '800 12px Sarabun, sans-serif';
+    ctx.font = '800 11.5px "Noto Sans Thai", sans-serif';
+    const title = fitCanvasText(ctx, rawTitle, maxBannerW - 44);
     const w1 = measureTextCached(ctx, title);
-    ctx.font = '600 10px Sarabun, sans-serif';
+    ctx.font = '600 9.5px "Noto Sans Thai", sans-serif';
+    const sub = fitCanvasText(ctx, rawSub, maxBannerW - 44);
     const w2 = measureTextCached(ctx, sub);
-    const cardW = clamp(Math.max(w1, w2) + 46, 178, cssW - 24);
+    const cardW = clamp(Math.max(w1, w2) + 46, 178, maxBannerW);
     const cardH = 38;
     const cx = cssW / 2;
     const cy = Math.round(padTop + 6);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 3;
     ctx.fillStyle = 'rgba(11, 18, 28, 0.94)';
     ctx.strokeStyle = accent;
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 10);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
 
     // Mini card icon badge on left (overlapping yellow+red for Y2R, single card for Y/R)
     if (cb.type === 'Y2R') {
@@ -5317,10 +5380,10 @@ export const drawLivePitchToCanvas = (
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = accent;
-    ctx.font = '800 11.5px Sarabun, sans-serif';
+    ctx.font = '800 11.5px "Noto Sans Thai", sans-serif';
     ctx.fillText(title, cx - cardW / 2 + 29, cy + 13.5);
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.font = '600 9.5px Sarabun, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.86)';
+    ctx.font = '600 9.5px "Noto Sans Thai", sans-serif';
     ctx.fillText(sub, cx - cardW / 2 + 29, cy + 27);
     ctx.restore();
   }
@@ -5367,54 +5430,62 @@ export const drawLivePitchToCanvas = (
     ctx.setLineDash([]);
     ctx.restore();
 
-    // 9b. Top-Center Broadcast Header Bar
+    // 9b. Compact Single-Row Top Broadcast Header Bar
     ctx.save();
-    const boxW = Math.min(286, cssW - 24);
-    const boxH = 44;
+    const boxW = Math.min(410, cssW - 24);
+    const boxH = 26;
     const cx = cssW / 2;
-    const cy = Math.round(padTop + 6);
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+    const cy = Math.round(padTop + 5);
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = 'rgba(11, 25, 44, 0.95)';
     ctx.strokeStyle = frameAccent;
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.roundRect(cx - boxW / 2, cy, boxW, boxH, 10);
+    ctx.roundRect(cx - boxW / 2, cy, boxW, boxH, 7);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
 
     ctx.fillStyle = frameAccent;
     ctx.beginPath();
-    ctx.arc(cx - boxW / 2 + 16, cy + 15, 3.8, 0, Math.PI * 2);
+    ctx.arc(cx - boxW / 2 + 12, cy + 12, 3.2, 0, Math.PI * 2);
     ctx.fill();
 
+    const kindShort =
+      vr.kind === 'goal'
+        ? 'VAR เช็กประตู'
+        : vr.kind === 'foul_card'
+          ? 'VAR เช็กใบแดง'
+          : 'VAR เช็กจุดโทษ';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = frameAccent;
-    ctx.font = '800 12px Sarabun, sans-serif';
-    ctx.fillText(
-      vr.kind === 'goal'
-        ? '🖥 VAR CHECK · ตรวจสอบประตู'
-        : vr.kind === 'foul_card'
-          ? '🖥 VAR CHECK · ฟาวล์รุนแรง / ใบแดง'
-          : '🖥 VAR CHECK · ตรวจสอบจุดโทษ & ใบ',
-      cx - boxW / 2 + 26,
-      cy + 15
-    );
-    ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.font = '600 10px Sarabun, sans-serif';
-    ctx.fillText(vr.reasonText, cx - boxW / 2 + 26, cy + 29);
+    ctx.font = '800 10.5px "Noto Sans Thai", sans-serif';
+    const prefixStr = `${kindShort} · `;
+    const prefixW = measureTextCached(ctx, prefixStr);
+    const textStartX = cx - boxW / 2 + 20;
+    ctx.fillText(prefixStr, textStartX, cy + 12.5);
+
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.92)';
+    ctx.font = '600 10.5px "Noto Sans Thai", sans-serif';
+    const remW = Math.max(48, boxW - 28 - prefixW);
+    ctx.fillText(fitCanvasText(ctx, vr.reasonText, remW), textStartX + prefixW, cy + 12.5);
 
     ctx.fillStyle = 'rgba(255,255,255,0.16)';
-    ctx.fillRect(cx - boxW / 2 + 10, cy + boxH - 6, boxW - 20, 2.5);
+    ctx.fillRect(cx - boxW / 2 + 8, cy + boxH - 4, boxW - 16, 2);
     ctx.fillStyle = frameAccent;
-    ctx.fillRect(cx - boxW / 2 + 10, cy + boxH - 6, (boxW - 20) * pct, 2.5);
+    ctx.fillRect(cx - boxW / 2 + 8, cy + boxH - 4, (boxW - 16) * pct, 2);
     ctx.restore();
 
-    // 9c. Mini Picture-in-Picture VAR Replay Monitor Screen (placed opposite the incident side)
-    const monW = clamp(pw * 0.335, 148, 242);
-    const monH = clamp(ph * 0.49, 86, 134);
+    // 9c. Taller Picture-in-Picture VAR Replay Monitor Screen (matching external VAR modal)
+    const monW = clamp(pw * 0.44, 188, 340);
+    const monH = clamp(ph * 0.68, 132, 248);
     const incidentOnRight = (rep?.incidentX ?? vr.x) >= 50;
     const monX = incidentOnRight ? Math.round(padX + 10) : Math.round(padX + pw - monW - 10);
-    const monY = Math.round(padY + ph - monH - 8);
+    const monY = Math.max(Math.round(padTop + 36), Math.round(padY + (ph - monH) * 0.52));
     renderVarMonitorPanel(
       ctx,
       vr,

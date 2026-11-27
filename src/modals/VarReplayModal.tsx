@@ -142,8 +142,6 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
             ? 'ตรวจสอบปะทะรุนแรง / นอกเกม'
             : 'ตรวจสอบฟาวล์รุนแรง / ใบแดง';
 
-  const activeIdx = records.findIndex((r) => r.id === activeRecord.id);
-
   const handleTogglePlay = () => {
     SFX.tap();
     if (pct >= 0.995) {
@@ -162,37 +160,71 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-2 sm:p-4 mland:p-1.5 safe-all overflow-hidden"
+      className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-1.5 sm:p-3 mland:p-1 safe-all overflow-hidden"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl mland:max-w-3xl max-h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[#07111e] border border-sky-400/45 text-white shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-5xl mland:max-w-[97vw] h-[calc(var(--app-dvh,1dvh)*94)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl mland:rounded-xl bg-[#07111e] border border-sky-400/45 text-white shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Broadcast Header */}
-        <div className="shrink-0 px-3 py-2 sm:px-4 sm:py-2.5 mland:px-3 mland:py-1.5 bg-[#0b192c] border-b border-white/12 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/20 border border-sky-400/50 text-sky-300 text-[10.5px] mland:text-[9.5px] font-black tracking-wide shrink-0">
-              <Tv className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
-              <span>VAR REPLAY</span>
+        {/* Single-Row Top Broadcast Header */}
+        <div className="shrink-0 px-2.5 py-1.5 sm:px-3.5 mland:px-2.5 mland:py-1 bg-[#0b192c] border-b border-white/12 flex items-center justify-between gap-2 whitespace-nowrap overflow-hidden">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/20 border border-sky-400/50 text-sky-300 text-[10px] mland:text-[9px] font-black tracking-wide shrink-0">
+              <Tv className="w-3 h-3" />
+              <span>VAR</span>
             </span>
-            <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10.5px] mland:text-[9.5px] font-extrabold tabular shrink-0">
+            <span className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] mland:text-[9px] font-extrabold tabular shrink-0">
               น.{activeRecord.minute}&apos;
             </span>
-            <span className="text-xs sm:text-sm mland:text-[11px] font-bold text-white/95 truncate">
-              {kindLabel}
+            <span className="hidden sm:inline-flex mland:inline-flex items-center gap-1 shrink-0" title={`${homeOrig.name} vs ${awayOrig.name}`}>
+              <ClubCrest name={homeOrig.name} size={14} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+              <span className="text-[9.5px] text-white/40 font-bold">v</span>
+              <ClubCrest name={awayOrig.name} size={14} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+            </span>
+            <span
+              className="text-xs sm:text-[13px] mland:text-[10.5px] font-bold text-white/95 min-w-0 truncate"
+              title={`${kindLabel} · ${activeRecord.varState.reasonText}`}
+            >
+              {activeRecord.varState.reasonText || kindLabel}
             </span>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {!liveMode && records.length > 1 && onSelectRecord && (
+              <div className="hidden md:inline-flex items-center gap-1 p-0.5 rounded-lg bg-white/6 border border-white/10 max-w-[240px] overflow-x-auto">
+                {records.map((rec) => {
+                  const isCur = rec.id === activeRecord.id;
+                  return (
+                    <button
+                      key={rec.id}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        onSelectRecord(rec.id);
+                      }}
+                      title={`${rec.minute}' · ${rec.verdictShort}`}
+                      className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-extrabold tabular cursor-pointer transition-colors ${
+                        isCur
+                          ? 'bg-sky-400 text-slate-950'
+                          : 'text-white/75 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {rec.minute}&apos;
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {(!liveMode || pct >= 0.72) ? (
               <span
-                className={`px-2 py-0.5 rounded-md border text-[10.5px] mland:text-[9.5px] font-extrabold whitespace-nowrap ${VERDICT_BADGE_CLS[activeRecord.verdictTone]}`}
+                className={`px-2 py-0.5 rounded-md border text-[10px] mland:text-[9px] font-extrabold whitespace-nowrap ${VERDICT_BADGE_CLS[activeRecord.verdictTone]}`}
               >
                 {activeRecord.verdictShort}
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded-md border border-sky-400/40 bg-sky-500/15 text-sky-200 text-[10.5px] mland:text-[9.5px] font-bold whitespace-nowrap animate-pulse">
+              <span className="px-2 py-0.5 rounded-md border border-sky-400/40 bg-sky-500/15 text-sky-200 text-[10px] mland:text-[9px] font-bold whitespace-nowrap">
                 กำลังตรวจภาพช้า...
               </span>
             )}
@@ -203,36 +235,18 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
                 onClose();
               }}
               aria-label="ปิดหน้าต่าง VAR"
-              className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/10 hover:bg-white/20 text-white/85 flex items-center justify-center cursor-pointer transition-colors"
+              className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/10 hover:bg-white/20 text-white/85 flex items-center justify-center cursor-pointer transition-colors shrink-0"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
             </button>
           </div>
         </div>
 
-        {/* Match & Incident Summary Strip */}
-        <div className="shrink-0 px-3 py-1.5 sm:px-4 mland:px-3 mland:py-1 bg-[#091524] border-b border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="inline-flex items-center gap-1 font-bold text-white/90 truncate">
-              <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-              <span className="truncate max-w-[115px] sm:max-w-[160px]">{homeOrig.name}</span>
-            </span>
-            <span className="text-white/40 font-bold">vs</span>
-            <span className="inline-flex items-center gap-1 font-bold text-white/90 truncate">
-              <ClubCrest name={awayOrig.name} size={15} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-              <span className="truncate max-w-[115px] sm:max-w-[160px]">{awayOrig.name}</span>
-            </span>
-          </div>
-          <span className="text-sky-200/90 font-semibold truncate max-w-full">
-            {activeRecord.varState.reasonText}
-          </span>
-        </div>
-
-        {/* Zoomed VAR Monitor Canvas */}
-        <div className="flex-1 min-h-0 p-2.5 sm:p-3.5 mland:p-2 flex flex-col items-center justify-center bg-[#050c16]">
+        {/* Full-Height Zoomed VAR Monitor Canvas */}
+        <div className="flex-1 min-h-0 p-1 sm:p-1.5 mland:p-1 flex flex-col bg-[#050c16]">
           <div
             ref={stageRef}
-            className="w-full aspect-[16/9] max-h-[50dvh] mland:max-h-[48dvh] rounded-xl overflow-hidden shadow-2xl"
+            className="w-full h-full min-h-0 rounded-xl mland:rounded-lg overflow-hidden shadow-2xl"
           >
             <canvas
               ref={canvasRef}
@@ -243,14 +257,61 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
           </div>
         </div>
 
-        {/* Scrub Bar + Playback Controls */}
-        <div className="shrink-0 px-3 py-2 sm:px-4 sm:py-2.5 mland:px-3 mland:py-1.5 bg-[#0b192c] border-t border-white/12 space-y-2 mland:space-y-1">
-          {/* Timeline Scrubber */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[10px] mland:text-[9px] font-bold">
-              <span className="text-sky-300">{phaseLabel}</span>
-              <span className="tabular text-white/75">{Math.round(pct * 100)}%</span>
-            </div>
+        {/* Single-Row Playback & Camera Controls */}
+        <div className="shrink-0 px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 bg-[#0b192c] border-t border-white/12 flex items-center gap-1.5 sm:gap-2 overflow-x-auto whitespace-nowrap">
+          <button
+            type="button"
+            onClick={handleTogglePlay}
+            className="h-7 mland:h-6 px-2.5 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-[11px] mland:text-[9.5px] inline-flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+          >
+            {pct >= 0.995 ? (
+              <>
+                <RotateCcw className="w-3 h-3" />
+                <span>ดูซ้ำ</span>
+              </>
+            ) : playing ? (
+              <>
+                <Pause className="w-3 h-3" />
+                <span>หยุด</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3 h-3 fill-current" />
+                <span>เล่น</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleJump(0)}
+            className="h-7 mland:h-6 px-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[10.5px] mland:text-[9px] font-bold inline-flex items-center gap-0.5 cursor-pointer transition-colors shrink-0"
+            title="ย้อนไปจุดเริ่มต้น"
+          >
+            <SkipBack className="w-3 h-3" />
+            <span className="hidden sm:inline">เริ่ม</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleJump(0.5)}
+            className="h-7 mland:h-6 px-2 rounded-md bg-amber-400/18 border border-amber-300/40 hover:bg-amber-400/28 text-amber-200 text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors shrink-0"
+            title="หยุดที่จุดตีเส้น / จุดปะทะ"
+          >
+            🎯 ชี้ขาด
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleJump(1)}
+            className="h-7 mland:h-6 px-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white text-[10.5px] mland:text-[9px] font-bold inline-flex items-center gap-0.5 cursor-pointer transition-colors shrink-0"
+            title="ข้ามไปดูผลตัดสิน"
+          >
+            <SkipForward className="w-3 h-3" />
+            <span className="hidden sm:inline">ตัดสิน</span>
+          </button>
+
+          <div className="flex-1 min-w-[96px] flex items-center gap-1.5 px-1">
             <input
               type="range"
               min={0}
@@ -261,142 +322,69 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
                 setPct(Number(e.target.value) / 1000);
               }}
               aria-label="เลื่อนช่วงเวลาภาพช้า VAR"
-              className="w-full h-2 rounded-full accent-sky-400 cursor-pointer bg-white/15"
+              title={phaseLabel}
+              className="flex-1 min-w-[60px] h-1.5 rounded-full accent-sky-400 cursor-pointer bg-white/15"
             />
+            <span className="text-[10px] mland:text-[8.5px] font-extrabold text-sky-300 tabular shrink-0 w-8 text-right">
+              {Math.round(pct * 100)}%
+            </span>
           </div>
 
-          {/* Control Buttons */}
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={handleTogglePlay}
-                className="h-8 mland:h-7 px-3 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-extrabold text-xs mland:text-[10.5px] inline-flex items-center gap-1.5 cursor-pointer transition-colors"
-              >
-                {pct >= 0.995 ? (
-                  <>
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>ดูซ้ำ</span>
-                  </>
-                ) : playing ? (
-                  <>
-                    <Pause className="w-3.5 h-3.5" />
-                    <span>หยุดภาพ</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>เล่นต่อ</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleJump(0)}
-                className="h-8 mland:h-7 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] mland:text-[9.5px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                title="ย้อนไปจุดเริ่มต้น"
-              >
-                <SkipBack className="w-3 h-3" />
-                <span>เริ่ม</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleJump(0.5)}
-                className="h-8 mland:h-7 px-2 rounded-lg bg-amber-400/18 border border-amber-300/40 hover:bg-amber-400/28 text-amber-200 text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors"
-                title="หยุดที่จุดตีเส้น / จุดปะทะ"
-              >
-                🎯 จุดชี้ขาด
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleJump(1)}
-                className="h-8 mland:h-7 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] mland:text-[9.5px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                title="ข้ามไปดูผลตัดสิน"
-              >
-                <SkipForward className="w-3 h-3" />
-                <span>ผลตัดสิน</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <div className="inline-flex items-center p-0.5 rounded-lg bg-white/8 border border-white/12">
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setCameraMode('wide');
-                  }}
-                  title="กล้องระยะไกล (เห็นภาพรวมพื้นที่และผู้เล่นที่เกี่ยวข้อง)"
-                  className={`h-6 px-2 rounded-md text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
-                    cameraMode === 'wide'
-                      ? 'bg-sky-400 text-slate-950'
-                      : 'text-white/75 hover:text-white'
-                  }`}
-                >
-                  🔭 ระยะไกล
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setCameraMode('zoom');
-                  }}
-                  title="กล้องระยะใกล้ (ซูมดูจุดชี้ขาด)"
-                  className={`h-6 px-2 rounded-md text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
-                    cameraMode === 'zoom'
-                      ? 'bg-sky-400 text-slate-950'
-                      : 'text-white/75 hover:text-white'
-                  }`}
-                >
-                  🔍 ระยะใกล้
-                </button>
-              </div>
-
-              <div className="inline-flex items-center p-0.5 rounded-lg bg-white/8 border border-white/12">
-                {([0.25, 0.5, 1, 1.5] as const).map((sp) => (
-                  <button
-                    key={sp}
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      setReplaySpeed(sp);
-                    }}
-                    className={`h-6 px-2 rounded-md text-[10.5px] mland:text-[9px] font-extrabold tabular cursor-pointer transition-colors ${
-                      replaySpeed === sp
-                        ? 'bg-sky-400 text-slate-950'
-                        : 'text-white/75 hover:text-white'
-                    }`}
-                  >
-                    {sp}x
-                  </button>
-                ))}
-              </div>
-
-              {liveMode && onSkipLiveVar && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    onSkipLiveVar();
-                  }}
-                  className="h-8 mland:h-7 px-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] mland:text-[9.5px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <FastForward className="w-3.5 h-3.5" />
-                  <span>ประกาศผลเลย</span>
-                </button>
-              )}
-            </div>
+          <div className="inline-flex items-center p-0.5 rounded-md bg-white/8 border border-white/12 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setCameraMode('wide');
+              }}
+              title="กล้องระยะไกล"
+              className={`h-6 mland:h-5 px-1.5 rounded text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
+                cameraMode === 'wide'
+                  ? 'bg-sky-400 text-slate-950'
+                  : 'text-white/75 hover:text-white'
+              }`}
+            >
+              🔭 ไกล
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setCameraMode('zoom');
+              }}
+              title="กล้องระยะใกล้"
+              className={`h-6 mland:h-5 px-1.5 rounded text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
+                cameraMode === 'zoom'
+                  ? 'bg-sky-400 text-slate-950'
+                  : 'text-white/75 hover:text-white'
+              }`}
+            >
+              🔍 ใกล้
+            </button>
           </div>
 
-          {/* Multi-incident Selector Strip */}
+          <div className="inline-flex items-center p-0.5 rounded-md bg-white/8 border border-white/12 shrink-0">
+            {([0.25, 0.5, 1, 1.5] as const).map((sp) => (
+              <button
+                key={sp}
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setReplaySpeed(sp);
+                }}
+                className={`h-6 mland:h-5 px-1.5 rounded text-[10px] mland:text-[8.5px] font-extrabold tabular cursor-pointer transition-colors ${
+                  replaySpeed === sp
+                    ? 'bg-sky-400 text-slate-950'
+                    : 'text-white/75 hover:text-white'
+                }`}
+              >
+                {sp}x
+              </button>
+            ))}
+          </div>
+
           {!liveMode && records.length > 1 && onSelectRecord && (
-            <div className="pt-1.5 border-t border-white/10 flex items-center gap-1.5 overflow-x-auto pb-0.5">
-              <span className="text-[10px] mland:text-[9px] font-bold text-white/60 shrink-0">
-                VAR ในเกม ({activeIdx + 1}/{records.length}):
-              </span>
+            <div className="md:hidden inline-flex items-center gap-1 shrink-0">
               {records.map((rec) => {
                 const isCur = rec.id === activeRecord.id;
                 return (
@@ -407,18 +395,31 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
                       SFX.tap();
                       onSelectRecord(rec.id);
                     }}
-                    className={`shrink-0 px-2 py-1 rounded-lg border text-[10.5px] mland:text-[9px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap ${
+                    className={`h-6 px-1.5 rounded border text-[9.5px] font-extrabold tabular cursor-pointer transition-colors ${
                       isCur
-                        ? 'bg-sky-500/25 border-sky-400 text-white'
-                        : 'bg-white/6 border-white/12 text-white/75 hover:bg-white/12'
+                        ? 'bg-sky-400 border-sky-400 text-slate-950'
+                        : 'bg-white/6 border-white/12 text-white/75'
                     }`}
                   >
-                    <span className="tabular font-extrabold text-sky-300">{rec.minute}&apos;</span>
-                    <span>{rec.verdictShort}</span>
+                    {rec.minute}&apos;
                   </button>
                 );
               })}
             </div>
+          )}
+
+          {liveMode && onSkipLiveVar && (
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                onSkipLiveVar();
+              }}
+              className="h-7 mland:h-6 px-2 rounded-md bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[10.5px] mland:text-[9px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+            >
+              <FastForward className="w-3 h-3" />
+              <span>ประกาศผล</span>
+            </button>
           )}
         </div>
       </div>

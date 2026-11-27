@@ -153,7 +153,7 @@ export const MatchModal: React.FC<{
   const [htStatMode, setHtStatMode] = useState<'rating' | 'ovr'>('rating');
   const [injuryAlert, setInjuryAlert] = useState<{ name: string; role: SubRole; no: number; games: number; minute: number } | null>(null);
   const [miracleBannerUi, setMiracleBannerUi] = useState<{ side: 'H' | 'A'; teamName: string; minsLeft: number; goalsDuring: number; maxDeficit: number } | null>(null);
-  const [blessedListUi, setBlessedListUi] = useState<{ id: string; shortName: string; side: 'H' | 'A'; tag: string; minsLeft: number }[]>([]);
+  const [blessedListUi, setBlessedListUi] = useState<{ id: string; shortName: string; no: number; side: 'H' | 'A'; tag: string; minsLeft: number }[]>([]);
   const [gh, setGh] = useState(0);
   const [ga, setGa] = useState(0);
   const [goalFlashInfo, setGoalFlashInfo] = useState<{
@@ -9175,11 +9175,12 @@ export const MatchModal: React.FC<{
       .map((a) => ({
         id: a.id,
         shortName: a.shortName,
+        no: a.no,
         side: a.side,
         tag: a.blessedTag || 'เข้าฝัก',
         minsLeft: a.blessedMins ?? 0
       }));
-    const blessedSig = nextBlessed.map((b) => `${b.id}:${b.minsLeft}`).join(',');
+    const blessedSig = nextBlessed.map((b) => `${b.id}:${b.no}:${b.minsLeft}`).join(',');
     if (lastBlessedSigRef.current !== blessedSig) {
       lastBlessedSigRef.current = blessedSig;
       setBlessedListUi(nextBlessed);
@@ -11494,11 +11495,11 @@ export const MatchModal: React.FC<{
       const sideTeam = actionBanner.teamSide === 'A' ? awayOrig : homeOrig;
       const isSideMe = sideTeam.id === state.me && state.mode === 'm';
       return (
-        <span className="inline-flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-center leading-snug">
+        <span className="inline-flex flex-nowrap items-center justify-center gap-1.5 min-w-0 max-w-full whitespace-nowrap">
           <span className="shrink-0 inline-flex">
-            <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={isSideMe} />
+            <ClubCrest name={sideTeam.name} size={15} team={sideTeam} club={state.club} isMyClub={isSideMe} />
           </span>
-          <span className="break-words">{label}</span>
+          <span className="truncate">{label}</span>
         </span>
       );
     }
@@ -11518,9 +11519,14 @@ export const MatchModal: React.FC<{
     let cursor = 0;
     hits.forEach((h, idx) => {
       if (h.start > cursor) {
+        const segTxt = label.slice(cursor, h.start);
+        const allowTruncate = segTxt.trim().length > 6;
         nodes.push(
-          <span key={`bt-${idx}`} className="whitespace-normal break-words inline-flex items-center gap-0.5">
-            {renderBannerSeg(label.slice(cursor, h.start), `bt-${idx}`)}
+          <span
+            key={`bt-${idx}`}
+            className={`${allowTruncate ? 'min-w-0 truncate' : 'shrink-0'} whitespace-nowrap inline-flex items-center gap-1`}
+          >
+            {renderBannerSeg(segTxt, `bt-${idx}`)}
           </span>
         );
       }
@@ -11532,9 +11538,9 @@ export const MatchModal: React.FC<{
       const htTrim = htIsHome ? homeTrim : awayTrim;
       const htIsMe = htTeam.id === state.me && state.mode === 'm';
       nodes.push(
-        <span key={`bp-${idx}`} className="inline-flex items-center gap-1 shrink-0 align-middle">
+        <span key={`bp-${idx}`} className="inline-flex items-center gap-1 shrink-0 align-middle whitespace-nowrap">
           <span className="shrink-0 inline-flex">
-            <ClubCrest name={htTeam.name} size={13} team={htTeam} club={state.club} isMyClub={htIsMe} />
+            <ClubCrest name={htTeam.name} size={14} team={htTeam} club={state.club} isMyClub={htIsMe} />
           </span>
           <MatchPlayerThumb
             player={htPlayer}
@@ -11545,20 +11551,21 @@ export const MatchModal: React.FC<{
             size="xs"
             dark
           />
-          <span className="text-[9.5px] mland:text-[8px] font-black tabular text-[#fde047]">#{h.entry.no}</span>
-          <span className="font-extrabold">{label.slice(h.start, h.end)}</span>
+          <span className="text-[10.5px] sm:text-[11px] mland:text-[9px] font-black tabular text-[#fde047]">#{h.entry.no}</span>
+          <span className="font-extrabold">{h.entry.shortName}</span>
         </span>
       );
       cursor = h.end;
     });
     if (cursor < label.length) {
+      const tailTxt = label.slice(cursor);
       nodes.push(
-        <span key="bt-tail" className="whitespace-normal break-words inline-flex items-center gap-0.5">
-          {renderBannerSeg(label.slice(cursor), 'bt-tail')}
+        <span key="bt-tail" className="min-w-0 truncate whitespace-nowrap inline-flex items-center gap-1">
+          {renderBannerSeg(tailTxt, 'bt-tail')}
         </span>
       );
     }
-    return <span className="inline-flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-center leading-snug">{nodes}</span>;
+    return <span className="inline-flex flex-nowrap items-center justify-center gap-1.5 min-w-0 max-w-full whitespace-nowrap">{nodes}</span>;
   }, [actionBanner, matchVisualIndex, homeId, awayId, homeOrig, awayOrig, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, state]);
 
   return (
@@ -11867,6 +11874,121 @@ export const MatchModal: React.FC<{
             {/* Left Stage: Live 2D Pitch + Events Feed Below */}
             <div ref={leftStageScrollRef} className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
               <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
+                  {/* Single-Row Top Broadcast Commentary + Compact Photo/Number Blessing Chips */}
+                  {matchPhaseUi !== 'halftime' && !done && (() => {
+                    const homeMiracle = miracleBannerUi?.side === 'H' ? miracleBannerUi : null;
+                    const awayMiracle = miracleBannerUi?.side === 'A' ? miracleBannerUi : null;
+                    const homeBlessed = blessedListUi.filter((b) => b.side === 'H');
+                    const awayBlessed = blessedListUi.filter((b) => b.side === 'A');
+                    const hasLeft = Boolean(homeMiracle || homeBlessed.length > 0);
+                    const hasRight = Boolean(awayMiracle || awayBlessed.length > 0);
+                    return (
+                      <div className="bg-[#06190f] border-b border-white/12 px-2 py-1 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-0.5 flex items-center justify-between gap-2 min-w-0">
+                        {hasLeft && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {homeMiracle && (
+                              <span
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-[2px] rounded-md border text-[9.5px] sm:text-[10.5px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${
+                                  homeMiracle.maxDeficit >= 3
+                                    ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
+                                    : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
+                                }`}
+                                title={`${homeMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งเจ้าบ้าน (${homeMiracle.teamName}) เหลือ ${homeMiracle.minsLeft}'`}
+                              >
+                                <span>{homeMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+                                <span>{homeMiracle.minsLeft}&apos;</span>
+                              </span>
+                            )}
+                            {homeBlessed.map((bl) => {
+                              const blPlayer = homeOrig.sq.find((q) => q.n === bl.id);
+                              return (
+                                <span
+                                  key={bl.id}
+                                  className="inline-flex items-center gap-1 px-1 py-[1px] rounded-md bg-[#0f291c] border border-amber-300/60 shadow-2xs shrink-0"
+                                  title={`✨ พร: ${bl.tag} · ${bl.id} (#${bl.no} ${homeOrig.name}) เหลือ ${bl.minsLeft}'`}
+                                >
+                                  {blPlayer && (
+                                    <MatchPlayerThumb
+                                      player={blPlayer}
+                                      team={homeOrig}
+                                      state={state}
+                                      kitColor={blPlayer.pos === 'GK' ? homeGkKit : homeKit}
+                                      trimColor={blPlayer.pos === 'GK' ? undefined : homeTrim}
+                                      size="xs"
+                                      dark
+                                      ringClassName="ring-amber-300/80"
+                                    />
+                                  )}
+                                  <span className="text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-black tabular text-[#fde047] leading-none">
+                                    #{bl.no}
+                                  </span>
+                                  <span className="text-[8.5px] sm:text-[9px] mland:text-[7.5px] font-bold tabular text-amber-200/85 leading-none">
+                                    ✨{bl.minsLeft}&apos;
+                                  </span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0 flex items-center justify-center">
+                          <span
+                            className={`inline-flex items-center justify-center max-w-full px-3 sm:px-4 mland:px-2.5 py-1 mland:py-0.5 rounded-lg border text-xs sm:text-[13.5px] mland:text-[11px] leading-tight font-bold whitespace-nowrap overflow-hidden ${bannerCls}`}
+                            title={actionBanner.label}
+                          >
+                            {actionBannerContent}
+                          </span>
+                        </div>
+
+                        {hasRight && (
+                          <div className="flex items-center justify-end gap-1 shrink-0">
+                            {awayBlessed.map((bl) => {
+                              const blPlayer = awayOrig.sq.find((q) => q.n === bl.id);
+                              return (
+                                <span
+                                  key={bl.id}
+                                  className="inline-flex items-center gap-1 px-1 py-[1px] rounded-md bg-[#0f291c] border border-amber-300/60 shadow-2xs shrink-0"
+                                  title={`✨ พร: ${bl.tag} · ${bl.id} (#${bl.no} ${awayOrig.name}) เหลือ ${bl.minsLeft}'`}
+                                >
+                                  {blPlayer && (
+                                    <MatchPlayerThumb
+                                      player={blPlayer}
+                                      team={awayOrig}
+                                      state={state}
+                                      kitColor={blPlayer.pos === 'GK' ? awayGkKit : awayKit}
+                                      trimColor={blPlayer.pos === 'GK' ? undefined : awayTrim}
+                                      size="xs"
+                                      dark
+                                      ringClassName="ring-amber-300/80"
+                                    />
+                                  )}
+                                  <span className="text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-black tabular text-[#fde047] leading-none">
+                                    #{bl.no}
+                                  </span>
+                                  <span className="text-[8.5px] sm:text-[9px] mland:text-[7.5px] font-bold tabular text-amber-200/85 leading-none">
+                                    ✨{bl.minsLeft}&apos;
+                                  </span>
+                                </span>
+                              );
+                            })}
+                            {awayMiracle && (
+                              <span
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-[2px] rounded-md border text-[9.5px] sm:text-[10.5px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${
+                                  awayMiracle.maxDeficit >= 3
+                                    ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
+                                    : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
+                                }`}
+                                title={`${awayMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งทีมเยือน (${awayMiracle.teamName}) เหลือ ${awayMiracle.minsLeft}'`}
+                              >
+                                <span>{awayMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+                                <span>{awayMiracle.minsLeft}&apos;</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div
                     className="relative"
                     style={{
@@ -11880,98 +12002,22 @@ export const MatchModal: React.FC<{
                             : turfSpec.palette.day[2]
                     }}
                   >
-                    {/* Top-Left (Home) & Top-Right (Away) Sacred / Miracle Corner Badges + Centered Commentary */}
-                    {matchPhaseUi !== 'halftime' && !done && (() => {
-                      const homeMiracle = miracleBannerUi?.side === 'H' ? miracleBannerUi : null;
-                      const awayMiracle = miracleBannerUi?.side === 'A' ? miracleBannerUi : null;
-                      const homeBlessed = blessedListUi.filter((b) => b.side === 'H');
-                      const awayBlessed = blessedListUi.filter((b) => b.side === 'A');
-                      return (
-                        <>
-                          {(homeMiracle || homeBlessed.length > 0) && (
-                            <div className="pointer-events-none absolute top-1 left-1.5 z-20 flex flex-col items-start gap-0.5 max-w-[22%] sm:max-w-[23%]">
-                              {homeMiracle && (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md border text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-extrabold animate-pulse truncate max-w-full shadow-xs ${
-                                    homeMiracle.maxDeficit >= 3
-                                      ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
-                                      : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
-                                  }`}
-                                  title={`${homeMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งเจ้าบ้าน (${homeMiracle.teamName}) เหลือ ${homeMiracle.minsLeft}'`}
-                                >
-                                  <span>{homeMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
-                                  <span className="truncate">{homeMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'} {homeMiracle.minsLeft}&apos;</span>
-                                </span>
-                              )}
-                              {homeBlessed.map((bl) => (
-                                <span
-                                  key={bl.id}
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-md bg-[#112419]/88 border border-yellow-300/50 text-yellow-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-bold truncate max-w-full shadow-xs"
-                                  title={`${bl.id} (${homeOrig.name}) · พร: ${bl.tag}`}
-                                >
-                                  <span>✨</span>
-                                  <span className="truncate">{bl.shortName}</span>
-                                  <span className="opacity-85 shrink-0">{bl.tag} {bl.minsLeft}&apos;</span>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          {(awayMiracle || awayBlessed.length > 0) && (
-                            <div className="pointer-events-none absolute top-1 right-1.5 z-20 flex flex-col items-end gap-0.5 max-w-[22%] sm:max-w-[23%]">
-                              {awayMiracle && (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md border text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-extrabold animate-pulse truncate max-w-full shadow-xs ${
-                                    awayMiracle.maxDeficit >= 3
-                                      ? 'bg-red-950/90 border-orange-400/80 text-orange-200'
-                                      : 'bg-amber-950/85 border-amber-300/65 text-amber-200'
-                                  }`}
-                                  title={`${awayMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}ฝั่งทีมเยือน (${awayMiracle.teamName}) เหลือ ${awayMiracle.minsLeft}'`}
-                                >
-                                  <span>{awayMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
-                                  <span className="truncate">{awayMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'} {awayMiracle.minsLeft}&apos;</span>
-                                </span>
-                              )}
-                              {awayBlessed.map((bl) => (
-                                <span
-                                  key={bl.id}
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-md bg-[#112419]/88 border border-yellow-300/50 text-yellow-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-bold truncate max-w-full shadow-xs"
-                                  title={`${bl.id} (${awayOrig.name}) · พร: ${bl.tag}`}
-                                >
-                                  <span>✨</span>
-                                  <span className="truncate">{bl.shortName}</span>
-                                  <span className="opacity-85 shrink-0">{bl.tag} {bl.minsLeft}&apos;</span>
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                          <div className="pointer-events-none absolute top-0.5 left-0 right-0 flex items-start justify-center px-2 z-10">
-                            <span
-                              className={`inline-flex items-center justify-center px-2.5 mland:px-2 py-[2px] rounded-xl border text-[10px] sm:text-[11px] mland:text-[9px] leading-snug font-bold ${
-                                miracleBannerUi || blessedListUi.length > 0 ? 'max-w-[54%] sm:max-w-[52%]' : 'max-w-[96%]'
-                              } ${bannerCls}`}
-                            >
-                              {actionBannerContent}
-                            </span>
-                          </div>
-                        </>
-                      );
-                    })()}
                     <canvas
                       ref={canvasRef}
                       onContextMenu={(e) => e.preventDefault()}
                       style={{ WebkitTouchCallout: 'none', touchAction: 'manipulation' }}
-                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-100px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-86px)] object-contain mx-auto block select-none`}
+                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-128px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-112px)] object-contain mx-auto block select-none`}
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
 
-                    {/* Live Substitution Animated Broadcast Pill */}
+                    {/* Live Substitution Animated Broadcast Strip */}
                     {subFlashInfo && !liveVarActive && !done && matchPhaseUi !== 'halftime' && (
                       <div
                         key={subFlashInfo.key}
-                        className="sub-banner-in pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 z-20 max-w-[92%] px-3 py-1 mland:px-2.5 mland:py-0.5 rounded-full bg-[#071f13]/95 border border-emerald-400/75 text-white shadow-xl flex items-center gap-1.5 text-[10.5px] sm:text-xs mland:text-[9px] font-bold whitespace-nowrap"
+                        className="sub-banner-in pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 z-20 max-w-[92%] px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[#071f13]/95 border border-emerald-400/70 text-white shadow-xl flex items-center gap-1.5 text-[10.5px] sm:text-xs mland:text-[9px] font-bold whitespace-nowrap"
                       >
-                        <span className="px-1.5 py-[1px] rounded-full bg-emerald-500/25 text-emerald-300 font-black tabular">
-                          🔄 {subFlashInfo.minute}&apos;
+                        <span className="px-1.5 py-[1px] rounded bg-emerald-500/25 text-emerald-300 font-black tabular">
+                          {subFlashInfo.minute}&apos;
                         </span>
                         <span className="hidden sm:inline text-white/75 truncate max-w-[110px]">
                           {subFlashInfo.teamName}
@@ -11990,11 +12036,11 @@ export const MatchModal: React.FC<{
 
                     {/* Live VAR Interactive Overlay Controls */}
                     {liveVarActive && !done && matchPhaseUi !== 'halftime' && (
-                      <div className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2 z-25 flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-950/92 border border-sky-400/65 shadow-xl">
+                      <div className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2 z-25 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-950/94 border border-sky-400/65 shadow-xl">
                         <button
                           type="button"
                           onClick={openLiveVarReplay}
-                          className="px-2.5 py-1 rounded-full bg-sky-500 hover:bg-sky-400 text-slate-950 text-[10.5px] sm:text-xs mland:text-[9.5px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap"
+                          className="px-2.5 py-1 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 text-[10.5px] sm:text-xs mland:text-[9.5px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap"
                         >
                           <span>🖥</span>
                           <span>ขยายจอ VAR / หยุดภาพ</span>
@@ -12008,7 +12054,7 @@ export const MatchModal: React.FC<{
                               resolveVarReview(w, Math.max(1, Math.floor(w.minuteFloat)));
                             }
                           }}
-                          className="px-2 py-1 rounded-full bg-white/12 hover:bg-white/22 text-white/90 text-[10px] sm:text-[11px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+                          className="px-2 py-1 rounded-md bg-white/12 hover:bg-white/22 text-white/90 text-[10px] sm:text-[11px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap"
                         >
                           ⏭ ข้าม
                         </button>
@@ -12460,7 +12506,7 @@ export const MatchModal: React.FC<{
                   </div>
                 </div>
 
-                <div className="p-2.5 sm:p-3 mland:p-2 space-y-1.5 mland:space-y-1">
+                <div className="p-2 sm:p-2.5 mland:p-1.5 space-y-1 mland:space-y-0.5">
 
                   {eventFilter === 'sub' ? (
                     subLog.length === 0 ? (
