@@ -78,6 +78,7 @@ import {
   type ClubFinanceChartPoint
 } from '../engine/simulation';
 import { renderCrestPattern, ClubCrest, KitJersey, KitPatternThumb, PlayerFace } from '../components/SvgVisuals';
+import { MainSponsorLogo, PartnerBrandLogo, TicketPlanLogo, BroadcastPlanLogo } from '../components/SponsorLogos';
 import { FacilityUpgradeSvg, StaffRoleSvg, getFacilityTierLabel, getStaffTierLabel, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 
@@ -1113,271 +1114,562 @@ export const FinanceClubView: React.FC<{
             {/* Left Column: Sponsor & Partner Contracts */}
             <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
               {/* Main Sponsors */}
-              <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-sm mland:text-xs">🤝 สปอนเซอร์หลักคาดอกเสื้อ ({MAIN_SPONSOR_PACKAGES.length} แพ็กเกจ)</h3>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {changedFinItems.sp && (
-                      <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
-                    )}
-                    <span className="text-[10.5px] font-bold text-[var(--g)] tabular">
-                      รับ {fmtMoneyNum(est.estSponsor)}/นัด
-                    </span>
-                  </div>
-                </div>
-                <div className="rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/20">
-                  {MAIN_SPONSOR_PACKAGES.map((pkg) => {
-                    const active = activeFinanceValues.sp === pkg.idx;
-                    const elig = evaluateMainSponsorEligibility(pkg.idx, state, me);
-                    const preview = calcMainSponsorPayout({ sp: pkg.idx, promo: 0 }, me);
-                    return (
-                      <button
-                        key={pkg.idx}
-                        type="button"
-                        disabled={!elig.ok}
-                        onClick={() => {
-                          patchFinanceDraft((d) => {
-                            d.sp = pkg.idx;
-                          });
-                        }}
-                        className={`w-full px-3 py-2 mland:py-1.5 text-left transition-colors ${
-                          !elig.ok
-                            ? 'opacity-55 cursor-not-allowed'
-                            : active
-                              ? 'bg-[var(--g-soft)] cursor-pointer'
-                              : 'hover:bg-[var(--surface-2)]/75 cursor-pointer'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                          <span className="truncate text-[var(--ink)]">
-                            {pkg.title} · <span className="text-[var(--mut)] font-semibold">{pkg.brand}</span>
-                          </span>
-                          <span className="text-[var(--g)] tabular shrink-0">{preview.previewText}</span>
+              {(() => {
+                const activeSpIdx = clamp(activeFinanceValues.sp ?? 0, 0, MAIN_SPONSOR_PACKAGES.length - 1);
+                const activePkg = MAIN_SPONSOR_PACKAGES[activeSpIdx] || MAIN_SPONSOR_PACKAGES[0];
+                const activeCalc = calcMainSponsorPayout({ sp: activeSpIdx, promo: 0 }, me);
+                const activeMerchPct = Math.round((activePkg.merchBoost || 0) * 100);
+                return (
+                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h3 className="font-bold text-sm mland:text-xs">🤝 สปอนเซอร์หลักคาดอกเสื้อ</h3>
+                        <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">
+                          รายได้ประจำทุกแมตช์ + โบนัสตามผลงาน · แตะเพื่อเปลี่ยนแบรนด์คาดอก
+                        </p>
+                      </div>
+                      {changedFinItems.sp ? (
+                        <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)] shrink-0">
+                          รอการบันทึก
+                        </span>
+                      ) : (
+                        <span className="text-[10.5px] font-bold text-[var(--g)] shrink-0">
+                          {MAIN_SPONSOR_PACKAGES.length} แพ็กเกจ
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 3-Column Active Main Sponsor Summary Strip */}
+                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular items-center">
+                      <div className="px-1.5 flex items-center justify-center gap-2 min-w-0">
+                        <MainSponsorLogo idx={activePkg.idx} size={28} />
+                        <div className="min-w-0 text-left">
+                          <div className="text-[9.5px] text-[var(--mut)] leading-none">แบรนด์คาดอก</div>
+                          <div className="font-extrabold text-[11px] text-[var(--ink)] truncate mt-0.5">
+                            {activePkg.brand}
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between gap-2 text-[10.5px] text-[var(--mut)] mt-0.5">
-                          <span className="truncate">{pkg.desc}</span>
-                          <span className={`shrink-0 font-semibold ${elig.ok ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                            {active ? (committedFinance.sp === pkg.idx ? 'ใช้งานอยู่' : 'เลือกไว้ (รอบันทึก)') : elig.ok ? pkg.tag : elig.reqText}
-                          </span>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">รับพื้นฐาน / นัด</div>
+                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--g)] mt-0.5">
+                          +{fmtMoneyNum(activeCalc.base)}
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
+                        <div className="text-[9.5px] text-[var(--mut)] truncate">{activePkg.tag}</div>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">เงื่อนไขโบนัส</div>
+                        <div className="font-bold text-[11px] text-[var(--ink)] mt-0.5 truncate">
+                          {activeMerchPct > 0 ? `สโตร์ +${activeMerchPct}%` : activePkg.tag}
+                        </div>
+                        <div className="text-[9.5px] text-[var(--mut)] truncate">{activePkg.title}</div>
+                      </div>
+                    </div>
+
+                    {/* Interactive 8-Row Main Sponsor List with Fictional Brand Logos */}
+                    <div className="rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/20">
+                      {MAIN_SPONSOR_PACKAGES.map((pkg) => {
+                        const active = activeFinanceValues.sp === pkg.idx;
+                        const elig = evaluateMainSponsorEligibility(pkg.idx, state, me);
+                        const preview = calcMainSponsorPayout({ sp: pkg.idx, promo: 0 }, me);
+                        return (
+                          <button
+                            key={pkg.idx}
+                            type="button"
+                            disabled={!elig.ok}
+                            onClick={() => {
+                              patchFinanceDraft((d) => {
+                                d.sp = pkg.idx;
+                              });
+                            }}
+                            className={`w-full px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2.5 text-left transition-colors ${
+                              !elig.ok
+                                ? 'opacity-50 cursor-not-allowed'
+                                : active
+                                  ? 'bg-[var(--g-soft)] cursor-pointer'
+                                  : 'hover:bg-[var(--surface-2)]/75 cursor-pointer'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 ${
+                                  active
+                                    ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                                    : 'border-[var(--line)] bg-[var(--surface)]'
+                                }`}
+                              >
+                                {active && <Check className="w-2.5 h-2.5" />}
+                              </span>
+                              <MainSponsorLogo idx={pkg.idx} size={30} />
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-[var(--ink)] truncate">
+                                  {pkg.brand} <span className="font-medium text-[var(--mut)]">· {pkg.title}</span>
+                                </div>
+                                <div className={`text-[10px] truncate ${!elig.ok ? 'text-[var(--red)] font-semibold' : 'text-[var(--mut)]'}`}>
+                                  {!elig.ok ? elig.reqText : pkg.desc}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0 tabular">
+                              <div className={`text-xs font-extrabold ${active ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                                +{fmtMoneyNum(preview.base)}/นัด
+                              </div>
+                              <div className="text-[10px] text-[var(--g)] font-semibold truncate max-w-[130px]">
+                                {pkg.idx === 0 ? 'คงที่แน่นอน' : preview.previewText.replace(`${fmtMoneyNum(preview.base)} + `, '+')}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })()}
 
               {/* Multi-Slot Partner Deals */}
-              <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="font-bold text-sm mland:text-xs">
-                      📄 ดีลพาร์ทเนอร์ธุรกิจ ({activeDeals.length}/{maxPartnerSlots} ช่องสัญญา)
-                    </h3>
-                    <div className="text-[10px] text-[var(--mut)]">
-                      {maxPartnerSlots < 3
-                        ? 'อัปเกรดเมกะสโตร์ Lv.5 เพื่อปลดล็อกช่องสัญญาที่ 3'
-                        : 'ปลดล็อกช่องสัญญาครบ 3 ช่องแล้ว'}
+              {(() => {
+                const totalDealMerchPct = Math.round(activeDeals.reduce((sum, ad) => sum + (ad.merchBoost || 0), 0) * 100);
+                return (
+                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h3 className="font-bold text-sm mland:text-xs">📄 ดีลพาร์ทเนอร์ธุรกิจ</h3>
+                        <p className="text-[10px] text-[var(--mut)]">
+                          {maxPartnerSlots < 3
+                            ? 'อัปเกรดเมกะสโตร์ Lv.5 เพื่อปลดล็อกช่องสัญญาที่ 3'
+                            : 'ปลดล็อกช่องสัญญาครบ 3 ช่องแล้ว'}
+                        </p>
+                      </div>
+                      <div className="seg-bar shrink-0">
+                        {(
+                          [
+                            ['all', 'ทั้งหมด'],
+                            ['ready', 'พร้อมเซ็น'],
+                            ['merch', '+สโตร์']
+                          ] as const
+                        ).map(([fid, flbl]) => (
+                          <button
+                            key={fid}
+                            type="button"
+                            onClick={() => setPartnerFilter(fid)}
+                            className={`seg-btn whitespace-nowrap ${partnerFilter === fid ? 'seg-btn-active' : ''}`}
+                          >
+                            {flbl}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div className="seg-bar shrink-0">
-                    {(
-                      [
-                        ['all', 'ทั้งหมด'],
-                        ['ready', 'พร้อมเซ็น'],
-                        ['merch', '+สโตร์']
-                      ] as const
-                    ).map(([fid, flbl]) => (
-                      <button
-                        key={fid}
-                        type="button"
-                        onClick={() => setPartnerFilter(fid)}
-                        className={`seg-btn whitespace-nowrap ${partnerFilter === fid ? 'seg-btn-active' : ''}`}
-                      >
-                        {flbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                {activeDeals.length > 0 && (
-                  <div className="rounded-xl border border-[var(--g)]/45 bg-[var(--g-soft)] divide-y divide-[var(--g)]/20 overflow-hidden">
-                    {activeDeals.map((ad) => (
-                      <div key={ad.id} className="px-3 py-2 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold truncate text-[var(--ink)]">
-                            {ad.name}
-                            {ad.category ? <span className="text-[10px] text-[var(--mut)] font-normal"> · {ad.category}</span> : null}
-                          </div>
-                          <div className="text-[10.5px] text-[var(--mut)] tabular">
-                            +{fmtMoneyNum(ad.perMatch)}/นัด · เหลือ {ad.left} นัด (~{fmtMoney(ad.left * ad.perMatch)})
-                            {ad.merchBoost ? ` · บูสต์สโตร์ +${Math.round(ad.merchBoost * 100)}%` : ''}
-                          </div>
+                    {/* 3-Column Partner Summary Strip */}
+                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular">
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ช่องสัญญาใช้งาน</div>
+                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5">
+                          {activeDeals.length} / {maxPartnerSlots}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => {
-                              const nextDeals = getActivePartnerDeals(d).filter((x) => x.id !== ad.id);
-                              syncPartnerDealsField(d, nextDeals);
-                            });
-                            onToast(`ยกเลิกสัญญาพาร์ทเนอร์ ${ad.name} แล้ว`);
-                          }}
-                          className="btn btn-xs btn-surface text-[var(--red)] shrink-0 whitespace-nowrap"
-                        >
-                          ยกเลิกดีล
-                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">รายได้รวม / นัด</div>
+                        <div className={`font-extrabold text-xs sm:text-sm mland:text-xs mt-0.5 ${est.dealIncome > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                          {est.dealIncome > 0 ? `+${fmtMoneyNum(est.dealIncome)}` : '0฿'}
+                        </div>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">บูสต์สโตร์รวม</div>
+                        <div className={`font-extrabold text-xs sm:text-sm mland:text-xs mt-0.5 ${totalDealMerchPct > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                          {totalDealMerchPct > 0 ? `+${totalDealMerchPct}%` : '0%'}
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/20">
-                  {visiblePartnerDeals.map((deal) => {
-                    const slotsFull = activeDeals.length >= maxPartnerSlots;
-                    const disabled = deal.isSigned || slotsFull || !deal.reqOk;
-                    return (
-                      <div key={deal.id} className="px-3 py-2 flex items-center justify-between gap-2.5">
-                        <div className="min-w-0">
-                          <div className="font-bold text-xs truncate">
-                            {deal.name} <span className="text-[10px] font-medium text-[var(--mut)]">· {deal.category}</span>
-                          </div>
-                          <div className="text-[10.5px] text-[var(--mut)] tabular">
-                            +{fmtMoneyNum(deal.perMatch)}/นัด · {deal.matches} นัด · โบนัสเซ็น +{fmtMoneyNum(deal.signBonus)}
-                          </div>
-                          <div className={`text-[10px] mt-0.5 ${deal.reqOk ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                            {deal.reqText}
-                          </div>
+                    {activeDeals.length > 0 && (
+                      <div className="space-y-1">
+                        <div className="text-[10.5px] font-bold text-[var(--g)]">สัญญาที่กำลังใช้งาน</div>
+                        <div className="rounded-xl border border-[var(--g)]/45 bg-[var(--g-soft)] divide-y divide-[var(--g)]/20 overflow-hidden">
+                          {activeDeals.map((ad) => (
+                            <div key={ad.id} className="px-3 py-2 flex items-center justify-between gap-2.5">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <PartnerBrandLogo id={ad.id} name={ad.name} size={30} />
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold truncate text-[var(--ink)]">
+                                    {ad.name}
+                                    {ad.category ? <span className="text-[10px] text-[var(--mut)] font-normal"> · {ad.category}</span> : null}
+                                  </div>
+                                  <div className="text-[10.5px] text-[var(--mut)] tabular truncate">
+                                    +{fmtMoneyNum(ad.perMatch)}/นัด · เหลือ {ad.left} นัด (~{fmtMoney(ad.left * ad.perMatch)})
+                                    {ad.merchBoost ? ` · สโตร์ +${Math.round(ad.merchBoost * 100)}%` : ''}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  SFX.tap();
+                                  onUpdateState((d) => {
+                                    const nextDeals = getActivePartnerDeals(d).filter((x) => x.id !== ad.id);
+                                    syncPartnerDealsField(d, nextDeals);
+                                  });
+                                  onToast(`ยกเลิกสัญญาพาร์ทเนอร์ ${ad.name} แล้ว`);
+                                }}
+                                className="btn btn-xs btn-surface text-[var(--red)] shrink-0 whitespace-nowrap"
+                              >
+                                ยกเลิกดีล
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                        <button
-                          type="button"
-                          disabled={disabled}
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => {
-                              const cur = getActivePartnerDeals(d);
-                              if (cur.length >= getMaxPartnerSlots(d) || cur.some((x) => x.id === deal.id)) return;
-                              syncPartnerDealsField(d, [
-                                ...cur,
-                                {
-                                  id: deal.id,
-                                  name: deal.name,
-                                  category: deal.category,
-                                  perMatch: deal.perMatch,
-                                  left: deal.matches,
-                                  merchBoost: deal.merchBoost
-                                }
-                              ]);
-                              d.money += deal.signBonus;
-                              logFin(d, `โบนัสเซ็นสัญญาพาร์ทเนอร์: ${deal.name}`, deal.signBonus);
-                            });
-                            onToast(`เซ็นสัญญากับ ${deal.name} สำเร็จ (+${fmtMoney(deal.signBonus)})`);
-                          }}
-                          className="btn btn-xs btn-primary shrink-0 whitespace-nowrap"
-                        >
-                          {deal.isSigned ? 'ใช้งานอยู่' : slotsFull ? 'ช่องเต็ม' : 'เซ็นสัญญา'}
-                        </button>
                       </div>
-                    );
-                  })}
-                </div>
-              </section>
+                    )}
+
+                    <div className="rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/20">
+                      {visiblePartnerDeals.length === 0 ? (
+                        <div className="px-3 py-5 text-center space-y-1.5">
+                          <div className="text-xs text-[var(--mut)]">ไม่มีดีลพาร์ทเนอร์ที่ตรงกับตัวกรองนี้</div>
+                          <button
+                            type="button"
+                            onClick={() => setPartnerFilter('all')}
+                            className="btn btn-xs btn-secondary"
+                          >
+                            แสดงทั้งหมด
+                          </button>
+                        </div>
+                      ) : (
+                        visiblePartnerDeals.map((deal) => {
+                          const slotsFull = activeDeals.length >= maxPartnerSlots;
+                          const disabled = deal.isSigned || slotsFull || !deal.reqOk;
+                          return (
+                            <div
+                              key={deal.id}
+                              className={`px-3 py-2 flex items-center justify-between gap-2.5 ${
+                                deal.isSigned ? 'bg-[var(--g-soft)]/45' : ''
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <PartnerBrandLogo id={deal.id} name={deal.name} size={30} />
+                                <div className="min-w-0">
+                                  <div className="font-bold text-xs truncate text-[var(--ink)]">
+                                    {deal.name} <span className="text-[10px] font-medium text-[var(--mut)]">· {deal.category}</span>
+                                  </div>
+                                  <div className="text-[10.5px] text-[var(--mut)] tabular truncate">
+                                    +{fmtMoneyNum(deal.perMatch)}/นัด · {deal.matches} นัด · โบนัสเซ็น +{fmtMoneyNum(deal.signBonus)}
+                                  </div>
+                                  <div className={`text-[10px] truncate ${deal.reqOk ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                                    {deal.reqText}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => {
+                                  SFX.tap();
+                                  onUpdateState((d) => {
+                                    const cur = getActivePartnerDeals(d);
+                                    if (cur.length >= getMaxPartnerSlots(d) || cur.some((x) => x.id === deal.id)) return;
+                                    syncPartnerDealsField(d, [
+                                      ...cur,
+                                      {
+                                        id: deal.id,
+                                        name: deal.name,
+                                        category: deal.category,
+                                        perMatch: deal.perMatch,
+                                        left: deal.matches,
+                                        merchBoost: deal.merchBoost
+                                      }
+                                    ]);
+                                    d.money += deal.signBonus;
+                                    logFin(d, `โบนัสเซ็นสัญญาพาร์ทเนอร์: ${deal.name}`, deal.signBonus);
+                                  });
+                                  onToast(`เซ็นสัญญากับ ${deal.name} สำเร็จ (+${fmtMoney(deal.signBonus)})`);
+                                }}
+                                className="btn btn-xs btn-primary shrink-0 whitespace-nowrap"
+                              >
+                                {deal.isSigned ? 'ใช้งานอยู่' : slotsFull ? 'ช่องเต็ม' : 'เซ็นสัญญา'}
+                              </button>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
+                );
+              })()}
             </div>
 
             {/* Right Column: Ticket Pricing + Live Broadcast Rights + Slim Megastore Shortcut */}
             <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
-              {/* Ticket Pricing */}
-              <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-sm mland:text-xs">🎫 นโยบายราคาตั๋วเข้าชม ({TICKET_PRICING_PLANS.length} ระดับ)</h3>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {changedFinItems.ticket && (
-                      <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
-                    )}
-                    <span className="text-xs font-bold text-[var(--g)] tabular">
-                      ~{est.estAtt.toLocaleString()} / {est.cap.toLocaleString()} ({est.attPct}%)
-                    </span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {TICKET_PRICING_PLANS.map((plan) => {
-                    const active = currentTicketPlan.id === plan.id;
-                    const stLv = state.st ?? 1;
-                    const locked = !!(plan.minStadiumLv && stLv < plan.minStadiumLv);
-                    return (
-                      <button
-                        key={plan.id}
-                        type="button"
-                        disabled={locked}
-                        onClick={() => {
-                          patchFinanceDraft((d) => {
-                            d.ticketPlan = plan.id;
-                            d.tp = plan.legacyIdx;
-                          });
-                        }}
-                        className={`p-2 rounded-xl text-left border transition-colors ${
-                          locked
-                            ? 'bg-[var(--surface-2)]/30 border-[var(--line)]/40 opacity-55 cursor-not-allowed'
-                            : active
-                              ? 'bg-[var(--g)] text-white border-[var(--g)] cursor-pointer'
-                              : 'bg-[var(--surface-2)]/45 border-[var(--line)]/70 hover:border-[var(--g)]/55 cursor-pointer'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1.5 text-xs font-bold">
-                          <span className="truncate">{plan.label}</span>
-                          <span className="tabular shrink-0">{plan.priceBaht}฿</span>
+              {/* Ticket Pricing Manager */}
+              {(() => {
+                const stLv = state.st ?? 1;
+                const merchBonusPct = Math.round((currentTicketPlan.merchMult - 1) * 100);
+                const moodLabel =
+                  currentTicketPlan.fanMoodDelta > 0
+                    ? `ขวัญแฟน +${currentTicketPlan.fanMoodDelta}/เหย้า`
+                    : currentTicketPlan.fanMoodDelta < 0
+                      ? `ขวัญแฟน ${currentTicketPlan.fanMoodDelta}/เหย้า`
+                      : 'ขวัญแฟนคงที่';
+
+                return (
+                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h3 className="font-bold text-sm mland:text-xs">🎫 นโยบายราคาตั๋วเข้าชม</h3>
+                        <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">
+                          เปรียบเทียบผู้ชมและรายได้ต่อนัดเหย้า · แตะเพื่อเปลี่ยนระดับราคา
+                        </p>
+                      </div>
+                      {changedFinItems.ticket ? (
+                        <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)] shrink-0">
+                          รอการบันทึก
+                        </span>
+                      ) : (
+                        <span className="text-[10.5px] font-bold text-[var(--g)] tabular shrink-0">
+                          สนาม Lv.{stLv}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 3-Column Live Projection Strip */}
+                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular items-center">
+                      <div className="px-1.5 flex items-center justify-center gap-2 min-w-0">
+                        <TicketPlanLogo id={currentTicketPlan.id} size={28} />
+                        <div className="min-w-0 text-left">
+                          <div className="text-[9.5px] text-[var(--mut)] leading-none">ราคาตั๋ว / ใบ</div>
+                          <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5 truncate">
+                            {currentTicketPlan.priceBaht}฿
+                          </div>
+                          <div className="text-[9px] text-[var(--mut)] truncate">{currentTicketPlan.label}</div>
                         </div>
-                        <div className={`text-[10px] mt-0.5 tabular ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>
-                          ผู้ชม {Math.round(plan.attMult * 100)}% · รายรับ {Math.round(plan.revMult * 100)}% · สโตร์ +{Math.round((plan.merchMult - 1) * 100)}%
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">คาดการณ์ผู้ชม</div>
+                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5">
+                          ~{est.estAtt.toLocaleString()} <span className="text-[10px] font-semibold text-[var(--mut)]">({est.attPct}%)</span>
                         </div>
-                        <div className={`text-[10px] mt-0.5 truncate ${active ? 'text-white/85' : locked ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
-                          {locked ? `ต้องอัปสนามเหย้า Lv.${plan.minStadiumLv}+` : plan.desc}
+                        <div
+                          className={`text-[9.5px] font-semibold truncate ${
+                            currentTicketPlan.fanMoodDelta > 0
+                              ? 'text-[var(--g)]'
+                              : currentTicketPlan.fanMoodDelta < 0
+                                ? 'text-[#9a6700] dark:text-[var(--lamp)]'
+                                : 'text-[var(--mut)]'
+                          }`}
+                        >
+                          {moodLabel}
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="pt-2 border-t border-[var(--line)]/60 flex items-center justify-between gap-2 text-xs">
-                  <span className="text-[var(--mut)]">
-                    {changedFinItems.ticket ? 'ที่เลือกไว้:' : 'แผนปัจจุบัน:'}{' '}
-                    <b className="text-[var(--ink)]">{currentTicketPlan.label} ({currentTicketPlan.priceBaht}฿)</b>
-                  </span>
-                  <b className="text-[var(--g)] tabular shrink-0">+{fmtMoney(est.estTicket)} / นัดเหย้า</b>
-                </div>
-              </section>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">รายได้ตั๋ว / นัดเหย้า</div>
+                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--g)] mt-0.5">
+                          +{fmtMoneyNum(est.estTicket)}
+                        </div>
+                        <div className="text-[9.5px] text-[var(--mut)] truncate">
+                          {merchBonusPct > 0 ? `สโตร์ +${merchBonusPct}%` : 'สโตร์มาตรฐาน'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Interactive 7-Row Hairline Pricing Table */}
+                    <div className="rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/20">
+                      {TICKET_PRICING_PLANS.map((plan) => {
+                        const active = currentTicketPlan.id === plan.id;
+                        const locked = !!(plan.minStadiumLv && stLv < plan.minStadiumLv);
+                        const previewEst = locked
+                          ? null
+                          : calcMatchdayFinanceEstimate(
+                              { ...finPreviewState, ticketPlan: plan.id, tp: plan.legacyIdx },
+                              me
+                            );
+                        const planMerchPct = Math.round((plan.merchMult - 1) * 100);
+                        return (
+                          <button
+                            key={plan.id}
+                            type="button"
+                            disabled={locked}
+                            onClick={() => {
+                              patchFinanceDraft((d) => {
+                                d.ticketPlan = plan.id;
+                                d.tp = plan.legacyIdx;
+                              });
+                            }}
+                            className={`w-full px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2.5 text-left transition-colors ${
+                              locked
+                                ? 'opacity-50 cursor-not-allowed'
+                                : active
+                                  ? 'bg-[var(--g-soft)] cursor-pointer'
+                                  : 'hover:bg-[var(--surface-2)]/75 cursor-pointer'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 ${
+                                  active
+                                    ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                                    : 'border-[var(--line)] bg-[var(--surface)]'
+                                }`}
+                              >
+                                {active && <Check className="w-2.5 h-2.5" />}
+                              </span>
+                              <TicketPlanLogo id={plan.id} size={30} />
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-[var(--ink)] truncate">
+                                  <span className={`font-extrabold tabular mr-1.5 ${active ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                                    {plan.priceBaht}฿
+                                  </span>
+                                  <span>{plan.label}</span>
+                                </div>
+                                <div
+                                  className={`text-[10px] truncate tabular ${
+                                    locked ? 'text-[var(--red)] font-semibold' : 'text-[var(--mut)]'
+                                  }`}
+                                >
+                                  {locked
+                                    ? `ปลดล็อกเมื่อสนามเหย้า Lv.${plan.minStadiumLv}+`
+                                    : [
+                                        plan.fanMoodDelta > 0
+                                          ? `ขวัญ +${plan.fanMoodDelta}`
+                                          : plan.fanMoodDelta < 0
+                                            ? `ขวัญ ${plan.fanMoodDelta} (เมื่อไม่ชนะ)`
+                                            : 'ขวัญคงที่',
+                                        planMerchPct > 0 ? `สโตร์ +${planMerchPct}%` : null
+                                      ]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0 tabular">
+                              {previewEst ? (
+                                <>
+                                  <div className={`text-xs font-extrabold ${active ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                                    +{fmtMoneyNum(previewEst.estTicket)}
+                                  </div>
+                                  <div className="text-[10px] text-[var(--mut)]">
+                                    ~{previewEst.estAtt.toLocaleString()} คน ({previewEst.attPct}%)
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="text-[10px] font-semibold text-[var(--red)]">ล็อก</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })()}
 
               {/* Online Live Streaming & Broadcast Rights */}
               {(() => {
                 const curStreamPlan = resolveLiveStreamPlan(finPreviewState);
                 const nxtRound = state.fx?.[state.md];
                 const nxtPair = nxtRound?.find(([x, y]) => x === state.me || y === state.me);
+                const isNextHome = !nxtPair || nxtPair[0] === state.me;
                 const oppId = nxtPair ? (nxtPair[0] === state.me ? nxtPair[1] : nxtPair[0]) : state.me;
                 const oppTeam = state.teams[oppId] || me;
+                const isNextDerby =
+                  oppTeam.id !== me.id &&
+                  ((me.id ^ 1) === oppTeam.id || !!state.derby);
+                const streamHome = isNextHome ? me : oppTeam;
+                const streamAway = isNextHome ? oppTeam : me;
+                const planProjections = LIVE_STREAM_PLANS.map((plan) => ({
+                  plan,
+                  proj: computeMatchStreamProjection(streamHome, streamAway, finPreviewState, {
+                    kind: 'league',
+                    derby: isNextDerby,
+                    planOverride: plan
+                  })
+                }));
+                const activeStreamProj =
+                  planProjections.find((x) => x.plan.id === curStreamPlan.id)?.proj || planProjections[0].proj;
+                const bestPaidNet = Math.max(
+                  0,
+                  ...planProjections.filter((x) => x.plan.id !== 'off').map((x) => x.proj.estNet)
+                );
+                const bestPaidId =
+                  bestPaidNet > 0
+                    ? planProjections.find((x) => x.plan.id !== 'off' && x.proj.estNet === bestPaidNet)?.plan.id || null
+                    : null;
+
                 return (
-                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5">
-                        <Radio className="w-4 h-4 text-[var(--red)] shrink-0" />
-                        <span>ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์</span>
-                      </h3>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {changedFinItems.liveStream && (
-                          <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
-                        )}
-                        <span className="text-xs font-bold text-[var(--g)] tabular">
-                          {curStreamPlan.id === 'off' ? 'ช่องกลางลีก' : `~${est.estStreamViewers.toLocaleString()} คนดู`}
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5">
+                          <Radio className="w-4 h-4 text-[var(--red)] shrink-0" />
+                          <span>ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์</span>
+                        </h3>
+                        <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
+                          {oppTeam.id !== me.id
+                            ? `ประเมินจากเกมถัดไป (${isNextHome ? 'เหย้า' : 'เยือน'}) พบ ${oppTeam.name}`
+                            : 'รายได้และโบนัสฐานแฟนบอลทุกแมตช์'}
+                        </p>
+                      </div>
+                      {changedFinItems.liveStream ? (
+                        <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)] shrink-0">
+                          รอการบันทึก
                         </span>
+                      ) : (
+                        <span className="text-[10.5px] font-bold text-[var(--mut)] shrink-0">
+                          {curStreamPlan.id === 'off' ? 'ช่องกลางลีก' : 'ขายลิขสิทธิ์เอง'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* 3-Column Live Broadcast Summary Strip */}
+                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular items-center">
+                      <div className="px-1.5 flex items-center justify-center gap-2 min-w-0">
+                        <BroadcastPlanLogo id={curStreamPlan.id} size={28} />
+                        <div className="min-w-0 text-left">
+                          <div className="text-[9.5px] text-[var(--mut)] leading-none">เครือข่ายถ่ายทอด</div>
+                          <div className="font-extrabold text-[11px] sm:text-xs text-[var(--ink)] mt-0.5 truncate">
+                            {curStreamPlan.short}
+                          </div>
+                          <div className="text-[9px] text-[var(--mut)] truncate">
+                            {curStreamPlan.id === 'off' ? 'ไม่มีต้นทุน' : `ต้นทุน -${fmtMoneyNum(activeStreamProj.estOut)}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ผู้ชม &amp; แฟนเพิ่ม</div>
+                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--ink)] mt-0.5">
+                          ~{fmtFansShort(activeStreamProj.baseViewers)} ดู
+                        </div>
+                        <div className={`text-[9.5px] font-semibold truncate ${curStreamPlan.fanGainBonus > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                          {curStreamPlan.fanGainBonus > 0 ? `+${curStreamPlan.fanGainBonus} แฟน/นัด` : 'ฐานแฟนปกติ'}
+                        </div>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">กำไรสุทธิ / นัด</div>
+                        <div
+                          className={`font-extrabold text-xs sm:text-sm mland:text-xs mt-0.5 ${
+                            curStreamPlan.id === 'off'
+                              ? 'text-[var(--mut)]'
+                              : activeStreamProj.estNet >= 0
+                                ? 'text-[var(--g)]'
+                                : 'text-[var(--red)]'
+                          }`}
+                        >
+                          {curStreamPlan.id === 'off'
+                            ? '0฿'
+                            : activeStreamProj.estNet >= 0
+                              ? `+${fmtMoneyNum(activeStreamProj.estNet)}`
+                              : fmtMoneyNum(activeStreamProj.estNet)}
+                        </div>
+                        <div className="text-[9.5px] text-[var(--mut)] truncate">
+                          {curStreamPlan.id === 'off' ? 'ไม่หักค่าสัญญาณ' : `ค่าลิขสิทธิ์ +${fmtMoneyNum(activeStreamProj.estIn)}`}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                      {LIVE_STREAM_PLANS.map((plan) => {
+                    {/* Interactive 4-Row Hairline Broadcast Plan Selector */}
+                    <div className="rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/20">
+                      {planProjections.map(({ plan, proj }) => {
                         const active = curStreamPlan.id === plan.id;
-                        const proj = computeMatchStreamProjection(me, oppTeam, finPreviewState, {
-                          kind: 'league',
-                          derby: !!state.derby,
-                          planOverride: plan
-                        });
+                        const isBest = bestPaidId === plan.id;
                         return (
                           <button
                             key={plan.id}
@@ -1387,41 +1679,50 @@ export const FinanceClubView: React.FC<{
                                 d.liveStream = plan.id;
                               });
                             }}
-                            className={`p-2 rounded-xl text-left border transition-colors cursor-pointer ${
-                              active
-                                ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                                : 'bg-[var(--surface-2)]/45 border-[var(--line)]/70 hover:border-[var(--g)]/55'
+                            className={`w-full px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2.5 text-left transition-colors cursor-pointer ${
+                              active ? 'bg-[var(--g-soft)]' : 'hover:bg-[var(--surface-2)]/75'
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-1.5 text-xs font-bold">
-                              <span className="truncate">{plan.short}</span>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border shrink-0 ${
+                                  active
+                                    ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                                    : 'border-[var(--line)] bg-[var(--surface)]'
+                                }`}
+                              >
+                                {active && <Check className="w-2.5 h-2.5" />}
+                              </span>
+                              <BroadcastPlanLogo id={plan.id} size={30} />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--ink)]">
+                                  <span className="truncate">{plan.short}</span>
+                                  {isBest && (
+                                    <span className="text-[10px] font-bold text-[var(--g)] shrink-0">· คุ้มสุด</span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-[var(--mut)] truncate tabular">
+                                  {plan.id === 'off'
+                                    ? 'ปล่อยช่องกลางลีกถ่ายทอด · ไม่มีค่าใช้จ่าย'
+                                    : `รับ +${fmtMoneyNum(proj.estIn)} · ต้นทุน -${fmtMoneyNum(proj.estOut)} · แฟน +${plan.fanGainBonus}/นัด`}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-right shrink-0 tabular">
                               {plan.id === 'off' ? (
-                                <span className="text-[10.5px] opacity-80 shrink-0">0฿ / นัด</span>
+                                <div className="text-xs font-bold text-[var(--mut)]">0฿</div>
                               ) : (
-                                <span
-                                  className={`tabular text-[11px] shrink-0 ${
-                                    active ? 'text-white' : proj.estNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'
+                                <div
+                                  className={`text-xs font-extrabold ${
+                                    proj.estNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'
                                   }`}
                                 >
-                                  สุทธิ {proj.estNet >= 0 ? `+${fmtMoneyNum(proj.estNet)}` : fmtMoneyNum(proj.estNet)}
-                                </span>
+                                  {proj.estNet >= 0 ? `+${fmtMoneyNum(proj.estNet)}` : fmtMoneyNum(proj.estNet)}
+                                </div>
                               )}
+                              <div className="text-[10px] text-[var(--mut)]">~{fmtFansShort(proj.baseViewers)} ดู</div>
                             </div>
-                            {plan.id === 'off' ? (
-                              <div className={`text-[10px] mt-1 leading-snug ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
-                                {plan.desc}
-                              </div>
-                            ) : (
-                              <>
-                                <div className={`text-[10px] mt-0.5 tabular flex items-center justify-between gap-1 ${active ? 'text-white/90' : 'text-[var(--ink)]'}`}>
-                                  <span>คนดู ~{fmtFansShort(proj.baseViewers)}</span>
-                                  <span>รับ +{fmtMoneyNum(proj.estIn)} · หัก -{fmtMoneyNum(proj.estOut)}</span>
-                                </div>
-                                <div className={`text-[9.5px] mt-0.5 tabular truncate ${active ? 'text-white/80' : 'text-[var(--mut)]'}`}>
-                                  ประสาน {plan.crewCost}k · สัญญาณ {plan.gearCost}k · แพลตฟอร์ม {plan.rightsCost}k
-                                </div>
-                              </>
-                            )}
                           </button>
                         );
                       })}

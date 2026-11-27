@@ -2502,9 +2502,9 @@ export interface LiveStreamPlanDef {
 export const LIVE_STREAM_PLANS: readonly LiveStreamPlanDef[] = [
   {
     id: 'off',
-    name: 'ช่องกลางผู้ถือลิขสิทธิ์ลีก (ไม่ขายเพิ่ม)',
-    short: 'ช่องกลางลีก',
-    desc: 'ปล่อยให้ลีกถ่ายทอดผ่านช่องกลางตามปกติ ไม่ได้ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์เพิ่มเติม',
+    name: 'ช่องกลางผู้ถือลิขสิทธิ์ลีก (LTV Central)',
+    short: 'ช่องกลางลีก (LTV)',
+    desc: 'ปล่อยให้ลีกถ่ายทอดผ่านช่องกลางตามปกติ ไม่เปิดขายลิขสิทธิ์เสริมของสโมสร',
     crewCost: 0,
     gearCost: 0,
     rightsCost: 0,
@@ -2516,44 +2516,44 @@ export const LIVE_STREAM_PLANS: readonly LiveStreamPlanDef[] = [
   },
   {
     id: 'basic',
-    name: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ (มาตรฐาน)',
-    short: 'ลิขสิทธิ์มาตรฐาน',
-    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ให้แพลตฟอร์มสตรีมมิ่งทั่วไป ได้ค่าลิขสิทธิ์สม่ำเสมอ',
+    name: 'ขายลิขสิทธิ์ SiamStream Standard (THS)',
+    short: 'SiamStream (THS)',
+    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์แพ็กเกจมาตรฐาน ต้นทุนผลิตต่ำ ได้กำไรแน่นอนทุกนัด',
     crewCost: 1,
     gearCost: 1,
-    rightsCost: 1,
-    totalCost: 3,
+    rightsCost: 0,
+    totalCost: 2,
     viewerMult: 1.0,
-    revBase: 2.6,
-    revPer1k: 1.3,
+    revBase: 4.2,
+    revPer1k: 1.35,
     fanGainBonus: 25
   },
   {
     id: 'pro',
-    name: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ HD',
-    short: 'ลิขสิทธิ์ HD',
-    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ความคมชัดสูงให้ผู้ให้บริการรายใหญ่ ยอดผู้ชมและรายได้สูงขึ้น',
-    crewCost: 4,
-    gearCost: 3,
-    rightsCost: 3,
-    totalCost: 10,
+    name: 'ขายลิขสิทธิ์ BallThai HD+ Network',
+    short: 'BallThai HD+',
+    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดความคมชัดสูงให้เครือข่าย HD+ ขยายผู้ชมและฐานแฟนบอลรวดเร็ว',
+    crewCost: 2,
+    gearCost: 2,
+    rightsCost: 2,
+    totalCost: 6,
     viewerMult: 1.85,
-    revBase: 4.5,
-    revPer1k: 1.65,
+    revBase: 7.8,
+    revPer1k: 1.7,
     fanGainBonus: 70
   },
   {
     id: 'studio',
-    name: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์หลัก (Exclusive)',
-    short: 'ลิขสิทธิ์พรีเมียม',
-    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์คู่เอกให้เครือข่ายแพลตฟอร์มระดับประเทศ ค่าลิขสิทธิ์และยอดผู้ชมสูงสุด',
-    crewCost: 8,
-    gearCost: 7,
-    rightsCost: 7,
-    totalCost: 22,
+    name: 'ขายลิขสิทธิ์ PrimeBall Exclusive (MAX)',
+    short: 'PrimeBall MAX',
+    desc: 'ขายลิขสิทธิ์คู่เอกระดับพรีเมียม ทีมถ่ายทำครบชุด ยอดผู้ชมและค่าลิขสิทธิ์สูงสุดในลีกใหญ่',
+    crewCost: 5,
+    gearCost: 4,
+    rightsCost: 4,
+    totalCost: 13,
     viewerMult: 3.0,
-    revBase: 7.5,
-    revPer1k: 1.95,
+    revBase: 12.0,
+    revPer1k: 2.05,
     fanGainBonus: 160
   }
 ];
@@ -2675,32 +2675,53 @@ export function applyLiveStreamMatchSettlement(
   return { streamIn, streamOut, viewers, peakViewers };
 }
 
-export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
+export function calcHomeTicketRevenue(
+  s: Pick<GameState, 'st' | 'fan' | 'promo' | 'ticketPlan' | 'tp' | 'facCond' | 'club' | 'boardEffects'>,
+  me: Team,
+  opts?: { scale?: number; ignorePromo?: boolean }
+): number {
   const stLv = clamp(s.st ?? 1, 1, MAX_FACILITY_LV);
-  const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
-  const stCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'st') / 100);
-  const cap = getTeamStadiumCapacity(me, s);
+  const stCondMul = 0.85 + 0.15 * (getFacilityCondition(s as GameState, 'st') / 100);
   const stStyleSpec = getStadiumStyleSpec(s.club?.stadiumStyle);
   const tPlan = resolveTicketPlan(s);
-  const bMods = getActiveBoardModifiers(s);
+  const bMods = getActiveBoardModifiers(s as GameState);
   const fanVal = clamp((s.fan ?? 55) + bMods.fan, 5, 100);
   const myFans = ensureTeamFans(me);
   const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
+  const promoMult = !opts?.ignorePromo && s.promo === 1 ? 1.35 : 1;
+  const scale = opts?.scale ?? 1;
+  return Math.round(
+    (8 + stLv * 6) * (fanVal / 60) * fanScale * tPlan.revMult * promoMult * stCondMul * stStyleSpec.vipTicketMult * scale
+  );
+}
+
+export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
+  const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
+  const cap = getTeamStadiumCapacity(me, s);
+  const tPlan = resolveTicketPlan(s);
   const nxtRound = s.fx?.[s.md];
   const nxtPair = nxtRound?.find(([x, y]) => x === s.me || y === s.me);
+  const isNextHome = !nxtPair || nxtPair[0] === s.me;
   const oppId = nxtPair ? (nxtPair[0] === s.me ? nxtPair[1] : nxtPair[0]) : s.me;
   const oppTeam = s.teams[oppId] || me;
-  const attEst = computeMatchAttendance(me, oppTeam || me, s, { kind: 'league', derby: !!s.derby });
+  const isNextDerby =
+    oppTeam.id !== me.id &&
+    ((me.id ^ 1) === oppTeam.id || !!s.derby);
+  const attEst = computeMatchAttendance(me, oppTeam || me, s, { kind: 'league', derby: isNextDerby });
   const estAtt = attEst.att;
   const attRate = attEst.pct / 100;
-  const ticketPriceMult = tPlan.revMult;
-  const estTicket = Math.round((8 + stLv * 6) * (fanVal / 60) * fanScale * ticketPriceMult * (s.promo === 1 ? 1.35 : 1) * stCondMul * stStyleSpec.vipTicketMult);
+  const estTicket = calcHomeTicketRevenue(s, me);
   const estMerch = merchLv <= 0 ? 0 : getMegastoreProjection(s, me).estMatchSales;
   const mainSp = calcMainSponsorPayout(s, me);
   const estSponsor = mainSp.total;
   const activeDeals = getActivePartnerDeals(s);
   const dealIncome = activeDeals.reduce((sum, d) => sum + d.perMatch, 0);
-  const streamProj = computeMatchStreamProjection(me, oppTeam || me, s, { kind: 'league', derby: !!s.derby });
+  const streamHome = isNextHome ? me : oppTeam;
+  const streamAway = isNextHome ? oppTeam : me;
+  const streamProj = computeMatchStreamProjection(streamHome, streamAway, s, {
+    kind: 'league',
+    derby: isNextDerby
+  });
   const estStreamIn = streamProj.estIn;
   const estStreamOut = streamProj.estOut;
   const wageCost = squadWage(me);

@@ -13,7 +13,7 @@ import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
@@ -577,6 +577,13 @@ export default function App() {
         applyMatchCards(d, H, A, payload.cards);
         applyPositionAdaptation(d, H, A, resObj);
         if (d.mode === 'm') {
+          if (homeId === d.me) {
+            const cupTicket = calcHomeTicketRevenue(d, me, { ignorePromo: true });
+            if (cupTicket > 0) {
+              d.money += cupTicket;
+              logFin(d, `ค่าตั๋วเข้าชมเกมเหย้าบอลถ้วย (${resolveTicketPlan(d).label})`, cupTicket);
+            }
+          }
           applyLiveStreamMatchSettlement(d, me, opp, {
             kind: 'cup',
             isHome: homeId === d.me,
@@ -683,6 +690,13 @@ export default function App() {
         applyMatchCards(d, H, A, payload.cards);
         applyPositionAdaptation(d, H, A, resObj);
         if (d.mode === 'm') {
+          if (homeId === d.me && kind !== 'sc') {
+            const cupTicket = calcHomeTicketRevenue(d, me, { ignorePromo: true });
+            if (cupTicket > 0) {
+              d.money += cupTicket;
+              logFin(d, `ค่าตั๋วเข้าชมเกมเหย้า${meta.short} (${resolveTicketPlan(d).label})`, cupTicket);
+            }
+          }
           applyLiveStreamMatchSettlement(d, me, opp, {
             kind,
             isHome: homeId === d.me,
@@ -778,6 +792,13 @@ export default function App() {
         applyMatchCards(d, H, A, payload.cards);
         applyPositionAdaptation(d, H, A, resObj);
         if (d.mode === 'm') {
+          if (homeId === d.me) {
+            const cupTicket = calcHomeTicketRevenue(d, me, { ignorePromo: true });
+            if (cupTicket > 0) {
+              d.money += cupTicket;
+              logFin(d, `ค่าตั๋วเข้าชมเกมเหย้าถ้วยทวีป (${resolveTicketPlan(d).label})`, cupTicket);
+            }
+          }
           applyLiveStreamMatchSettlement(d, me, opp, {
             kind: 'asia',
             isHome: homeId === d.me,
@@ -877,14 +898,8 @@ export default function App() {
         const isHomeMatch = homeId === d.me;
         const tPlan = resolveTicketPlan(d);
         const fanEff = clamp((d.fan ?? 55) + getActiveBoardModifiers(d).fan, 5, 100);
-        const myFans = ensureTeamFans(me);
-        const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
-        const stCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'st') / 100);
         const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'merchLv') / 100);
-        const stStyleSpec = getStadiumStyleSpec(d.club?.stadiumStyle);
-        const ticket = isHomeMatch
-          ? Math.round((8 + clamp(d.st ?? 1, 1, 10) * 6) * (fanEff / 60) * fanScale * tPlan.revMult * (d.promo === 1 ? 1.35 : 1) * stCondMul * stStyleSpec.vipTicketMult)
-          : 0;
+        const ticket = isHomeMatch ? calcHomeTicketRevenue(d, me) : 0;
         const merchLv = clamp(d.merchLv ?? 1, 0, 10);
         const partnerMerchBoost = getActivePartnerDeals(d).reduce((sum, x) => sum + (x.merchBoost || 0), 0);
         const attPct = isHomeMatch && payload.cap ? Math.round(((payload.att || 0) / Math.max(1, payload.cap)) * 100) : 0;
