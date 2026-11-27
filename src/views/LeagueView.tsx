@@ -5,7 +5,6 @@ import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/th
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum, clamp } from '../utils/math';
 import { xi, vlu, ensureCon, logFin } from '../engine/playerCore';
-import { ovColor } from '../engine/missions';
 import {
   sortTable,
   getTransferWindowInfo,
@@ -13,8 +12,6 @@ import {
   getIncomingOffers,
   getActiveBoardEffects,
   getBoardDirectiveProgress,
-  ensureTeamFans,
-  fmtFansShort,
   EXTRA_CUP_META,
   getLeaguePrizeMoney,
   MAIN_SPONSOR_PACKAGES,
@@ -39,6 +36,7 @@ import { MyTeamBadge } from '../components/MyTeamBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { WdlFormStrip, WdlRecordBadges, getWdlDotClass, type WdlKind } from '../components/WdlBadge';
 import { CupView } from './CupView';
+import { RankingHubView } from '../components/RankingHubView';
 
 export const LeagueView = React.memo<{
   state: GameState;
@@ -57,7 +55,6 @@ export const LeagueView = React.memo<{
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
   const sub = rawSub === 5 ? 2 : rawSub;
-  const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'req' | 'feed'>('all');
   const [prizeModalTier, setPrizeModalTier] = useState<number | null>(null);
   const [cupInitialStats, setCupInitialStats] = useState(false);
@@ -68,14 +65,6 @@ export const LeagueView = React.memo<{
     return idx >= 0 ? idx + 1 : null;
   }, [tb, state.me]);
   const ms = useMemo(() => teamStats(me, state), [me, state]);
-
-  const leagueRows = useMemo(() => {
-    if (sub !== 1) return [];
-    return state.teams
-      .filter((t) => t.tier === vt)
-      .map((t) => ({ t, st: teamStats(t, state) }))
-      .sort((a, b) => b.st[cmpSort] - a.st[cmpSort] || b.st.ovXi - a.st.ovXi);
-  }, [sub, state, vt, cmpSort]);
 
   const nextMatchResolved = useMemo(() => {
     type NextKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
@@ -1039,70 +1028,6 @@ export const LeagueView = React.memo<{
     </div>
   );
 
-  const renderPowerComparison = () => {
-    const minV = Math.min(...leagueRows.map((x) => x.st[cmpSort])) - 4;
-    const maxV = Math.max(...leagueRows.map((x) => x.st[cmpSort]), minV + 8);
-    const sortLabels: Record<'ovSq' | 'ovXi' | 'at' | 'df', string> = { ovSq: 'เฉลี่ยทีม', ovXi: '11 ตัวจริง', at: 'พลังบุก', df: 'พลังรับ' };
-    return (
-      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2 mland:mb-1.5 shrink-0">
-          <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📊 เทียบพลังทีม · {TN[vt]}</h3>
-          <div className="seg-bar shrink-0">
-            {(['ovSq', 'ovXi', 'at', 'df'] as const).map((k) => (
-              <button key={k} type="button" onClick={() => setCmpSort(k)} className={`seg-btn ${cmpSort === k ? 'seg-btn-active' : ''}`}>
-                {sortLabels[k]}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-2 gap-1.5 pr-0.5 content-start">
-          {leagueRows.map(({ t, st }, idx) => {
-            const val = st[cmpSort];
-            const pct = Math.max(8, Math.min(100, Math.round(((val - minV) / (maxV - minV)) * 100)));
-            const isMe = t.id === state.me;
-            const df = val - ms[cmpSort];
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => onInspectTeam(t.id)}
-                className={`w-full grid grid-cols-[22px_22px_minmax(0,1fr)_auto] sm:grid-cols-[24px_24px_minmax(0,1fr)_90px_auto] mland:grid-cols-[20px_20px_minmax(0,1fr)_auto] items-center gap-2 mland:gap-1.5 p-2 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-colors ${
-                  isMe ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/55 border-[var(--line)] hover:border-[var(--g)]'
-                }`}
-              >
-                <span className="text-xs mland:text-[10px] font-bold text-center text-[var(--mut)] tabular">{idx + 1}</span>
-                <ClubCrest name={t.name} size={20} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
-                <div className="min-w-0">
-                  <div className="font-bold text-xs mland:text-[10.5px] whitespace-normal break-words leading-tight flex items-center gap-1 flex-wrap">
-                    <span>{t.name}</span>
-                    {isMe && <MyTeamBadge size="xs" />}
-                  </div>
-                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">ตัวจริง {st.ovXi} · หน้า {st.f} กลาง {st.m} หลัง {st.d} · 👥 {fmtFansShort(ensureTeamFans(t))}</div>
-                </div>
-                <div className="hidden sm:block mland:hidden">
-                  <div className="flex justify-between text-[10.5px] font-bold mb-0.5">
-                    <span className="text-[var(--mut)]">{sortLabels[cmpSort]}</span>
-                    <span className="tabular">{val}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: ovColor(st.ovXi) }} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <OvrBadge ov={st.ovSq} size="xs" />
-                  {!isMe && (
-                    <span className={`text-[10.5px] mland:text-[9.5px] font-bold tabular ${df > 0 ? 'text-[var(--red)]' : df < 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                      {df > 0 ? `+${df}` : df}
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
 
   const renderStatsAndAwards = () => {
     const ts = state.teams.filter((t) => t.tier === vt);
@@ -1574,7 +1499,7 @@ export const LeagueView = React.memo<{
               [4, '🏅', 'บอลถ้วย'],
               [2, '⭐', 'สถิติ & รางวัล'],
               [3, '📅', 'ปฏิทิน'],
-              [1, '📊', 'พลังทีม']
+              [1, '📊', 'จัดอันดับ']
             ] as const
           ).map(([tabIdx, ic, fullLbl]) => (
             <button
@@ -1652,7 +1577,7 @@ export const LeagueView = React.memo<{
               </button>
             )}
           </div>
-        ) : sub === 1 || sub === 2 ? (
+        ) : sub === 2 ? (
           <div className="order-1 w-auto seg-bar bg-[var(--surface)] shadow-xs shrink-0">
             {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => {
               const isMyTier = idx === me.tier;
@@ -1681,13 +1606,19 @@ export const LeagueView = React.memo<{
           </div>
         ) : (
           <div className="order-1 flex items-center gap-1.5 px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold text-[var(--ink)] shadow-xs shrink-0">
-            <span>{sub === 4 ? '🏅' : '📅'}</span>
-            <span>{sub === 4 ? 'รายการแข่งขันบอลถ้วย' : 'โปรแกรมการแข่งขัน'}</span>
+            <span>{sub === 4 ? '🏅' : sub === 1 ? '📊' : '📅'}</span>
+            <span>
+              {sub === 4
+                ? 'รายการแข่งขันบอลถ้วย'
+                : sub === 1
+                  ? `อันดับสโมสร & นักเตะ · ซีซั่น ${state.season}`
+                  : 'โปรแกรมการแข่งขัน'}
+            </span>
           </div>
         )}
       </div>
       {sub === 0 && renderStandings()}
-      {sub === 1 && renderPowerComparison()}
+      {sub === 1 && <RankingHubView state={state} onInspectTeam={onInspectTeam} onInspectPlayer={onInspectPlayer} />}
       {sub === 2 && renderStatsAndAwards()}
       {sub === 3 && (
         <ScheduleCalendarView
