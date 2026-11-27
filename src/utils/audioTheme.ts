@@ -844,6 +844,10 @@ export function refreshAudioSettings() {
   }
 }
 
+export function isCrowdAudioActive(): boolean {
+  return crowdActive;
+}
+
 export function setCrowdAudio(on: boolean) {
   crowdActive = on;
   try {

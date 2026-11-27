@@ -6065,7 +6065,7 @@ export function getClubFinanceChartData(
     const isHome = pair ? pair[0] === s.me : i % 2 === 1;
     const mInc = Math.round(isHome ? est.homeIn : est.awayIn);
     const mExp = Math.round(est.totalOut);
-    simBal += mInc - mExp;
+    simBal = capMoney(simBal + mInc - mExp);
     actualPts.push({
       label: `คาด น.${curMd + i}`,
       md: curMd + i,

@@ -16,9 +16,13 @@ import { ClubCrest } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { MatchPlayerThumb } from './MatchSharedComponents';
 import { getShirtNo } from '../engine/playerCore';
-import { getHighlightKindBadge } from '../engine/matchHighlights';
-import { drawHighlightClipToCanvas, type HighlightCameraMode } from './MatchPitchCanvas';
-import { SFX } from '../utils/audioTheme';
+import { getHighlightKindBadge, HL_ACT } from '../engine/matchHighlights';
+import {
+  drawHighlightClipToCanvas,
+  resolveHighlightGoalImpactT,
+  type HighlightCameraMode
+} from './MatchPitchCanvas';
+import { isCrowdAudioActive, setCrowdAudio, SFX, unlockAudio } from '../utils/audioTheme';
 
 interface MatchHighlightModalProps {
   clips: MatchHighlightClip[];
@@ -83,6 +87,8 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
   const endedRef = useRef<boolean>(false);
   const scrubbingRef = useRef<boolean>(false);
   const pendingNextTimerRef = useRef<number | null>(null);
+  const firedCueIdxRef = useRef<Set<number>>(new Set());
+  const prevCrowdActiveRef = useRef<boolean>(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -134,6 +140,220 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
     }
   };
 
+  const audioCues = useMemo(() => {
+    if (!activeClip) return [] as { t: number; play: () => void }[];
+    const cues: { t: number; play: () => void }[] = [];
+    const frames = activeClip.frames || [];
+    const clamp01 = (v: number) => Math.min(0.98, Math.max(0.01, v));
+
+    const meActor = activeClip.actors.find((a) => a.me);
+    const userSide: 'H' | 'A' | null =
+      meActor?.s ??
+      (homeOrig.id === state.me ? 'H' : awayOrig.id === state.me ? 'A' : null);
+    const isPositiveClip = userSide ? activeClip.side === userSide : true;
+    const isGoalClip = activeClip.kind.startsWith('goal_');
+    const isNetShot =
+      isGoalClip ||
+      (activeClip.kind === 'shootout_kick' && activeClip.shootoutScored !== false);
+    const impactT = clamp01(isNetShot ? resolveHighlightGoalImpactT(activeClip) : activeClip.peakT);
+    const firstShotFrame = frames.find((f) => f.shot === 1);
+    const firstShotT = firstShotFrame ? clamp01(firstShotFrame.t) : null;
+    const shotCueT = firstShotT ?? clamp01(Math.min(impactT - 0.03, Math.max(0.04, impactT - 0.12)));
+
+    // 1. Pre-shot buildup cues (passes, long kicks, headers, tackles, slips, whiffs) from sampled frames
+    const buildupCutoff = Math.max(0.04, shotCueT - 0.025);
+    let lastBuildupSfxT = -1;
+    let prevSlideActive = false;
+    let prevTackleActive = false;
+    let prevSlipActive = false;
+    let prevWhiffActive = false;
+
+    for (let i = 1; i < frames.length; i++) {
+      const f0 = frames[i - 1];
+      const f1 = frames[i];
+      if (f1.t >= buildupCutoff) break;
+      if (f1.t - lastBuildupSfxT < 0.055) continue;
+
+      const hasSlide = f1.p.some((row) => row[4] === HL_ACT.SLIDE);
+      const hasTackle = f1.p.some((row) => row[4] === HL_ACT.TACKLE || row[4] === HL_ACT.CLASH);
+      const hasSlip = f1.p.some((row) => row[4] === HL_ACT.SLIP);
+      const hasWhiff = f1.p.some((row) => row[4] === HL_ACT.WHIFF);
+
+      if (hasSlide && !prevSlideActive) {
+        cues.push({ t: f1.t, play: () => SFX.tackle(true) });
+        lastBuildupSfxT = f1.t;
+      } else if (hasTackle && !prevTackleActive) {
+        cues.push({ t: f1.t, play: () => SFX.tackle(false) });
+        lastBuildupSfxT = f1.t;
+      } else if (hasSlip && !prevSlipActive) {
+        cues.push({ t: f1.t, play: () => SFX.slip() });
+        lastBuildupSfxT = f1.t;
+      } else if (hasWhiff && !prevWhiffActive) {
+        cues.push({ t: f1.t, play: () => SFX.whiff() });
+        lastBuildupSfxT = f1.t;
+      } else if (f0.car !== undefined && f1.car === undefined && !f1.shot) {
+        const passerRow = f0.p.find((row) => row[0] === f0.car);
+        const passerAct = passerRow?.[4] || 0;
+        const nextMaxZ = Math.max(f1.bz, frames[i + 1]?.bz ?? 0, frames[i + 2]?.bz ?? 0);
+        if (passerAct === HL_ACT.HEADER || passerAct === HL_ACT.DIVING_HEADER) {
+          cues.push({ t: f1.t, play: () => SFX.header() });
+        } else if (nextMaxZ > 3.2) {
+          cues.push({ t: f1.t, play: () => SFX.kick() });
+        } else {
+          cues.push({ t: f1.t, play: () => SFX.pass() });
+        }
+        lastBuildupSfxT = f1.t;
+      }
+
+      prevSlideActive = hasSlide;
+      prevTackleActive = hasTackle;
+      prevSlipActive = hasSlip;
+      prevWhiffActive = hasWhiff;
+    }
+
+    // 2. Set-piece / Shot / Climax / Post-climax real-match SFX
+    if (
+      activeClip.kind === 'goal_freekick' ||
+      activeClip.kind === 'goal_penalty' ||
+      activeClip.kind === 'penalty_miss' ||
+      activeClip.kind === 'shootout_kick'
+    ) {
+      cues.push({ t: clamp01(Math.max(0.02, shotCueT - 0.14)), play: () => SFX.foul() });
+    }
+
+    const hasHeaderShot =
+      activeClip.kind === 'goal_header' ||
+      frames.some(
+        (f) =>
+          Math.abs(f.t - shotCueT) <= 0.08 &&
+          f.p.some((row) => row[4] === HL_ACT.HEADER || row[4] === HL_ACT.DIVING_HEADER)
+      );
+
+    if (
+      isGoalClip ||
+      activeClip.kind === 'super_save' ||
+      activeClip.kind === 'woodwork' ||
+      activeClip.kind === 'penalty_miss' ||
+      activeClip.kind === 'shootout_kick' ||
+      (activeClip.kind === 'var_overturn' && (!activeClip.varVerdict || activeClip.varVerdict === 'no_goal'))
+    ) {
+      cues.push({
+        t: shotCueT,
+        play: () => {
+          if (hasHeaderShot) {
+            SFX.header();
+            SFX.cheer(0.38);
+          } else {
+            SFX.shot();
+          }
+        }
+      });
+    }
+
+    if (activeClip.kind === 'goal_woodwork_in') {
+      cues.push({
+        t: clamp01(Math.max(shotCueT + 0.03, Math.min(impactT - 0.03, (shotCueT + impactT) * 0.54))),
+        play: () => SFX.woodwork()
+      });
+    } else if (activeClip.kind === 'goal_deflect') {
+      cues.push({
+        t: clamp01(Math.max(shotCueT + 0.03, Math.min(impactT - 0.03, (shotCueT + impactT) * 0.5))),
+        play: () => SFX.block()
+      });
+    }
+
+    if (isGoalClip) {
+      cues.push({
+        t: impactT,
+        play: () => SFX.goal(activeClip.kind === 'goal_og' ? false : isPositiveClip)
+      });
+      if (activeClip.kind !== 'goal_og' && isPositiveClip && impactT + 0.15 < 0.96) {
+        cues.push({
+          t: clamp01(impactT + 0.15),
+          play: () => SFX.cheer(0.88)
+        });
+      }
+    } else if (activeClip.kind === 'super_save') {
+      cues.push({ t: impactT, play: () => SFX.save(1.05) });
+    } else if (activeClip.kind === 'woodwork') {
+      cues.push({ t: impactT, play: () => SFX.woodwork() });
+    } else if (activeClip.kind === 'penalty_miss') {
+      cues.push({ t: impactT, play: () => SFX.boo(0.75) });
+    } else if (activeClip.kind === 'red_card') {
+      cues.push({
+        t: clamp01(Math.max(0.04, impactT - 0.14)),
+        play: () => SFX.tackle(true)
+      });
+      cues.push({
+        t: impactT,
+        play: () => {
+          SFX.card();
+          SFX.boo(0.9);
+        }
+      });
+    } else if (activeClip.kind === 'injury') {
+      cues.push({
+        t: clamp01(Math.max(0.04, impactT - 0.12)),
+        play: () => SFX.tackle(true)
+      });
+      cues.push({
+        t: impactT,
+        play: () => {
+          SFX.foul();
+          SFX.boo(0.62);
+        }
+      });
+    } else if (activeClip.kind === 'var_overturn') {
+      cues.push({
+        t: clamp01(Math.max(0.06, impactT - 0.18)),
+        play: () => SFX.var()
+      });
+      cues.push({
+        t: impactT,
+        play: () => {
+          SFX.foul();
+          if (activeClip.varVerdict === 'pen') SFX.cheer(0.72);
+          else SFX.boo(0.82);
+        }
+      });
+    } else if (activeClip.kind === 'shootout_kick') {
+      cues.push({
+        t: impactT,
+        play: () => {
+          if (activeClip.shootoutScored !== false) {
+            SFX.goal(isPositiveClip);
+          } else if (activeClip.shootoutOutcome === 'save') {
+            SFX.save(1.05);
+          } else if (activeClip.shootoutOutcome === 'woodwork') {
+            SFX.woodwork();
+          } else {
+            SFX.boo(0.78);
+          }
+        }
+      });
+    }
+
+    return cues.sort((a, b) => a.t - b.t);
+  }, [activeClip, state.me, homeOrig.id, awayOrig.id]);
+
+  // Ambient stadium crowd audio synced with highlight playback (restores previous state on close)
+  useEffect(() => {
+    prevCrowdActiveRef.current = isCrowdAudioActive();
+    unlockAudio();
+    return () => {
+      setCrowdAudio(prevCrowdActiveRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (playing) {
+      unlockAudio();
+      setCrowdAudio(true);
+    } else {
+      setCrowdAudio(false);
+    }
+  }, [playing]);
+
   useEffect(() => {
     if (pendingNextTimerRef.current !== null) {
       window.clearTimeout(pendingNextTimerRef.current);
@@ -143,6 +363,7 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
     slowMoRef.current = false;
     showSlateRef.current = true;
     endedRef.current = false;
+    firedCueIdxRef.current.clear();
     setShowStartSlate(true);
     setIsEnded(false);
     setPlaying(true);
@@ -197,6 +418,15 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
 
       syncDomAndState.current(next, nearClimax);
 
+      for (let ci = 0; ci < audioCues.length; ci++) {
+        if (firedCueIdxRef.current.has(ci)) continue;
+        const cue = audioCues[ci];
+        if ((prev === 0 && cue.t <= next) || (cue.t > prev && cue.t <= next)) {
+          firedCueIdxRef.current.add(ci);
+          cue.play();
+        }
+      }
+
       if (next >= 1) {
         if (autoAdvance && orderedClips.length > 1 && activeIdx < orderedClips.length - 1) {
           const nextClip = orderedClips[activeIdx + 1];
@@ -221,7 +451,7 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
         pendingNextTimerRef.current = null;
       }
     };
-  }, [playing, speed, slowMoFocus, autoAdvance, activeClip, activeIdx, orderedClips]);
+  }, [playing, speed, slowMoFocus, autoAdvance, activeClip, activeIdx, orderedClips, audioCues]);
 
   if (!activeClip) return null;
 
@@ -275,16 +505,22 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
 
   const seekToRatio = (ratio: number) => {
     const r = Math.min(1, Math.max(0, ratio));
+    firedCueIdxRef.current.clear();
+    audioCues.forEach((cue, idx) => {
+      if (cue.t < r) firedCueIdxRef.current.add(idx);
+    });
     const isSlow = Boolean(slowMoFocus && playing && Math.abs(r - activeClip.peakT) <= 0.12);
     slowMoRef.current = isSlow;
     syncDomAndState.current(r, isSlow);
   };
 
   const handleTogglePlay = () => {
+    unlockAudio();
     SFX.tap();
     if (pctRef.current >= 0.995) {
       pctRef.current = 0;
       endedRef.current = false;
+      firedCueIdxRef.current.clear();
       setIsEnded(false);
       syncDomAndState.current(0, false);
       setPlaying(true);
@@ -294,10 +530,12 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
   };
 
   const handleSelectClip = (clipId: string) => {
+    unlockAudio();
     SFX.tap();
     if (clipId === activeClip.id) {
       pctRef.current = 0;
       endedRef.current = false;
+      firedCueIdxRef.current.clear();
       setIsEnded(false);
       syncDomAndState.current(0, false);
       setPlaying(true);

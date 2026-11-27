@@ -6627,7 +6627,7 @@ const sampleHighlightFrameAt = (frames: MatchHighlightFrame[], t: number) => {
   return { bx, by, bz, shot, style, ripL, ripR, car };
 };
 
-const resolveHighlightGoalImpactT = (clip: MatchHighlightClip): number => {
+export const resolveHighlightGoalImpactT = (clip: MatchHighlightClip): number => {
   const frames = clip.frames;
   if (!clip.kind.startsWith('goal_') || frames.length < 2) return clip.peakT;
 
