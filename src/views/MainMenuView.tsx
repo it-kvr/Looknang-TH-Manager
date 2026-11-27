@@ -5,7 +5,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, Pla
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, SPW, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
@@ -1254,7 +1254,7 @@ export const MainMenu: React.FC<{
       const nextGallery = Array.from({ length: 6 }, rollFaceTraits);
       setFaceChoices(nextGallery);
       applyFaceTraits(nextGallery[0]);
-      const rSp = P(SPX[cPos]);
+      const rSp = SPW(cPos);
       const rArch = P(posArchs);
       const nextTalent = R(62, 95);
       setCSp(rSp);

@@ -178,7 +178,6 @@ export const FinanceClubView: React.FC<{
     ticketPlan: string;
     tp: number;
     liveStream: LiveStreamPlanId;
-    stockTier: number;
   } | null>(null);
   const [crestStudioTab, setCrestStudioTab] = useState<'shape' | 'icon'>('shape');
   const [identityMobilePane, setIdentityMobilePane] = useState<'crest' | 'kit'>('crest');
@@ -237,14 +236,12 @@ export const FinanceClubView: React.FC<{
     if (tab === 'f') {
       const tpResolved = resolveTicketPlan(state);
       const streamResolved = resolveLiveStreamPlan(state);
-      const msSnap = state.megastore || ensureMegastoreState({ ...state });
       setFinanceDraft({
         winBonus: state.winBonus || 0,
         sp: state.sp ?? 0,
         ticketPlan: tpResolved.id,
         tp: tpResolved.legacyIdx,
-        liveStream: streamResolved.id,
-        stockTier: msSnap.stockTier ?? 1
+        liveStream: streamResolved.id
       });
     } else {
       setFinanceDraft(null);
@@ -267,8 +264,7 @@ export const FinanceClubView: React.FC<{
     sp: state.sp ?? 0,
     ticketPlan: committedTicketPlan.id,
     tp: committedTicketPlan.legacyIdx,
-    liveStream: committedStreamPlan.id,
-    stockTier: megastoreSnap.stockTier ?? 1
+    liveStream: committedStreamPlan.id
   };
   const activeFinanceValues = tab === 'f' && financeDraft ? financeDraft : committedFinance;
   const changedFinItems = {
@@ -277,8 +273,7 @@ export const FinanceClubView: React.FC<{
     ticket:
       activeFinanceValues.ticketPlan !== committedFinance.ticketPlan ||
       activeFinanceValues.tp !== committedFinance.tp,
-    liveStream: activeFinanceValues.liveStream !== committedFinance.liveStream,
-    stockTier: activeFinanceValues.stockTier !== committedFinance.stockTier
+    liveStream: activeFinanceValues.liveStream !== committedFinance.liveStream
   };
   const changedFinCount = Object.values(changedFinItems).filter(Boolean).length;
   const hasFinanceChanges = tab === 'f' && changedFinCount > 0;
@@ -291,13 +286,9 @@ export const FinanceClubView: React.FC<{
       sp: financeDraft.sp,
       ticketPlan: financeDraft.ticketPlan,
       tp: financeDraft.tp,
-      liveStream: financeDraft.liveStream,
-      megastore: {
-        ...megastoreSnap,
-        stockTier: financeDraft.stockTier
-      }
+      liveStream: financeDraft.liveStream
     };
-  }, [tab, financeDraft, state, megastoreSnap]);
+  }, [tab, financeDraft, state]);
 
   const est = calcMatchdayFinanceEstimate(finPreviewState, me);
   const megastoreProj = useMemo(() => getMegastoreProjection(finPreviewState, me), [finPreviewState, me]);
@@ -571,7 +562,6 @@ export const FinanceClubView: React.FC<{
         ticketPlan: string;
         tp: number;
         liveStream: LiveStreamPlanId;
-        stockTier: number;
       }) => void
     ) => {
       SFX.tap();
@@ -592,7 +582,6 @@ export const FinanceClubView: React.FC<{
         d.ticketPlan = financeDraft.ticketPlan;
         d.tp = financeDraft.tp;
         d.liveStream = financeDraft.liveStream;
-        ensureMegastoreState(d).stockTier = financeDraft.stockTier;
         doneDemands = checkClubDemandsCompletion(d);
       });
       onToast(
@@ -1855,11 +1844,15 @@ export const FinanceClubView: React.FC<{
           </div>
         )}
 
-        {/* Sub-tab 3: Club Megastore Working Capital, Stock Tiers, Souvenirs & Jersey Rankings */}
+        {/* Sub-tab 3: Club Megastore Working Capital, Store Operations, Official Kit Showcase & Rankings */}
         {finTab === 'megastore' && (() => {
           const merchLv = clamp(state.merchLv ?? 1, 0, MAX_FACILITY_LV);
           const merchCond = getFacilityCondition(state, 'merchLv');
+          const merchBaseCost = 75;
+          const upgCost = getFacilityUpgradeCost(merchBaseCost, merchLv);
+          const renCost = getFacilityRenovateCost(merchBaseCost, merchLv, merchCond);
           const curTierDef = megastoreProj.tierDef;
+          const activeTierIdx = clamp(megastoreSnap.stockTier ?? 1, 0, 2);
 
           const computeSouvenirRows = (period: 'season' | 'alltime'): {
             id: string;
@@ -1927,6 +1920,29 @@ export const FinanceClubView: React.FC<{
           const maxSouvRev = Math.max(0.1, ...activeSouvRows.map((x) => x.revenue));
           const maxJerseyUnits = Math.max(1, ...activePrintedRows.map((x) => x.units));
 
+          const activeFeaturedName = megastoreProj.activeFeaturedPlayer;
+          const featuredSquadPl = activeFeaturedName ? me.sq.find((p) => p.n === activeFeaturedName) || null : null;
+          const spotlightPl = featuredSquadPl || topSellerPlayer || me.sq.slice().sort((a, b) => b.ov - a.ov)[0] || null;
+          const spotlightNo = featuredSquadPl
+            ? getShirtNo(me, featuredSquadPl)
+            : topSeller
+              ? topSeller.no
+              : spotlightPl
+                ? getShirtNo(me, spotlightPl)
+                : 10;
+          const spotlightIsGK = featuredSquadPl
+            ? featuredSquadPl.pos === 'GK'
+            : topSeller
+              ? topSeller.pos === 'GK'
+              : spotlightPl?.pos === 'GK';
+          const spotlightLabel = featuredSquadPl
+            ? `#${spotlightNo} ${featuredSquadPl.n.split(' ')[0]} · พรีเซ็นเตอร์`
+            : topSeller
+              ? `#${topSeller.no} ${topSeller.name.split(' ')[0]} · ขายดีสุด`
+              : spotlightPl
+                ? `#${spotlightNo} ${spotlightPl.n.split(' ')[0]} · ดาวเด่นทีม`
+                : 'สกรีนชื่อ & เบอร์';
+
           const currentLiveArchive: MegastoreSeasonArchive = {
             season: state.season,
             capitalInvested: megastoreSnap.capitalInvestedSeason,
@@ -1952,7 +1968,9 @@ export const FinanceClubView: React.FC<{
             ...megastoreSnap.seasonHistory.filter((h) => h.season !== state.season)
           ].sort((a, b) => b.season - a.season);
 
-          const topUpCapital = (amt: number) => {
+          const topUpCapital = (rawAmt: number) => {
+            const amt = Math.round(rawAmt * 100) / 100;
+            if (amt <= 0) return;
             if (state.money < amt) {
               onToast(`งบสโมสรไม่พอ (ต้องการ ${fmtMoney(amt)})`);
               return;
@@ -1961,392 +1979,698 @@ export const FinanceClubView: React.FC<{
             let doneDemands: string[] = [];
             onUpdateState((d) => {
               const ms = ensureMegastoreState(d);
-              d.money -= amt;
+              d.money = +(d.money - amt).toFixed(2);
               ms.capital = +(ms.capital + amt).toFixed(2);
               ms.capitalInvestedSeason = +(ms.capitalInvestedSeason + amt).toFixed(2);
-              logFin(d, `เพิ่มเงินทุนหมุนเวียนเมกะสโตร์`, -amt);
+              logFin(d, `เพิ่มทุนหมุนเวียนเมกะสโตร์`, -amt);
               doneDemands = checkClubDemandsCompletion(d);
             });
             onToast(
               doneDemands.length
-                ? `เติมเงินทุนเมกะสโตร์ +${fmtMoney(amt)} และตอบรับคำเรียกร้องแล้ว!`
-                : `เติมเงินทุนหมุนเวียนเมกะสโตร์ +${fmtMoney(amt)} สำเร็จ!`
+                ? `เติมทุนเมกะสโตร์ +${fmtMoney(amt)} และตอบรับคำเรียกร้องแล้ว`
+                : `เติมทุนหมุนเวียนเมกะสโตร์ +${fmtMoney(amt)} สำเร็จ`
             );
           };
 
+          const withdrawCapital = (rawAmt: number) => {
+            const amt = Math.min(megastoreSnap.capital, Math.round(rawAmt * 100) / 100);
+            if (amt <= 0.1) return;
+            SFX.tap();
+            onUpdateState((d) => {
+              const ms = ensureMegastoreState(d);
+              const actual = Math.min(ms.capital, amt);
+              if (actual <= 0) return;
+              ms.capital = +(ms.capital - actual).toFixed(2);
+              d.money = +(d.money + actual).toFixed(2);
+              logFin(d, `โอนทุนเมกะสโตร์คืนงบสโมสร`, actual);
+            });
+            onToast(`โอนทุนคืนงบสโมสร +${fmtMoney(amt)} เรียบร้อย`);
+          };
+
+          const selectStockTier = (tierIdx: number) => {
+            if (activeTierIdx === tierIdx) return;
+            const nextTier = MEGASTORE_STOCK_TIERS[tierIdx];
+            if (!nextTier) return;
+            SFX.tap();
+            onUpdateState((d) => {
+              ensureMegastoreState(d).stockTier = tierIdx;
+            });
+            onToast(`เปลี่ยนเกรดสินค้าหน้าร้านเป็น "${nextTier.label}" แล้ว`);
+          };
+
+          const toggleAutoRestock = () => {
+            SFX.tap();
+            const nextVal = !megastoreSnap.autoRestock;
+            onUpdateState((d) => {
+              ensureMegastoreState(d).autoRestock = nextVal;
+            });
+            onToast(
+              nextVal
+                ? 'เปิดเติมสต็อกอัตโนมัติ (ดึงงบสโมสรเติมส่วนต่างวันแข่งเพื่อเลี่ยงค่าฝากขาย +15%)'
+                : 'ปิดระบบเติมสต็อกอัตโนมัติแล้ว'
+            );
+          };
+
+          const changeFeaturedPlayer = (playerName: string) => {
+            SFX.tap();
+            onUpdateState((d) => {
+              ensureMegastoreState(d).featuredPlayer = playerName || null;
+            });
+            onToast(
+              playerName
+                ? `ตั้ง ${playerName.split(' ')[0]} เป็นพรีเซ็นเตอร์หน้าร้าน (+32% ยอดเสื้อเจ้าตัว)`
+                : 'กลับไปใช้พรีเซ็นเตอร์อัตโนมัติตามผลงาน'
+            );
+          };
+
+          const topUpNeededToReserve = Math.max(0, Math.ceil(megastoreProj.recommendedReserve - megastoreSnap.capital));
+          const excessCapital = Math.max(
+            0,
+            Math.floor((megastoreSnap.capital - Math.max(12, Math.ceil(megastoreProj.estProdCost * 2))) * 10) / 10
+          );
+          const sortedSquadForPresenter = me.sq.slice().sort((a, b) => b.ov - a.ov);
+          const storeStatusText =
+            merchLv <= 0
+              ? 'ร้านยังไม่เปิดบริการ'
+              : megastoreProj.consignmentRisk
+                ? `ทุนไม่พอต้นทุนนัดหน้า (เสี่ยงค่าฝากขาย -${fmtMoney(megastoreProj.estConsignmentFee)})`
+                : megastoreSnap.autoRestock && megastoreSnap.capital < megastoreProj.estProdCost
+                  ? 'โหมดเติมอัตโนมัติพร้อมคุ้มครอง'
+                  : `ทุนพร้อมขาย ~${megastoreProj.runwayMatches} นัดเหย้า`;
+
           return (
             <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-              {/* Store Status & Physical Building Link Strip */}
+              {/* Storefront Architectural Header Bar */}
               <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="font-bold text-xs sm:text-sm truncate">
-                    🛍️ เมกะสโตร์สโมสร (Lv.{merchLv}/{MAX_FACILITY_LV})
-                  </span>
-                  <span className="text-[11px] text-[var(--mut)] tabular">
-                    สภาพอาคาร <b className={merchLv <= 0 || merchCond < 75 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>{merchLv <= 0 ? 'ถูกทำลาย' : `${merchCond}%`}</b>
-                    {' · '}ตัวคูณสโตร์จากตั๋ว/สปอนเซอร์ <b className="text-[var(--ink)] tabular">×{megastoreProj.extraMerchMult.toFixed(2)}</b>
-                  </span>
+                  <div className="shrink-0 hidden sm:block">
+                    <FacilityUpgradeSvg
+                      kind="merchLv"
+                      level={merchLv}
+                      condition={merchCond}
+                      c1={clubK.c1}
+                      c2={clubK.c2}
+                      className="w-11 h-9 mland:w-9 mland:h-7"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-bold text-xs sm:text-sm truncate">
+                        เมกะสโตร์สโมสร (Lv.{merchLv}/{MAX_FACILITY_LV})
+                      </span>
+                      <span className="text-[10.5px] text-[var(--mut)] hidden sm:inline truncate">
+                        · {getFacilityTierLabel(merchLv)}
+                      </span>
+                    </div>
+                    <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate">
+                      สภาพอาคาร{' '}
+                      <b className={merchLv <= 0 || merchCond < 75 ? 'text-[var(--red)]' : merchCond < 90 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}>
+                        {merchLv <= 0 ? 'ถูกทำลาย' : `${merchCond}%`}
+                      </b>
+                      {' · '}ตัวคูณสโตร์ <b className="text-[var(--ink)]">×{megastoreProj.extraMerchMult.toFixed(2)}</b>
+                      {' · '}พาร์ทเนอร์สูงสุด <b className="text-[var(--ink)]">{merchLv >= 5 ? 3 : 2} ช่อง</b>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    if (onNavigate) onNavigate('u', 'infra');
-                    else onToast('กรุณาไปที่แท็บ สโมสร → สิ่งอำนวยความสะดวก');
-                  }}
-                  className="btn btn-xs btn-secondary shrink-0 whitespace-nowrap"
-                >
-                  🏟️ {merchLv <= 0 ? 'สร้างร้านเมกะสโตร์ใหม่' : 'อัปเกรด / ซ่อมอาคารร้าน'}
-                </button>
+
+                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                  {merchLv <= 0 ? (
+                    <button
+                      type="button"
+                      disabled={state.money < upgCost}
+                      onClick={() => upgradeFac('merchLv', 'เมกะสโตร์ & แฟนโซน', merchBaseCost)}
+                      className="btn btn-xs btn-primary whitespace-nowrap"
+                    >
+                      สร้างร้าน Lv.1 ({fmtMoneyNum(upgCost)})
+                    </button>
+                  ) : (
+                    <>
+                      {merchCond < 95 && (
+                        <button
+                          type="button"
+                          disabled={state.money < renCost}
+                          onClick={() => renovateFac('merchLv', 'เมกะสโตร์ & แฟนโซน', merchBaseCost)}
+                          className="btn btn-xs btn-gold whitespace-nowrap"
+                        >
+                          ซ่อม 100% ({fmtMoneyNum(renCost)})
+                        </button>
+                      )}
+                      {merchLv < MAX_FACILITY_LV && (
+                        <button
+                          type="button"
+                          disabled={state.money < upgCost}
+                          onClick={() => upgradeFac('merchLv', 'เมกะสโตร์ & แฟนโซน', merchBaseCost)}
+                          className="btn btn-xs btn-primary whitespace-nowrap"
+                        >
+                          อัปเกรด Lv.{merchLv + 1} ({fmtMoneyNum(upgCost)})
+                        </button>
+                      )}
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      if (onNavigate) onNavigate('u', 'infra');
+                      else onToast('กรุณาเปิดแท็บ สโมสร → สิ่งอำนวยความสะดวก');
+                    }}
+                    className="btn btn-xs btn-secondary whitespace-nowrap"
+                  >
+                    สิ่งอำนวยความสะดวก
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
-                {/* Left Column: Working Capital, Stock Tiers & Souvenirs Breakdown */}
-                <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
-                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+              {merchLv <= 0 ? (
+                /* Closed / Demolished Storefront Empty State */
+                <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                  <section className="p-5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col items-center text-center space-y-3">
+                    <FacilityUpgradeSvg
+                      kind="merchLv"
+                      level={0}
+                      condition={0}
+                      c1={clubK.c1}
+                      c2={clubK.c2}
+                      className="w-28 h-20"
+                    />
+                    <div className="space-y-1 max-w-sm">
+                      <h3 className="font-bold text-base text-[var(--ink)]">ร้านเมกะสโตร์สโมสรปิดบริการชั่วคราว</h3>
+                      <p className="text-xs text-[var(--mut)] leading-relaxed">
+                        อาคารร้านค้าถูกรื้อถอนหรือยังไม่เปิดทำการ จึงยังไม่สามารถจำหน่ายเสื้อแข่งและของชำร่วยในวันแข่งเหย้าได้ ก่อสร้างร้าน Lv.1 เพื่อเปิดขายทันที
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={state.money < upgCost}
+                      onClick={() => upgradeFac('merchLv', 'เมกะสโตร์ & แฟนโซน', merchBaseCost)}
+                      className="btn btn-sm btn-primary whitespace-nowrap"
+                    >
+                      ก่อสร้างเมกะสโตร์ Lv.1 ({fmtMoney(upgCost)})
+                    </button>
+                    {state.money < upgCost && (
+                      <p className="text-[11px] text-[var(--red)] tabular">
+                        งบสโมสรปัจจุบันไม่พอ (ขาดอีก {fmtMoney(upgCost - state.money)})
+                      </p>
+                    )}
+                  </section>
+
+                  <section className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-sm mland:text-xs">💼 เงินทุนหมุนเวียน &amp; ผลประกอบการ (ซ.{state.season})</h3>
-                      <span className={`text-[10.5px] font-bold tabular ${megastoreProj.stockReady ? 'text-[var(--g)]' : 'text-[#9a6700] dark:text-[var(--lamp)]'}`}>
-                        {megastoreProj.stockReady ? 'สต็อกพร้อมขายเต็มที่' : 'ทุนหมุนเวียนต่ำ'}
+                      <h3 className="font-bold text-sm">สถิติยอดขายสะสมตลอดกาล</h3>
+                      <span className="text-xs font-bold text-[var(--g)] tabular">
+                        ทุนค้างร้าน {fmtMoney(megastoreSnap.capital)}
                       </span>
                     </div>
-
-                    {/* 4-column hairline KPI strip */}
-                    <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular">
+                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-2 border-y border-[var(--line)]/65 text-center tabular">
                       <div className="px-1">
-                        <div className="text-[10px] text-[var(--mut)]">เงินทุนร้าน</div>
-                        <div className={`font-bold text-xs mt-0.5 ${megastoreSnap.capital < 3 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
-                          {fmtMoney(megastoreSnap.capital)}
-                        </div>
+                        <div className="text-[10px] text-[var(--mut)]">เสื้อไม่สกรีน</div>
+                        <div className="font-bold text-xs mt-0.5">{megastoreSnap.allTimeBlankUnits.toLocaleString()} ตัว</div>
+                        <div className="text-[10.5px] text-[var(--g)] font-bold">{fmtMoney(megastoreSnap.allTimeBlankRev)}</div>
                       </div>
                       <div className="px-1">
-                        <div className="text-[10px] text-[var(--mut)]">ต้นทุนผลิต</div>
-                        <div className="font-bold text-xs text-[var(--red)] mt-0.5">
-                          {fmtMoney(megastoreSnap.seasonCost)}
-                        </div>
+                        <div className="text-[10px] text-[var(--mut)]">สกรีนนักเตะ</div>
+                        <div className="font-bold text-xs mt-0.5">{megastoreSnap.allTimePrintedUnits.toLocaleString()} ตัว</div>
+                        <div className="text-[10.5px] text-[var(--g)] font-bold">{fmtMoney(megastoreSnap.allTimePrintedRev)}</div>
                       </div>
                       <div className="px-1">
-                        <div className="text-[10px] text-[var(--mut)]">ยอดขายรวม</div>
-                        <div className="font-bold text-xs text-[var(--g)] mt-0.5">
-                          {fmtMoney(curSeasonTotalRev)}
-                        </div>
-                      </div>
-                      <div className="px-1">
-                        <div className="text-[10px] text-[var(--mut)]">กำไรสุทธิ</div>
-                        <div className={`font-bold text-xs mt-0.5 ${curSeasonNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                          {curSeasonNet >= 0 ? `+${fmtMoney(curSeasonNet)}` : fmtMoney(curSeasonNet)}
-                        </div>
+                        <div className="text-[10px] text-[var(--mut)]">ของชำร่วย</div>
+                        <div className="font-bold text-xs mt-0.5">{megastoreSnap.allTimeSouvenirUnits.toLocaleString()} ชิ้น</div>
+                        <div className="text-[10.5px] text-[var(--g)] font-bold">{fmtMoney(megastoreSnap.allTimeSouvenirRev)}</div>
                       </div>
                     </div>
+                    {megastoreSnap.capital > 0 && (
+                      <div className="flex items-center justify-between gap-2 pt-1 text-xs">
+                        <span className="text-[var(--mut)]">สามารถถอนทุนค้างในร้านกลับงบสโมสรได้</span>
+                        <button
+                          type="button"
+                          onClick={() => withdrawCapital(megastoreSnap.capital)}
+                          className="btn btn-xs btn-secondary whitespace-nowrap"
+                        >
+                          ถอนคืน {fmtMoneyNum(megastoreSnap.capital)}
+                        </button>
+                      </div>
+                    )}
+                  </section>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
+                  {/* Left Column: Working Capital, Stock Tiers & Souvenirs Breakdown */}
+                  <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
+                    <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-bold text-sm mland:text-xs">เงินทุนหมุนเวียน &amp; ผลประกอบการ (ซ.{state.season})</h3>
+                        <span
+                          className={`text-[10.5px] font-bold tabular text-right ${
+                            megastoreProj.consignmentRisk
+                              ? 'text-[var(--red)]'
+                              : megastoreProj.stockReady
+                                ? 'text-[var(--g)]'
+                                : 'text-[#9a6700] dark:text-[var(--lamp)]'
+                          }`}
+                        >
+                          {storeStatusText}
+                        </span>
+                      </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
-                      <span className="text-[var(--mut)]">
-                        ทุนลงซีซั่นนี้: <b className="text-[var(--ink)] tabular">{fmtMoney(megastoreSnap.capitalInvestedSeason)}</b>
-                        {' · '}คาดเหย้าหน้า <b className="text-[var(--g)] tabular">+{fmtMoney(megastoreProj.estMatchSales)}</b>
-                      </span>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {([25, 50, 100] as const).map((amt) => (
+                      {/* 4-column hairline KPI strip */}
+                      <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular">
+                        <div className="px-1">
+                          <div className="text-[10px] text-[var(--mut)]">เงินทุนร้าน</div>
+                          <div className={`font-bold text-xs mt-0.5 ${megastoreProj.consignmentRisk ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                            {fmtMoney(megastoreSnap.capital)}
+                          </div>
+                        </div>
+                        <div className="px-1">
+                          <div className="text-[10px] text-[var(--mut)]">ต้นทุนผลิต</div>
+                          <div className="font-bold text-xs text-[var(--red)] mt-0.5">
+                            {fmtMoney(megastoreSnap.seasonCost)}
+                          </div>
+                        </div>
+                        <div className="px-1">
+                          <div className="text-[10px] text-[var(--mut)]">ยอดขายรวม</div>
+                          <div className="font-bold text-xs text-[var(--g)] mt-0.5">
+                            {fmtMoney(curSeasonTotalRev)}
+                          </div>
+                        </div>
+                        <div className="px-1">
+                          <div className="text-[10px] text-[var(--mut)]">กำไรสุทธิ</div>
+                          <div className={`font-bold text-xs mt-0.5 ${curSeasonNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                            {curSeasonNet >= 0 ? `+${fmtMoney(curSeasonNet)}` : fmtMoney(curSeasonNet)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Next Home Match Economics Strip */}
+                      <div className="px-2.5 py-2 rounded-xl bg-[var(--surface-2)]/40 border border-[var(--line)]/65 space-y-1 text-[11px] tabular">
+                        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
+                          <span className="text-[var(--mut)]">
+                            คาดเหย้าหน้า: ขายรวม <b className="text-[var(--ink)]">{fmtMoney(megastoreProj.estMatchSales)}</b> · ต้นทุนสต็อก <b className="text-[var(--red)]">-{fmtMoney(megastoreProj.estProdCost)}</b>
+                          </span>
+                          <span className="font-bold text-[var(--g)]">
+                            เข้าคลับ +{fmtMoney(megastoreProj.estNetClubCash)}
+                          </span>
+                        </div>
+                        {megastoreProj.consignmentRisk ? (
+                          <div className="text-[10.5px] text-[var(--red)] font-semibold">
+                            ทุนร้านไม่พอจ่ายต้นทุนผลิต 1 นัด (-{fmtMoney(megastoreProj.estProdCost)}) จะโดนหักค่าฝากขาย +15% ({fmtMoney(megastoreProj.estConsignmentFee)}) เติมทุนหรือเปิดเติมอัตโนมัติ
+                          </div>
+                        ) : (
+                          <div className="text-[10.5px] text-[var(--mut)] flex flex-wrap items-center justify-between gap-2">
+                            <span>ทุนลงเพิ่มซีซั่นนี้: <b className="text-[var(--ink)]">{fmtMoney(megastoreSnap.capitalInvestedSeason)}</b></span>
+                            <span>เป้าหมายทุนแนะนำ: <b className="text-[var(--ink)]">{fmtMoney(megastoreProj.recommendedReserve)}</b></span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Capital Controls + Auto-Restock */}
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {topUpNeededToReserve > 0 && (
+                            <button
+                              type="button"
+                              disabled={state.money < topUpNeededToReserve}
+                              onClick={() => topUpCapital(topUpNeededToReserve)}
+                              className="btn btn-xs btn-gold whitespace-nowrap"
+                            >
+                              +พอดี 4 นัด ({fmtMoneyNum(topUpNeededToReserve)})
+                            </button>
+                          )}
+                          {([25, 50, 100] as const).map((amt) => (
+                            <button
+                              key={amt}
+                              type="button"
+                              disabled={state.money < amt}
+                              onClick={() => topUpCapital(amt)}
+                              className="btn btn-xs btn-primary whitespace-nowrap"
+                            >
+                              +ทุน {amt}k
+                            </button>
+                          ))}
+                          {excessCapital >= 5 && (
+                            <button
+                              type="button"
+                              onClick={() => withdrawCapital(Math.min(25, excessCapital))}
+                              className="btn btn-xs btn-secondary whitespace-nowrap"
+                            >
+                              ถอนคืน {fmtMoneyNum(Math.min(25, excessCapital))}
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={toggleAutoRestock}
+                          className={`btn btn-xs whitespace-nowrap ${
+                            megastoreSnap.autoRestock ? 'btn-primary' : 'btn-secondary'
+                          }`}
+                        >
+                          เติมอัตโนมัติ: {megastoreSnap.autoRestock ? 'เปิด' : 'ปิด'}
+                        </button>
+                      </div>
+
+                      {/* Stock Tiers Selector (Instant Commit) */}
+                      <div className="pt-2 border-t border-[var(--line)]/60 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="font-bold text-[var(--mut)]">เกรดสต็อกเสื้อ &amp; ราคาจำหน่ายหน้าร้าน</span>
+                          <span className="text-[var(--mut)] tabular">
+                            กำไรขั้นต้น <b className="text-[var(--g)]">{Math.round((1 - curTierDef.costRate) * 100)}%</b> · วอลุ่ม ×{curTierDef.volumeMult.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {MEGASTORE_STOCK_TIERS.map((tier) => {
+                            const active = activeTierIdx === tier.idx;
+                            const marginPct = Math.round((1 - tier.costRate) * 100);
+                            return (
+                              <button
+                                key={tier.idx}
+                                type="button"
+                                onClick={() => selectStockTier(tier.idx)}
+                                className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                                  active
+                                    ? 'bg-[var(--g-soft)] border-[var(--g)]'
+                                    : 'bg-[var(--surface-2)]/40 border-[var(--line)]/70 hover:border-[var(--g)]/55'
+                                }`}
+                              >
+                                <div className="font-bold text-[11px] truncate text-[var(--ink)]">{tier.label}</div>
+                                <div className="text-[10px] text-[var(--mut)] tabular mt-0.5">
+                                  เปล่า {tier.blankJerseyBaht}฿ · สกรีน {tier.printedJerseyBaht}฿
+                                </div>
+                                <div className="text-[9.5px] font-semibold tabular mt-0.5 flex items-center justify-between gap-1">
+                                  <span className="text-[var(--g)]">กำไร {marginPct}%</span>
+                                  <span className="text-[var(--mut)]">×{tier.volumeMult.toFixed(2)}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Souvenirs Sales Breakdown */}
+                    <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="font-bold text-sm mland:text-xs">
+                          ของชำร่วยสโมสร ({merchPeriod === 'alltime' ? 'รวมตลอดกาล' : `ซ.${state.season}`})
+                        </h3>
+                        <span className="text-xs font-bold text-[var(--g)] tabular">
+                          {activeSouvUnits.toLocaleString()} ชิ้น · {fmtMoney(activeSouvRev)}
+                        </span>
+                      </div>
+
+                      <div className="divide-y divide-[var(--line)]/50">
+                        {activeSouvRows.map((sku) => {
+                          const pct = Math.max(4, Math.round((sku.revenue / maxSouvRev) * 100));
+                          return (
+                            <div key={sku.id} className="py-1.5 first:pt-0 last:pb-0 space-y-1">
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <span className="font-semibold truncate">
+                                  {sku.icon} {sku.name}{' '}
+                                  <span className="text-[10px] text-[var(--mut)] font-normal tabular">· {sku.unitPriceBaht}฿</span>
+                                </span>
+                                <span className="tabular shrink-0 font-bold">
+                                  {sku.units.toLocaleString()} ชิ้น · <span className="text-[var(--g)]">{fmtMoney(sku.revenue)}</span>
+                                </span>
+                              </div>
+                              <div className="h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-emerald-500 transition-all"
+                                  style={{ width: `${sku.units > 0 ? pct : 0}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  </div>
+
+                  {/* Right Column: Official Kit Showroom, Presenter, Jersey Rankings & History */}
+                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-[360px] md:min-h-0 mland:min-h-0 md:h-full mland:h-full gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+                      <h3 className="font-bold text-sm mland:text-xs">ชุดแข่งสโมสร &amp; อันดับยอดขายเสื้อ</h3>
+                      <div className="seg-bar shrink-0">
+                        {(
+                          [
+                            ['season', `ซ.${state.season}`],
+                            ['alltime', 'รวมทุกซีซั่น'],
+                            ['seasons', `รายซีซั่น (${combinedSeasons.length})`]
+                          ] as const
+                        ).map(([pid, plbl]) => (
                           <button
-                            key={amt}
+                            key={pid}
                             type="button"
-                            disabled={state.money < amt}
-                            onClick={() => topUpCapital(amt)}
-                            className="btn btn-xs btn-primary whitespace-nowrap"
+                            onClick={() => setMerchPeriod(pid)}
+                            className={`seg-btn whitespace-nowrap ${merchPeriod === pid ? 'seg-btn-active' : ''}`}
                           >
-                            +ทุน {amt}k
+                            {plbl}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-[var(--line)]/60 space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[11px] font-bold text-[var(--mut)]">เกรดสต็อกเสื้อ &amp; ราคาจำหน่ายหน้าร้าน</div>
-                        {changedFinItems.stockTier && (
-                          <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {MEGASTORE_STOCK_TIERS.map((tier) => {
-                          const active = activeFinanceValues.stockTier === tier.idx;
-                          return (
-                            <button
-                              key={tier.idx}
-                              type="button"
-                              onClick={() => {
-                                patchFinanceDraft((d) => {
-                                  d.stockTier = tier.idx;
-                                });
-                              }}
-                              className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
-                                active
-                                  ? 'bg-[var(--g-soft)] border-[var(--g)]'
-                                  : 'bg-[var(--surface-2)]/45 border-[var(--line)]/70 hover:border-[var(--g)]/55'
-                              }`}
-                            >
-                              <div className="font-bold text-[11px] truncate">{tier.label}</div>
-                              <div className="text-[10px] text-[var(--mut)] tabular mt-0.5">
-                                เปล่า {tier.blankJerseyBaht}฿ · สกรีน {tier.printedJerseyBaht}฿
-                              </div>
-                              <div className="text-[9.5px] text-[var(--g)] font-semibold tabular mt-0.5">
-                                ต้นทุน {(tier.costRate * 100).toFixed(0)}%
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </section>
-
-                  {/* Souvenirs Sales Breakdown (clean hairline list) */}
-                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-bold text-sm mland:text-xs">
-                        🎁 ของชำร่วยสโมสร ({merchPeriod === 'alltime' ? 'รวมตลอดกาล' : `ซีซั่น ${state.season}`})
-                      </h3>
-                      <span className="text-xs font-bold text-[var(--g)] tabular">
-                        {activeSouvUnits.toLocaleString()} ชิ้น · {fmtMoney(activeSouvRev)}
-                      </span>
-                    </div>
-
-                    <div className="divide-y divide-[var(--line)]/50">
-                      {activeSouvRows.map((sku) => {
-                        const pct = Math.max(4, Math.round((sku.revenue / maxSouvRev) * 100));
-                        return (
-                          <div key={sku.id} className="py-1.5 first:pt-0 last:pb-0 space-y-1">
-                            <div className="flex items-center justify-between gap-2 text-xs">
-                              <span className="font-semibold truncate">
-                                {sku.icon} {sku.name}{' '}
-                                <span className="text-[10px] text-[var(--mut)] font-normal tabular">({sku.unitPriceBaht}฿)</span>
-                              </span>
-                              <span className="tabular shrink-0 font-bold">
-                                {sku.units.toLocaleString()} ชิ้น · <span className="text-[var(--g)]">{fmtMoney(sku.revenue)}</span>
-                              </span>
+                    {merchPeriod !== 'seasons' ? (
+                      <>
+                        {/* Official 3-Kit Showroom (Home, Away, Spotlight Printed with live sponsor print) */}
+                        <div className="rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/75 p-2.5 space-y-2 shrink-0">
+                          <div className="grid grid-cols-3 divide-x divide-[var(--line)]/55 text-center items-end">
+                            <div className="flex flex-col items-center gap-1 px-1">
+                              <KitJersey club={clubK} team={me} state={state} hideNumber size={48} />
+                              <div className="text-[10.5px] font-bold leading-tight truncate w-full">ชุดเหย้า (ไม่สกรีน)</div>
+                              <div className="text-[10px] font-bold text-[var(--g)] tabular">{curTierDef.blankJerseyBaht}฿</div>
                             </div>
-                            <div className="h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                              <div
-                                className="h-full rounded-full bg-emerald-500 transition-all"
-                                style={{ width: `${sku.units > 0 ? pct : 0}%` }}
-                              />
+                            <div className="flex flex-col items-center gap-1 px-1">
+                              <KitJersey club={clubK} team={me} state={state} away hideNumber size={48} />
+                              <div className="text-[10.5px] font-bold leading-tight truncate w-full">ชุดเยือน (ไม่สกรีน)</div>
+                              <div className="text-[10px] font-bold text-[var(--g)] tabular">{curTierDef.blankJerseyBaht}฿</div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                </div>
-
-                {/* Right Column: Blank vs Printed Jerseys + Per-Player Rankings + Season Champions */}
-                <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-[340px] md:min-h-0 mland:min-h-0 md:h-full mland:h-full gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-                    <h3 className="font-bold text-sm mland:text-xs">👕 ยอดขายเสื้อแข่ง &amp; แชมป์ขายเสื้อ</h3>
-                    <div className="seg-bar shrink-0">
-                      {(
-                        [
-                          ['season', `ซ.${state.season}`],
-                          ['alltime', 'รวมทุกซีซั่น'],
-                          ['seasons', `แชมป์รายซีซั่น (${combinedSeasons.length})`]
-                        ] as const
-                      ).map(([pid, plbl]) => (
-                        <button
-                          key={pid}
-                          type="button"
-                          onClick={() => setMerchPeriod(pid)}
-                          className={`seg-btn whitespace-nowrap ${merchPeriod === pid ? 'seg-btn-active' : ''}`}
-                        >
-                          {plbl}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {merchPeriod !== 'seasons' ? (
-                    <>
-                      {/* 3-column hairline KPI strip */}
-                      <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center shrink-0 tabular">
-                        <div className="px-1">
-                          <div className="text-[10px] text-[var(--mut)]">เสื้อไม่สกรีน</div>
-                          <div className="font-bold text-xs mt-0.5">{activeBlankUnits.toLocaleString()} ตัว</div>
-                          <div className="text-[10.5px] font-bold text-[var(--g)]">{fmtMoney(activeBlankRev)}</div>
-                        </div>
-                        <div className="px-1">
-                          <div className="text-[10px] text-[var(--mut)]">สกรีนนักเตะรวม</div>
-                          <div className="font-bold text-xs mt-0.5">{activePrintedUnits.toLocaleString()} ตัว</div>
-                          <div className="text-[10.5px] font-bold text-[var(--g)]">{fmtMoney(activePrintedRev)}</div>
-                        </div>
-                        <div className="px-1">
-                          <div className="text-[10px] text-[var(--mut)]">รวมเสื้อทุกแบบ</div>
-                          <div className="font-bold text-xs mt-0.5">
-                            {(activeBlankUnits + activePrintedUnits).toLocaleString()} ตัว
-                          </div>
-                          <div className="text-[10.5px] font-bold text-[var(--g)]">
-                            {fmtMoney(activeBlankRev + activePrintedRev)}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* #1 Best Selling Player Spotlight */}
-                      <div className="p-2.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/45 flex items-center justify-between gap-2.5 shrink-0">
-                        {topSeller ? (
-                          <>
-                            <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="flex flex-col items-center gap-1 px-1">
                               <KitJersey
-                                club={ensureClubIdentity(state)}
+                                club={clubK}
                                 team={me}
                                 state={state}
-                                shirtNo={topSeller.no}
-                                isGK={topSeller.pos === 'GK'}
-                                size={36}
+                                shirtNo={spotlightNo}
+                                isGK={spotlightIsGK}
+                                size={48}
                               />
-                              {topSellerPlayer && <PlayerFace player={topSellerPlayer} team={me} state={state} size={34} />}
+                              <div className="text-[10.5px] font-bold leading-tight truncate w-full">{spotlightLabel}</div>
+                              <div className="text-[10px] font-bold text-[var(--g)] tabular">{curTierDef.printedJerseyBaht}฿</div>
+                            </div>
+                          </div>
+
+                          {/* Featured Presenter Selector */}
+                          <div className="pt-2 border-t border-[var(--line)]/55 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                            <div className="min-w-0 flex items-center gap-1.5">
+                              <span className="font-bold text-[var(--mut)] shrink-0">พรีเซ็นเตอร์หน้าร้าน:</span>
+                              <span className="text-[var(--g)] font-semibold truncate">
+                                {activeFeaturedName ? '+32% ยอดเสื้อเจ้าตัว' : 'อัตโนมัติตามฟอร์ม'}
+                              </span>
+                            </div>
+                            <select
+                              aria-label="เลือกนักเตะพรีเซ็นเตอร์หน้าร้าน"
+                              value={activeFeaturedName || ''}
+                              onChange={(e) => changeFeaturedPlayer(e.target.value)}
+                              className="px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] font-semibold text-[var(--ink)] max-w-[180px] cursor-pointer"
+                            >
+                              <option value="">อัตโนมัติ (ตามฟอร์ม)</option>
+                              {sortedSquadForPresenter.map((pl) => (
+                                <option key={pl.n} value={pl.n}>
+                                  #{getShirtNo(me, pl)} {pl.n} ({pl.ro} · {pl.ov})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* 3-column hairline Jersey KPI strip */}
+                        <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center shrink-0 tabular">
+                          <div className="px-1">
+                            <div className="text-[10px] text-[var(--mut)]">เสื้อไม่สกรีน</div>
+                            <div className="font-bold text-xs mt-0.5">{activeBlankUnits.toLocaleString()} ตัว</div>
+                            <div className="text-[10.5px] font-bold text-[var(--g)]">{fmtMoney(activeBlankRev)}</div>
+                          </div>
+                          <div className="px-1">
+                            <div className="text-[10px] text-[var(--mut)]">สกรีนนักเตะรวม</div>
+                            <div className="font-bold text-xs mt-0.5">{activePrintedUnits.toLocaleString()} ตัว</div>
+                            <div className="text-[10.5px] font-bold text-[var(--g)]">{fmtMoney(activePrintedRev)}</div>
+                          </div>
+                          <div className="px-1">
+                            <div className="text-[10px] text-[var(--mut)]">รวมเสื้อทุกแบบ</div>
+                            <div className="font-bold text-xs mt-0.5">
+                              {(activeBlankUnits + activePrintedUnits).toLocaleString()} ตัว
+                            </div>
+                            <div className="text-[10.5px] font-bold text-[var(--g)]">
+                              {fmtMoney(activeBlankRev + activePrintedRev)}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* #1 Best Selling Player Spotlight */}
+                        {topSeller && (
+                          <div className="px-2.5 py-2 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 flex items-center justify-between gap-2.5 shrink-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {topSellerPlayer && <PlayerFace player={topSellerPlayer} team={me} state={state} size={30} />}
                               <div className="min-w-0">
                                 <div className="text-[10px] font-bold text-[var(--g)]">
-                                  🏆 ขายเสื้ออันดับ 1 {merchPeriod === 'alltime' ? 'ตลอดกาล' : `ซีซั่น ${state.season}`}
+                                  ขายเสื้ออันดับ 1 {merchPeriod === 'alltime' ? 'ตลอดกาล' : `ซีซั่น ${state.season}`}
                                 </div>
                                 <div className="font-bold text-xs sm:text-sm truncate">
                                   #{topSeller.no} {topSeller.name}
-                                </div>
-                                <div className="text-[10.5px] text-[var(--mut)] tabular">
-                                  {topSeller.ro} ({topSeller.pos}) · ส่วนแบ่ง {activePrintedUnits > 0 ? Math.round((topSeller.units / activePrintedUnits) * 100) : 0}%
+                                  <span className="text-[10.5px] font-normal text-[var(--mut)] ml-1.5 tabular">
+                                    · {topSeller.ro} · ส่วนแบ่ง {activePrintedUnits > 0 ? Math.round((topSeller.units / activePrintedUnits) * 100) : 0}%
+                                  </span>
                                 </div>
                               </div>
                             </div>
                             <div className="text-right shrink-0 tabular">
-                              <div className="font-extrabold text-sm text-[var(--ink)]">{topSeller.units.toLocaleString()} ตัว</div>
-                              <div className="font-bold text-xs text-[var(--g)]">{fmtMoney(topSeller.revenue)}</div>
+                              <div className="font-extrabold text-xs sm:text-sm text-[var(--ink)]">{topSeller.units.toLocaleString()} ตัว</div>
+                              <div className="font-bold text-[11px] text-[var(--g)]">{fmtMoney(topSeller.revenue)}</div>
                             </div>
-                          </>
-                        ) : (
-                          <div className="text-xs text-[var(--mut)] w-full text-center py-1">
-                            ยังไม่มีสถิติยอดขายเสื้อในซีซั่นนี้ — ยอดขายเสื้อรายเบอร์จะบันทึกหลังจบเกมเหย้าแรก
                           </div>
                         )}
-                      </div>
 
-                      {/* Per-Player Printed Shirt Leaderboard (clean hairline list) */}
-                      <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/50 bg-[var(--surface-2)]/15">
-                        {activePrintedRows.length === 0 ? (
-                          <div className="text-xs text-[var(--mut)] text-center py-8">ยังไม่มีข้อมูลการขายเสื้อนักเตะรายบุคคล</div>
-                        ) : (
-                          activePrintedRows.map((row, idx) => {
-                            const squadPl = me.sq.find((p) => p.n === row.name) || null;
-                            const sharePct = activePrintedUnits > 0 ? Math.round((row.units / activePrintedUnits) * 100) : 0;
-                            const barPct = Math.max(4, Math.round((row.units / maxJerseyUnits) * 100));
-                            return (
-                              <button
-                                key={`${row.name}-${row.no}`}
-                                type="button"
-                                disabled={!squadPl || !onInspectPlayer}
-                                onClick={() => {
-                                  if (squadPl && onInspectPlayer) onInspectPlayer(squadPl, me);
-                                }}
-                                className={`w-full px-2.5 py-2 text-left flex items-center gap-2.5 transition-colors ${
-                                  squadPl && onInspectPlayer ? 'hover:bg-[var(--surface-2)]/70 cursor-pointer' : 'cursor-default'
-                                }`}
-                              >
-                                <span className={`w-4 text-left font-extrabold text-xs tabular shrink-0 ${idx === 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                                  {idx + 1}
-                                </span>
-                                {squadPl && (
-                                  <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6">
-                                    <PlayerFace player={squadPl} team={me} state={state} club={state.club} isMyClub size={24} />
-                                  </div>
-                                )}
-                                <span
-                                  className="w-7 h-7 rounded-lg font-extrabold text-[11px] flex items-center justify-center tabular shrink-0 border border-[var(--line)]/60"
-                                  style={{ background: me.kc[0], color: me.kc[1] }}
+                        {/* Per-Player Printed Shirt Leaderboard */}
+                        <div className="flex-1 min-h-0 overflow-y-auto rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/50 bg-[var(--surface-2)]/15">
+                          {activePrintedRows.length === 0 ? (
+                            <div className="text-xs text-[var(--mut)] text-center py-8 px-4">
+                              ยังไม่มีสถิติยอดขายเสื้อนักเตะรายบุคคลในซีซั่นนี้ — ยอดขายจะบันทึกหลังจบเกมเหย้าแรก
+                            </div>
+                          ) : (
+                            activePrintedRows.map((row, idx) => {
+                              const squadPl = me.sq.find((p) => p.n === row.name) || null;
+                              const sharePct = activePrintedUnits > 0 ? Math.round((row.units / activePrintedUnits) * 100) : 0;
+                              const barPct = Math.max(4, Math.round((row.units / maxJerseyUnits) * 100));
+                              const isPresenter = activeFeaturedName === row.name;
+                              return (
+                                <button
+                                  key={`${row.name}-${row.no}`}
+                                  type="button"
+                                  disabled={!squadPl || !onInspectPlayer}
+                                  onClick={() => {
+                                    if (squadPl && onInspectPlayer) onInspectPlayer(squadPl, me);
+                                  }}
+                                  className={`w-full px-2.5 py-2 text-left flex items-center gap-2.5 transition-colors ${
+                                    squadPl && onInspectPlayer ? 'hover:bg-[var(--surface-2)]/70 cursor-pointer' : 'cursor-default'
+                                  }`}
                                 >
-                                  {squadPl ? getShirtNo(me, squadPl) : row.no}
-                                </span>
-                                <div className="flex-1 min-w-0 space-y-1">
-                                  <div className="flex items-center justify-between gap-2 text-xs">
-                                    <span className="flex items-center gap-1.5 min-w-0">
-                                      <PositionBadge role={row.ro} size="2xs" />
-                                      <span className="font-bold truncate">{row.name}</span>
-                                      {me.cap === row.name && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
-                                    </span>
-                                    <span className="tabular shrink-0 font-bold">
-                                      {row.units.toLocaleString()} ตัว{' '}
-                                      <span className="text-[var(--mut)] font-normal text-[10.5px]">({sharePct}%)</span>
-                                    </span>
+                                  <span className={`w-4 text-left font-extrabold text-xs tabular shrink-0 ${idx === 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                                    {idx + 1}
+                                  </span>
+                                  {squadPl && (
+                                    <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6">
+                                      <PlayerFace player={squadPl} team={me} state={state} club={state.club} isMyClub size={24} />
+                                    </div>
+                                  )}
+                                  <span
+                                    className="w-7 h-7 rounded-lg font-extrabold text-[11px] flex items-center justify-center tabular shrink-0 border border-[var(--line)]/60"
+                                    style={{ background: me.kc[0], color: me.kc[1] }}
+                                  >
+                                    {squadPl ? getShirtNo(me, squadPl) : row.no}
+                                  </span>
+                                  <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                      <span className="flex items-center gap-1.5 min-w-0">
+                                        <PositionBadge role={row.ro} size="2xs" />
+                                        <span className="font-bold truncate">{row.name}</span>
+                                        {me.cap === row.name && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
+                                        {isPresenter && (
+                                          <span className="text-[9.5px] font-bold text-[var(--g)] shrink-0">· พรีเซ็นเตอร์</span>
+                                        )}
+                                      </span>
+                                      <span className="tabular shrink-0 font-bold">
+                                        {row.units.toLocaleString()} ตัว{' '}
+                                        <span className="text-[var(--mut)] font-normal text-[10.5px]">({sharePct}%)</span>
+                                      </span>
+                                    </div>
+                                    <div className="h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                                      <div className="h-full rounded-full bg-[var(--g)]" style={{ width: `${barPct}%` }} />
+                                    </div>
                                   </div>
-                                  <div className="h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                                    <div className="h-full rounded-full bg-[var(--g)]" style={{ width: `${barPct}%` }} />
-                                  </div>
-                                </div>
-                                <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
-                                  {fmtMoney(row.revenue)}
-                                </span>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    /* Season-by-Season Jersey Champion & Merch History */
-                    <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-0.5">
-                      {combinedSeasons.map((arch) => (
-                        <div key={arch.season} className="p-3 rounded-xl bg-[var(--surface-2)]/40 border border-[var(--line)]/80 space-y-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-bold text-xs sm:text-sm">
-                              ซีซั่น {arch.season} {arch.season === state.season ? '· กำลังดำเนินอยู่' : ''}
-                            </span>
-                            <div className="text-[11px] tabular flex items-center gap-2">
-                              <span className="text-[var(--mut)]">ยอดขาย {fmtMoney(arch.totalRevenue)}</span>
-                              <span className="text-[var(--red)]">ต้นทุน -{fmtMoney(arch.productionCost)}</span>
-                              <b className={arch.netProfit >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
-                                สุทธิ {arch.netProfit >= 0 ? `+${fmtMoney(arch.netProfit)}` : fmtMoney(arch.netProfit)}
-                              </b>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30">
-                            <span className="truncate">
-                              🏆 แชมป์ขายเสื้อ:{' '}
-                              {arch.topPlayer ? (
-                                <b>#{arch.topPlayer.no} {arch.topPlayer.name}</b>
-                              ) : (
-                                <span className="text-[var(--mut)]">ยังไม่มียอดขาย</span>
-                              )}
-                            </span>
-                            {arch.topPlayer && (
-                              <b className="text-[var(--g)] tabular shrink-0">
-                                {arch.topPlayer.units.toLocaleString()} ตัว · {fmtMoney(arch.topPlayer.revenue)}
-                              </b>
-                            )}
-                          </div>
-
-                          <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1 border-y border-[var(--line)]/60 text-[10.5px] text-center tabular">
-                            <div className="px-1">
-                              <div className="text-[var(--mut)]">สกรีนนักเตะ</div>
-                              <b>{arch.printedJerseysTotal.units.toLocaleString()} ตัว</b> · {fmtMoney(arch.printedJerseysTotal.revenue)}
-                            </div>
-                            <div className="px-1">
-                              <div className="text-[var(--mut)]">เสื้อไม่สกรีน</div>
-                              <b>{arch.blankJerseys.units.toLocaleString()} ตัว</b> · {fmtMoney(arch.blankJerseys.revenue)}
-                            </div>
-                            <div className="px-1">
-                              <div className="text-[var(--mut)]">ของชำร่วย</div>
-                              <b>{arch.souvenirsTotal.units.toLocaleString()} ชิ้น</b> · {fmtMoney(arch.souvenirsTotal.revenue)}
-                            </div>
-                          </div>
-
-                          {arch.playerJerseys.length > 1 && (
-                            <div className="text-[10.5px] text-[var(--mut)] flex flex-wrap gap-x-3 gap-y-0.5">
-                              {arch.playerJerseys.slice(0, 3).map((pj, rank) => (
-                                <span key={`${pj.name}-${pj.no}`} className="tabular">
-                                  {rank + 1}. #{pj.no} {pj.name} ({pj.units} ตัว)
-                                </span>
-                              ))}
-                            </div>
+                                  <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
+                                    {fmtMoney(row.revenue)}
+                                  </span>
+                                </button>
+                              );
+                            })
                           )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              </div>
+                      </>
+                    ) : (
+                      /* Season-by-Season Jersey Champion & Merch History */
+                      <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-0.5">
+                        {combinedSeasons.map((arch) => (
+                          <div key={arch.season} className="p-3 rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/80 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-bold text-xs sm:text-sm">
+                                ซีซั่น {arch.season} {arch.season === state.season ? '· กำลังดำเนินอยู่' : ''}
+                              </span>
+                              <div className="text-[11px] tabular flex items-center gap-2">
+                                <span className="text-[var(--mut)]">ยอดขาย {fmtMoney(arch.totalRevenue)}</span>
+                                <span className="text-[var(--red)]">ต้นทุน -{fmtMoney(arch.productionCost)}</span>
+                                <b className={arch.netProfit >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                                  สุทธิ {arch.netProfit >= 0 ? `+${fmtMoney(arch.netProfit)}` : fmtMoney(arch.netProfit)}
+                                </b>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 text-xs py-1.5 px-2.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30">
+                              <span className="flex items-center gap-2 min-w-0">
+                                {arch.topPlayer && (
+                                  <KitJersey
+                                    club={clubK}
+                                    team={me}
+                                    state={state}
+                                    shirtNo={arch.topPlayer.no}
+                                    isGK={arch.topPlayer.pos === 'GK'}
+                                    size={24}
+                                  />
+                                )}
+                                <span className="truncate">
+                                  แชมป์ขายเสื้อ:{' '}
+                                  {arch.topPlayer ? (
+                                    <b>#{arch.topPlayer.no} {arch.topPlayer.name}</b>
+                                  ) : (
+                                    <span className="text-[var(--mut)]">ยังไม่มียอดขาย</span>
+                                  )}
+                                </span>
+                              </span>
+                              {arch.topPlayer && (
+                                <b className="text-[var(--g)] tabular shrink-0">
+                                  {arch.topPlayer.units.toLocaleString()} ตัว · {fmtMoney(arch.topPlayer.revenue)}
+                                </b>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1 border-y border-[var(--line)]/60 text-[10.5px] text-center tabular">
+                              <div className="px-1">
+                                <div className="text-[var(--mut)]">สกรีนนักเตะ</div>
+                                <b>{arch.printedJerseysTotal.units.toLocaleString()} ตัว</b> · {fmtMoney(arch.printedJerseysTotal.revenue)}
+                              </div>
+                              <div className="px-1">
+                                <div className="text-[var(--mut)]">เสื้อไม่สกรีน</div>
+                                <b>{arch.blankJerseys.units.toLocaleString()} ตัว</b> · {fmtMoney(arch.blankJerseys.revenue)}
+                              </div>
+                              <div className="px-1">
+                                <div className="text-[var(--mut)]">ของชำร่วย</div>
+                                <b>{arch.souvenirsTotal.units.toLocaleString()} ชิ้น</b> · {fmtMoney(arch.souvenirsTotal.revenue)}
+                              </div>
+                            </div>
+
+                            {arch.playerJerseys.length > 1 && (
+                              <div className="text-[10.5px] text-[var(--mut)] flex flex-wrap gap-x-3 gap-y-0.5">
+                                {arch.playerJerseys.slice(0, 3).map((pj, rank) => (
+                                  <span key={`${pj.name}-${pj.no}`} className="tabular">
+                                    {rank + 1}. #{pj.no} {pj.name} ({pj.units} ตัว)
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </div>
+              )}
             </div>
           );
         })()}

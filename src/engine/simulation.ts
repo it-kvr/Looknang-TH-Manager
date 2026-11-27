@@ -3,7 +3,7 @@ import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { getDefaultSponsorSeed, pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
@@ -2151,6 +2151,8 @@ function createEmptyMegastoreState(initialCapital = 35): ClubMegastoreState {
     capital: initialCapital,
     stockTier: 1,
     capitalInvestedSeason: initialCapital,
+    featuredPlayer: null,
+    autoRestock: false,
     blankJerseyUnits: 0,
     blankJerseyRev: 0,
     playerJerseys: {},
@@ -2169,7 +2171,10 @@ function createEmptyMegastoreState(initialCapital = 35): ClubMegastoreState {
   };
 }
 
-function getSquadJerseyPopularityWeights(me: Team): { q: Player; no: number; weight: number }[] {
+function getSquadJerseyPopularityWeights(
+  me: Team,
+  featuredPlayer?: string | null
+): { q: Player; no: number; weight: number }[] {
   const starters = new Set(xi(me).map((z) => z.n));
   const list = me.sq.map((q) => {
     const no = q.no || getShirtNo(me, q);
@@ -2178,6 +2183,7 @@ function getSquadJerseyPopularityWeights(me: Team): { q: Player; no: number; wei
     const roleMul =
       (q.me ? 1.4 : 1) *
       (me.cap === q.n ? 1.28 : 1) *
+      (featuredPlayer && q.n === featuredPlayer ? 1.32 : 1) *
       (q.pos === 'FW' ? 1.32 : q.pos === 'MF' ? 1.16 : q.pos === 'DF' ? 0.92 : 0.85) *
       ([7, 9, 10, 11].includes(no) ? 1.18 : 1) *
       (starters.has(q.n) ? 1.38 : 0.45);
@@ -2194,11 +2200,14 @@ function applyMerchSalesBatch(
   ms: ClubMegastoreState,
   me: Team,
   grossTargetK: number,
-  options?: { isDeterministicSeed?: boolean; chargeCapital?: boolean }
+  options?: { isDeterministicSeed?: boolean; chargeCapital?: boolean; ownerState?: GameState }
 ): { grossRevK: number; prodCostK: number; netClubCashK: number } {
   const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+  const activeFeatured =
+    ms.featuredPlayer && me.sq.some((q) => q.n === ms.featuredPlayer) ? ms.featuredPlayer : null;
+  const featuredBoostMult = activeFeatured ? 1.04 : 1;
   const jitter = options?.isDeterministicSeed ? 1 : 0.94 + Math.random() * 0.14;
-  const targetK = Math.max(1.5, grossTargetK * tierDef.volumeMult * jitter);
+  const targetK = Math.max(1.5, grossTargetK * tierDef.volumeMult * featuredBoostMult * jitter);
 
   const printedBudget = targetK * 0.48;
   const blankBudget = targetK * 0.23;
@@ -2216,7 +2225,7 @@ function applyMerchSalesBatch(
   // 2. Player printed jerseys (name + number)
   const printedUnitPriceK = tierDef.printedJerseyBaht / 1000;
   const totalPrintedUnits = Math.max(1, Math.round(printedBudget / printedUnitPriceK));
-  const weightedSquad = getSquadJerseyPopularityWeights(me);
+  const weightedSquad = getSquadJerseyPopularityWeights(me, activeFeatured);
   const weightSum = weightedSquad.reduce((s, x) => s + x.weight, 0) || 1;
   let remainingUnits = totalPrintedUnits;
   let printedRevTotal = 0;
@@ -2311,6 +2320,15 @@ function applyMerchSalesBatch(
 
   let netClubCashK = Math.round(grossRevK);
   if (options?.chargeCapital !== false) {
+    if (ms.autoRestock && ms.capital < rawCostK && options?.ownerState) {
+      const needed = +(rawCostK - ms.capital).toFixed(2);
+      if (options.ownerState.money >= needed) {
+        options.ownerState.money = +(options.ownerState.money - needed).toFixed(2);
+        ms.capital = +(ms.capital + needed).toFixed(2);
+        ms.capitalInvestedSeason = +(ms.capitalInvestedSeason + needed).toFixed(2);
+        logFin(options.ownerState, 'เติมทุนสต็อกเมกะสโตร์อัตโนมัติ', -needed);
+      }
+    }
     if (ms.capital >= rawCostK) {
       ms.capital = +(ms.capital - rawCostK).toFixed(2);
       netClubCashK = Math.max(1, Math.round(grossRevK));
@@ -2362,16 +2380,17 @@ export function simulateHomeMegastoreMatchSales(
   const ms = ensureMegastoreState(s);
   const myFans = ensureTeamFans(me);
   const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
-  const stockAvailMul = ms.capital >= 3 ? 1.16 : 0.85;
+  const stockAvailMul = ms.capital >= 3 || (ms.autoRestock && s.money >= 3) ? 1.16 : 0.85;
   const stMerchMul = 1 + getStadiumStyleSpec(s.club?.stadiumStyle).merchBoost;
   const targetK = (2.5 + merchLv * 2.6) * (fanEff / 55) * fanScale * merchCondMul * extraMerchMult * stMerchMul * stockAvailMul;
-  return applyMerchSalesBatch(ms, me, targetK, { isDeterministicSeed: false, chargeCapital: true });
+  return applyMerchSalesBatch(ms, me, targetK, { isDeterministicSeed: false, chargeCapital: true, ownerState: s });
 }
 
 export function getMegastoreProjection(s: GameState, me: Team) {
   const ms = s.megastore || createEmptyMegastoreState(35);
   const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
-  const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'merchLv') / 100);
+  const merchCond = getFacilityCondition(s, 'merchLv');
+  const merchCondMul = 0.85 + 0.15 * (merchCond / 100);
   const bMods = getActiveBoardModifiers(s);
   const fanEff = clamp((s.fan ?? 55) + bMods.fan, 5, 100);
   const myFans = ensureTeamFans(me);
@@ -2382,16 +2401,58 @@ export function getMegastoreProjection(s: GameState, me: Team) {
   const stMerchBoost = getStadiumStyleSpec(s.club?.stadiumStyle).merchBoost;
   const extraMerchMult = tPlan.merchMult * (1 + mainSp.merchBoost + partnerBoost) * (1 + stMerchBoost);
   const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
-  const stockAvailMul = ms.capital >= 3 ? 1.16 : 0.85;
-  const estMatchSales =
+  const activeFeaturedPlayer =
+    ms.featuredPlayer && me.sq.some((q) => q.n === ms.featuredPlayer) ? ms.featuredPlayer : null;
+  const featuredBoostMult = activeFeaturedPlayer ? 1.04 : 1;
+  const autoCanCover = !!(ms.autoRestock && s.money >= 3);
+  const stockAvailMul = ms.capital >= 3 || autoCanCover ? 1.16 : 0.85;
+  const estGrossSales =
     merchLv <= 0
       ? 0
-      : Math.round((2.5 + merchLv * 2.6) * (fanEff / 55) * fanScale * merchCondMul * extraMerchMult * stockAvailMul * tierDef.volumeMult);
+      : +(
+          (2.5 + merchLv * 2.6) *
+          (fanEff / 55) *
+          fanScale *
+          merchCondMul *
+          extraMerchMult *
+          stockAvailMul *
+          tierDef.volumeMult *
+          featuredBoostMult
+        ).toFixed(2);
+  const estMatchSales = Math.round(estGrossSales);
+  const estProdCost = +(estGrossSales * tierDef.costRate).toFixed(2);
+  const estNetProfit = +(estGrossSales - estProdCost).toFixed(2);
+  const shortfall = Math.max(0, +(estProdCost - ms.capital).toFixed(2));
+  const autoCoversShortfall = !!(ms.autoRestock && shortfall > 0 && s.money >= shortfall);
+  const estConsignmentFee =
+    merchLv > 0 && shortfall > 0 && !autoCoversShortfall ? +(shortfall * 1.15).toFixed(2) : 0;
+  const estNetClubCash = merchLv <= 0 ? 0 : Math.max(1, Math.round(estGrossSales - estConsignmentFee));
+  const runwayMatches = estProdCost > 0 ? Math.floor((ms.capital / estProdCost) * 10) / 10 : 0;
+  const recommendedReserve = merchLv <= 0 ? 0 : Math.max(15, Math.ceil(estProdCost * 4));
+  const stockReady = merchLv > 0 && (ms.capital >= Math.max(2, estProdCost) || autoCoversShortfall);
+
   return {
+    estGrossSales,
     estMatchSales,
+    estProdCost,
+    estNetProfit,
+    estConsignmentFee,
+    estNetClubCash,
+    runwayMatches,
+    recommendedReserve,
+    merchCond,
+    merchCondMul,
+    fanScale,
+    stMerchBoost,
+    mainSpMerchBoost: mainSp.merchBoost,
+    partnerMerchBoost: partnerBoost,
+    ticketMerchMult: tPlan.merchMult,
+    featuredBoostMult,
+    activeFeaturedPlayer,
+    consignmentRisk: merchLv > 0 && shortfall > 0 && !autoCoversShortfall,
     tierDef,
     extraMerchMult,
-    stockReady: ms.capital >= Math.max(2, Math.round(estMatchSales * tierDef.costRate))
+    stockReady
   };
 }
 
@@ -2712,7 +2773,7 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const estAtt = attEst.att;
   const attRate = attEst.pct / 100;
   const estTicket = calcHomeTicketRevenue(s, me);
-  const estMerch = merchLv <= 0 ? 0 : getMegastoreProjection(s, me).estMatchSales;
+  const estMerch = merchLv <= 0 ? 0 : getMegastoreProjection(s, me).estNetClubCash;
   const mainSp = calcMainSponsorPayout(s, me);
   const estSponsor = mainSp.total;
   const activeDeals = getActivePartnerDeals(s);
@@ -2776,7 +2837,7 @@ export function mkMarket(s: GameState) {
 
   // Guarantee free agents across all 4 core lines so every position is signable even when transfer window closes
   const extraFreeAgents: Player[] = POS.map((pos) => {
-    const p = mkPlayer(pos, b0 + R(-2, 9), false, P(SPX[pos]));
+    const p = mkPlayer(pos, b0 + R(-2, 9), false, SPW(pos));
     p.free = 1;
     p.price = 0;
     p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
@@ -3074,6 +3135,10 @@ export function startSeason(s: GameState) {
     ms.seasonCost = 0;
     ms.seasonRev = 0;
     ms.capitalInvestedSeason = 0;
+    const myClub = s.teams[s.me];
+    if (ms.featuredPlayer && (!myClub || !myClub.sq.some((q) => q.n === ms.featuredPlayer))) {
+      ms.featuredPlayer = null;
+    }
   }
   s.fx = doubleRoundRobin(s.teams.filter((t) => t.tier === mt).map((t) => t.id));
   s.fxo = {};
@@ -3286,7 +3351,7 @@ export function applyPositionAdaptation(
         if (sIdx >= 0) rawSlotSp = slots[sIdx]?.sp;
       }
       if (!rawSlotSp) return;
-      const normSlot = (EQ[rawSlotSp] || rawSlotSp) as SubRole;
+      const normSlot = (EQ[rawSlotSp] || normalizeSubRole(rawSlotSp)) as SubRole;
 
       // Never convert outfielders to GK unless genuinely played there, or GK to outfield trivially
       if (q.pos === 'GK' && normSlot !== 'GK') return;
@@ -3966,13 +4031,13 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
       forceRo = 'GK';
     } else if (m.focus === 'striker') {
       pos = 'FW';
-      forceRo = SPX.FW[(idx + R(0, 4)) % SPX.FW.length];
+      forceRo = idx === 0 ? 'ST' : SPW('FW');
     } else if (m.focus === 'midfielder') {
       pos = 'MF';
-      forceRo = SPX.MF[(idx + R(0, 4)) % SPX.MF.length];
+      forceRo = SPW('MF');
     } else if (m.focus === 'defender') {
       pos = 'DF';
-      forceRo = SPX.DF[(idx + R(0, 4)) % SPX.DF.length];
+      forceRo = SPW('DF');
     }
 
     const p = mkPlayer(pos, b0 + boost, yo, forceRo);
@@ -7941,7 +8006,7 @@ function buildClubDemandCandidates(s: GameState): ClubDemandItem[] {
       targetKey: 'capital',
       targetLv: 20,
       title: 'เติมทุนสต็อกเสื้อ & ของที่ระลึกเมกะสโตร์',
-      detail: 'สต็อกเสื้อหน้าร้านใกล้หมด แฟนบอลขอให้เติมทุนหมุนเวียนอย่างน้อย 20 ลบ.',
+      detail: 'สต็อกเสื้อหน้าร้านใกล้หมด แฟนบอลขอให้เติมทุนหมุนเวียนอย่างน้อย 20k ฿',
       rewardText: 'ขวัญแฟน +5% · แฟนคลับ +320',
       createdMd: curMd,
       dueMd: curMd + 5,

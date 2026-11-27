@@ -3,7 +3,7 @@ export type SubRole =
   | 'GK'
   | 'CB' | 'LCB' | 'RCB' | 'LB' | 'RB' | 'LWB' | 'RWB'
   | 'CDM' | 'LDM' | 'RDM' | 'CM' | 'LCM' | 'RCM' | 'CAM' | 'LM' | 'RM'
-  | 'ST' | 'LST' | 'RST' | 'CF' | 'LW' | 'RW';
+  | 'ST' | 'LS' | 'RS' | 'CF' | 'LW' | 'RW';
 
 export type StatKey = 'sh' | 'ps' | 'dr' | 'tk' | 'ph';
 export type Mentality = 'X' | 'A' | 'B' | 'D' | 'Z';
@@ -762,6 +762,8 @@ export interface ClubMegastoreState {
   capital: number;
   stockTier: number;
   capitalInvestedSeason: number;
+  featuredPlayer?: string | null;
+  autoRestock?: boolean;
   blankJerseyUnits: number;
   blankJerseyRev: number;
   playerJerseys: Record<string, PlayerJerseySaleRecord>;

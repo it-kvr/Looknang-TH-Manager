@@ -222,14 +222,61 @@ export function firstEmptySlot(m: GameMode): number {
   return 0;
 }
 
-export const SPW = (p: Position): SubRole =>
-  p === 'DF'
-    ? P(['CB', 'LCB', 'RCB', 'LB', 'RB', 'LWB', 'RWB'])
-    : p === 'MF'
-      ? P(['CM', 'LCM', 'RCM', 'CDM', 'LDM', 'RDM', 'CAM', 'LM', 'RM'])
-      : p === 'FW'
-        ? P(['ST', 'LST', 'RST', 'CF', 'LW', 'RW'])
-        : 'GK';
+const pickWeightedRole = (pool: readonly [SubRole, number][]): SubRole => {
+  const total = pool.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= pool[i][1];
+    if (r <= 0) return pool[i][0];
+  }
+  return pool[0][0];
+};
+
+export const normalizeSubRole = (ro?: string | null): SubRole => {
+  if (!ro) return 'CM';
+  if (ro === 'SS') return 'CF';
+  if (ro === 'LST') return 'LS';
+  if (ro === 'RST') return 'RS';
+  return ro as SubRole;
+};
+
+export const SPW = (p: Position): SubRole => {
+  if (p === 'DF') {
+    return pickWeightedRole([
+      ['LCB', 28],
+      ['RCB', 28],
+      ['LB', 16],
+      ['RB', 16],
+      ['LWB', 4],
+      ['RWB', 4],
+      ['CB', 4]
+    ]);
+  }
+  if (p === 'MF') {
+    return pickWeightedRole([
+      ['CM', 18],
+      ['CDM', 16],
+      ['CAM', 14],
+      ['LCM', 12],
+      ['RCM', 12],
+      ['LM', 9],
+      ['RM', 9],
+      ['LDM', 5],
+      ['RDM', 5]
+    ]);
+  }
+  if (p === 'FW') {
+    return pickWeightedRole([
+      ['ST', 36],
+      ['LW', 20],
+      ['RW', 20],
+      ['CF', 14],
+      ['LS', 5],
+      ['RS', 5]
+    ]);
+  }
+  return 'GK';
+};
 
 export interface PositionShirtGuide {
   label: string;
@@ -359,17 +406,17 @@ const ROLE_SHIRT_POOLS: Record<SubRole, PositionShirtGuide> = {
     alt: [7, 10, 11, 14, 18, 19, 20, 99],
     reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
   },
-  LST: {
-    label: 'กองหน้าตัวเป้าซ้าย (LST)',
+  LS: {
+    label: 'หน้าคู่ซ้าย (LS)',
     primary: [9],
     alt: [7, 10, 11, 14, 18, 19, 20, 99],
-    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
+    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 10, 11, 14, 18, 19 หรือ 99'
   },
-  RST: {
-    label: 'กองหน้าตัวเป้าขวา (RST)',
+  RS: {
+    label: 'หน้าคู่ขวา (RS)',
     primary: [9],
     alt: [7, 10, 11, 14, 18, 19, 20, 99],
-    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
+    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 10, 11, 14, 18, 19 หรือ 99'
   },
   CF: {
     label: 'กองหน้าตัวต่ำ (CF)',
@@ -380,10 +427,10 @@ const ROLE_SHIRT_POOLS: Record<SubRole, PositionShirtGuide> = {
 };
 
 export function getPositionShirtGuide(ro?: SubRole | string, pos?: Position): PositionShirtGuide {
-  const norm = ((ro as string) === 'SS' ? 'CF' : ro) as SubRole;
-  if (norm && ROLE_SHIRT_POOLS[norm]) return ROLE_SHIRT_POOLS[norm];
+  const norm = normalizeSubRole(ro);
+  if (ro && ROLE_SHIRT_POOLS[norm]) return ROLE_SHIRT_POOLS[norm];
   if (pos === 'GK') return ROLE_SHIRT_POOLS.GK;
-  if (pos === 'DF') return ROLE_SHIRT_POOLS.CB;
+  if (pos === 'DF') return ROLE_SHIRT_POOLS.LCB;
   if (pos === 'FW') return ROLE_SHIRT_POOLS.ST;
   return ROLE_SHIRT_POOLS.CM;
 }
@@ -780,7 +827,7 @@ export function rollPlayerBio(
     minH = 179;
     maxH = 192;
     bmiBase = 23.1;
-  } else if (ro === 'ST' || ro === 'LST' || ro === 'RST' || ro === 'CF') {
+  } else if (ro === 'ST' || ro === 'LS' || ro === 'RS' || ro === 'CF') {
     minH = 173;
     maxH = 189;
     bmiBase = 22.8;
@@ -1046,9 +1093,19 @@ export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)):
   const fsdSlots = FSD[ph.form] || FSD['4-4-2'];
   const slotRolesByPos: Record<Position, SubRole[]> = { GK: [], DF: [], MF: [], FW: [] };
   fsdSlots.forEach(([sp]) => {
-    const normSp = ((sp as string) === 'SS' ? 'CF' : sp) as SubRole;
+    const normSp = normalizeSubRole(sp);
+    const naturalRo: SubRole =
+      normSp === 'CB'
+        ? Math.random() < 0.78
+          ? P(['LCB', 'RCB'])
+          : 'CB'
+        : normSp === 'LS' || normSp === 'RS'
+          ? Math.random() < 0.7
+            ? 'ST'
+            : normSp
+          : normSp;
     const pos = LINE[normSp] || 'MF';
-    slotRolesByPos[pos].push(normSp);
+    slotRolesByPos[pos].push(naturalRo);
   });
 
   const baseOv = BASE[tier] + diff;
@@ -1106,7 +1163,7 @@ export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)):
 export const getFormationSlots = (t?: Team): { sp: SubRole; x: number; y: number; pos: Position }[] => {
   const raw = t?.form === 'custom' && t.cf && t.cf.length === 11 ? t.cf : FSD[t?.form || '4-4-2'] || FSD['4-4-2'];
   return raw.map(([sp, x, y]) => {
-    const normSp = ((sp as string) === 'SS' ? 'CF' : sp) as SubRole;
+    const normSp = normalizeSubRole(sp);
     return { sp: normSp, x, y, pos: LINE[normSp] || 'MF' };
   });
 };
@@ -1144,9 +1201,12 @@ export const playerPen = (
 };
 
 export const fixRo = (q: Player) => {
-  if ((q.ro as string) === 'SS') q.ro = 'CF';
+  if (q.ro) q.ro = normalizeSubRole(q.ro);
   if (!q.ro) {
-    q.ro = typeof q.sp === 'string' && LINE[q.sp] === q.pos ? (q.sp as SubRole) : SPW(q.pos);
+    q.ro = typeof q.sp === 'string' && LINE[q.sp] === q.pos ? normalizeSubRole(q.sp) : SPW(q.pos);
+  }
+  if (q.altRoles?.length) {
+    q.altRoles = Array.from(new Set(q.altRoles.map((r) => normalizeSubRole(r)))).filter((r) => r !== q.ro);
   }
   if (typeof q.sp === 'string') q.sp = 0;
 };
@@ -1303,8 +1363,8 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null): DtResult {
   const roleMod: Partial<Record<SubRole, Partial<CoreAttrs>>> = {
     CF: { ps: 5, dr: 2, sh: -2 },
     ST: { sh: 4, ph: 2, ps: -4 },
-    LST: { sh: 4, ph: 2, ps: -4 },
-    RST: { sh: 4, ph: 2, ps: -4 }
+    LS: { sh: 4, ph: 2, ps: -4 },
+    RS: { sh: 4, ph: 2, ps: -4 }
   };
   const baseRo = EQ[q.ro] || q.ro;
   const rawBaseA: CoreAttrs = aSrc
@@ -2143,8 +2203,8 @@ export const ROLE_ADAPT_THRESHOLD_CROSS = 20;
 
 export const ROLE_ADAPT_TARGETS: Record<string, { cores: StatKey[]; subs: string[] }> = {
   ST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
-  LST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
-  RST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
+  LS: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
+  RS: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
   CF: { cores: ['sh', 'ps', 'dr'], subs: ['fin', 'vis', 'spass', 'ctrl'] },
   LW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },
   RW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },

@@ -90,7 +90,7 @@ function getLineAverage(players: Player[], slots: { pos: Position }[], targetPos
 function getFlankAverage(players: Player[], slots: { sp: SubRole }[], side: 'L' | 'R' | 'C'): number {
   const leftRoles = new Set<SubRole>(['LB', 'LWB', 'LM', 'LW']);
   const rightRoles = new Set<SubRole>(['RB', 'RWB', 'RM', 'RW']);
-  const centerRoles = new Set<SubRole>(['CB', 'LCB', 'RCB', 'CDM', 'LDM', 'RDM', 'CM', 'LCM', 'RCM', 'CAM', 'CF', 'ST', 'LST', 'RST']);
+  const centerRoles = new Set<SubRole>(['CB', 'LCB', 'RCB', 'CDM', 'LDM', 'RDM', 'CM', 'LCM', 'RCM', 'CAM', 'CF', 'ST', 'LS', 'RS']);
   const set = side === 'L' ? leftRoles : side === 'R' ? rightRoles : centerRoles;
   const matched = players.filter((q, idx) => set.has(slots[idx]?.sp || q.ro));
   if (!matched.length) return 0;

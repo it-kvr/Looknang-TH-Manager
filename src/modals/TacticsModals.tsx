@@ -22,11 +22,11 @@ export const CustomFormationModal: React.FC<{
   const autoRole = (x: number, y: number): SubRole => {
     const L = x < 22;
     const R_ = x > 78;
-    if (y >= 70) return L ? 'LB' : R_ ? 'RB' : x < 45 ? 'LCB' : x > 55 ? 'RCB' : 'CB';
+    if (y >= 70) return L ? 'LB' : R_ ? 'RB' : x < 47 ? 'LCB' : x > 53 ? 'RCB' : 'CB';
     if (y >= 58) return L ? 'LWB' : R_ ? 'RWB' : x < 45 ? 'LDM' : x > 55 ? 'RDM' : 'CDM';
     if (y >= 42) return L ? 'LM' : R_ ? 'RM' : x < 45 ? 'LCM' : x > 55 ? 'RCM' : 'CM';
     if (y >= 30) return L ? 'LM' : R_ ? 'RM' : 'CAM';
-    return x < 26 ? 'LW' : x > 74 ? 'RW' : y > 20 ? 'CF' : x < 45 ? 'LST' : x > 55 ? 'RST' : 'ST';
+    return x < 26 ? 'LW' : x > 74 ? 'RW' : y > 20 ? 'CF' : x < 46 ? 'LS' : x > 54 ? 'RS' : 'ST';
   };
 
   const countPos = (p: string) => slots.filter((z) => LINE[z[0]] === p).length;

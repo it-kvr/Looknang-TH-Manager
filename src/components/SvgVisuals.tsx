@@ -1145,9 +1145,9 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
 
 export const PITCH_POSITION_ZONES: PitchPositionZone[] = [
   { id: 'LW', sp: 'LW', label: 'ปีกซ้าย', x1: 3, y1: 7, x2: 26, y2: 29, line: 'FW' },
-  { id: 'LST', sp: 'LST', label: 'หน้าซ้าย', x1: 26, y1: 7, x2: 43, y2: 20, line: 'FW' },
+  { id: 'LS', sp: 'LS', label: 'หน้าคู่ซ้าย', x1: 26, y1: 7, x2: 43, y2: 20, line: 'FW' },
   { id: 'ST', sp: 'ST', label: 'หน้าเป้า', x1: 43, y1: 7, x2: 57, y2: 20, line: 'FW' },
-  { id: 'RST', sp: 'RST', label: 'หน้าขวา', x1: 57, y1: 7, x2: 74, y2: 20, line: 'FW' },
+  { id: 'RS', sp: 'RS', label: 'หน้าคู่ขวา', x1: 57, y1: 7, x2: 74, y2: 20, line: 'FW' },
   { id: 'CF', sp: 'CF', label: 'หน้าต่ำ/เชื่อม', x1: 26, y1: 20, x2: 74, y2: 29.5, line: 'FW' },
   { id: 'RW', sp: 'RW', label: 'ปีกขวา', x1: 74, y1: 7, x2: 97, y2: 29, line: 'FW' },
   { id: 'LM', sp: 'LM', label: 'กลางซ้าย', x1: 3, y1: 29, x2: 25, y2: 57, line: 'MF' },
