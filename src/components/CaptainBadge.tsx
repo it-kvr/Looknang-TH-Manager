@@ -98,24 +98,33 @@ export const CaptainBadge: React.FC<{
     >
       <svg
         viewBox="0 0 16 16"
-        className="w-full h-full block"
+        className="w-full h-full block drop-shadow-[0_1px_1px_rgba(0,0,0,0.22)]"
         aria-hidden="true"
       >
         <circle
           cx="8"
           cy="8"
-          r="6.8"
+          r="6.75"
           fill={pal.bg}
           stroke={pal.border}
-          strokeWidth="1.25"
+          strokeWidth="1.35"
+        />
+        <path
+          d="M 3.2 5.4 A 5.4 5.4 0 0 1 12.8 5.4"
+          fill="none"
+          stroke={pal.stripe}
+          strokeOpacity="0.45"
+          strokeWidth="0.9"
+          strokeLinecap="round"
         />
         <text
           x="8"
-          y="11.2"
+          y="8.15"
           textAnchor="middle"
-          fontSize="9.2"
+          dominantBaseline="central"
+          fontSize="8.8"
           fontWeight="900"
-          fontFamily="Sarabun, sans-serif"
+          fontFamily="'Chakra Petch', 'Noto Sans Thai', system-ui, sans-serif"
           fill={pal.text}
         >
           C

@@ -52,6 +52,26 @@ export interface MatchLogItem {
   subInfo?: MatchSubLogInfo;
 }
 
+export function isCardLogEntry(l: MatchLogItem): boolean {
+  return (
+    l.text.includes('ใบเหลือง') ||
+    l.text.includes('ใบแดง') ||
+    l.text.includes('เหลืองแดง') ||
+    l.text.includes('เหลืองที่สอง') ||
+    l.text.includes('🟨') ||
+    l.text.includes('🟥')
+  );
+}
+
+export function isVarLogEntry(l: MatchLogItem): boolean {
+  return (
+    Boolean(l.varReplayId) ||
+    l.text.includes('VAR') ||
+    l.text.includes('โกล์ไลน์') ||
+    l.text.includes('จุดโทษ')
+  );
+}
+
 export interface MatchVisualEntry {
   team: Team;
   player: Player;
@@ -229,6 +249,7 @@ export const SubEventCard: React.FC<{
   homeTrim: string;
   awayTrim: string;
   state: GameState;
+  captainName?: string;
 }> = ({
   minute,
   team,
@@ -245,7 +266,8 @@ export const SubEventCard: React.FC<{
   awayGkKit,
   homeTrim,
   awayTrim,
-  state
+  state,
+  captainName
 }) => {
   const isTMe = team.id === state.me && state.mode === 'm';
   const isTeamHome = team.id === homeId;
@@ -256,6 +278,9 @@ export const SubEventCard: React.FC<{
   const outPl = team.sq.find((q) => q.n === outName);
   const inNo = inPl ? getShirtNo(team, inPl) : null;
   const outNo = outPl ? getShirtNo(team, outPl) : null;
+  const effCap = captainName || team.cap;
+  const isInCap = Boolean(effCap && effCap === inName);
+  const isOutCap = Boolean(effCap && effCap === outName);
 
   return (
     <div className="rounded-lg bg-sky-500/6 border border-sky-500/20 px-2 py-1.5 mland:px-1.5 mland:py-1 space-y-1">
@@ -301,9 +326,11 @@ export const SubEventCard: React.FC<{
               #{inNo}
             </span>
           )}
-          <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate min-w-0 flex-1">
+          <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate min-w-0">
             {inName}
           </span>
+          {isInCap && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
+          <span className="flex-1" />
           {isMeIn && (
             <span className="text-[8.5px] font-black text-[#b45309] dark:text-[var(--lamp)] shrink-0">
               ★ คุณ
@@ -334,9 +361,11 @@ export const SubEventCard: React.FC<{
               #{outNo}
             </span>
           )}
-          <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)]/90 truncate min-w-0 flex-1">
+          <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)]/90 truncate min-w-0">
             {outName}
           </span>
+          {isOutCap && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
+          <span className="flex-1" />
           {isInjury && <StatIconBadge kind="injury" size="xs" title="บาดเจ็บ" />}
           {isMeOut && (
             <span className="text-[8.5px] font-black text-[#b45309] dark:text-[var(--lamp)] shrink-0">
@@ -366,6 +395,7 @@ export const MatchLogRow = React.memo<{
   state: GameState;
   isPlayerMode: boolean;
   myPlayerSquadObj: Player | undefined;
+  captains?: { H: string; A: string };
   onOpenVarReplay?: (varId: string) => void;
 }>(({
   l,
@@ -384,10 +414,17 @@ export const MatchLogRow = React.memo<{
   state,
   isPlayerMode,
   myPlayerSquadObj,
+  captains,
   onOpenVarReplay
 }) => {
+  const isCapForTeam = (team: Team, playerName: string) => {
+    const cap = team.id === homeId ? captains?.H : team.id === awayId ? captains?.A : undefined;
+    return Boolean((cap || team.cap) && (cap || team.cap) === playerName);
+  };
+
   if (l.tone === 'sub' && l.subInfo) {
     const subTeam = l.subInfo.teamId === homeOrig.id ? homeOrig : awayOrig;
+    const capName = subTeam.id === homeId ? captains?.H : captains?.A;
     return (
       <SubEventCard
         minute={l.m}
@@ -406,9 +443,203 @@ export const MatchLogRow = React.memo<{
         homeTrim={homeTrim}
         awayTrim={awayTrim}
         state={state}
+        captainName={capName}
       />
     );
   }
+
+  const capLineupMatch = l.text.match(/^(?:©️?\s*)?กัปตันสนามวันนี้:\s*(.+?)\s*\(([^)]*)\)\s*·\s*(.+?)\s*\(([^)]*)\)$/);
+  if (capLineupMatch) {
+    const [, hTeamLabel, hCapRaw, aTeamLabel, aCapRaw] = capLineupMatch;
+    const renderCapSide = (team: Team, sideLabel: 'เหย้า' | 'เยือน', rawCapName: string, isHomeSide: boolean) => {
+      const capName = rawCapName.trim();
+      const pl = capName && capName !== '-' ? team.sq.find((q) => q.n === capName) || null : null;
+      const no = pl ? getShirtNo(team, pl) : null;
+      const isMe = Boolean(pl?.me || (isPlayerMode && myPlayerSquadObj && capName === myPlayerSquadObj.n));
+      const isMyClub = team.id === state.me && state.mode === 'm';
+      const tKit = isHomeSide ? homeKit : awayKit;
+      const tGkKit = isHomeSide ? homeGkKit : awayGkKit;
+      const tTrim = isHomeSide ? homeTrim : awayTrim;
+      return (
+        <div
+          className={`flex items-center gap-1 min-w-0 px-1.5 py-1 mland:py-0.5 rounded-md border ${
+            isHomeSide
+              ? 'bg-[var(--g-soft)]/55 border-[var(--g)]/25'
+              : 'bg-amber-500/8 border-amber-500/25'
+          }`}
+        >
+          <span
+            className={`text-[9px] mland:text-[7.5px] font-extrabold px-1 py-[1px] rounded shrink-0 ${
+              isHomeSide
+                ? 'bg-[var(--g)]/15 text-[var(--g)]'
+                : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+            }`}
+          >
+            {sideLabel}
+          </span>
+          <span className="shrink-0 inline-flex">
+            <ClubCrest name={team.name} size={13} team={team} club={state.club} isMyClub={isMyClub} />
+          </span>
+          {pl && (
+            <MatchPlayerThumb
+              player={pl}
+              team={team}
+              state={state}
+              kitColor={pl.pos === 'GK' ? tGkKit : tKit}
+              trimColor={pl.pos === 'GK' ? undefined : tTrim}
+              size="xs"
+            />
+          )}
+          {pl?.ro && <PositionBadge role={pl.ro} size="2xs" />}
+          {no != null && (
+            <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
+              #{no}
+            </span>
+          )}
+          <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate min-w-0">
+            {capName || '-'}
+          </span>
+          <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />
+          <span className="flex-1" />
+          {isMe && (
+            <span className="text-[8.5px] font-black text-[#b45309] dark:text-[var(--lamp)] shrink-0">
+              ★ คุณ
+            </span>
+          )}
+        </div>
+      );
+    };
+
+    const hResolved = hTeamLabel.trim() === awayOrig.name ? awayOrig : homeOrig;
+    const aResolved = aTeamLabel.trim() === homeOrig.name ? homeOrig : awayOrig;
+
+    return (
+      <div className="rounded-lg bg-amber-500/7 border border-amber-500/25 px-2 py-1.5 mland:px-1.5 mland:py-1 space-y-1">
+        <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="min-w-[26px] text-center px-1 py-[1px] rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300 font-extrabold tabular shrink-0">
+              {l.m}&apos;
+            </span>
+            <CaptainBadge size="xs" className="shrink-0" />
+            <span className="font-extrabold text-[var(--ink)] truncate">กัปตันสนามวันนี้</span>
+          </div>
+          <span className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)] shrink-0 hidden sm:inline">
+            สวมปลอกแขนลงสนาม
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1">
+          {renderCapSide(hResolved, 'เหย้า', hCapRaw, true)}
+          {renderCapSide(aResolved, 'เยือน', aCapRaw, false)}
+        </div>
+      </div>
+    );
+  }
+
+  const capSwapMatch = l.text.match(/^(?:©️?\s*)?กัปตันชั่วคราว\s*\(([^)]+)\):\s*มอบปลอกแขนให้\s*(.+?)\s+แทน\s+(.+?)\s*\(([^)]+)\)$/);
+  if (capSwapMatch) {
+    const [, teamNameRaw, nextCapRawWithMe, curCapRaw, reasonTxt] = capSwapMatch;
+    const teamNameTrim = teamNameRaw.trim();
+    const capTeam = teamNameTrim === awayOrig.name ? awayOrig : homeOrig;
+    const isCapHome = capTeam.id === homeId;
+    const isMyClub = capTeam.id === state.me && state.mode === 'm';
+    const tKit = isCapHome ? homeKit : awayKit;
+    const tGkKit = isCapHome ? homeGkKit : awayGkKit;
+    const tTrim = isCapHome ? homeTrim : awayTrim;
+    const isMeTagInText = nextCapRawWithMe.includes('(คุณ!)');
+    const nextCapName = nextCapRawWithMe.replace(/\s*\(คุณ!\)\s*/g, '').trim();
+    const curCapName = curCapRaw.trim();
+    const nextPl = capTeam.sq.find((q) => q.n === nextCapName) || null;
+    const curPl = capTeam.sq.find((q) => q.n === curCapName) || null;
+    const nextNo = nextPl ? getShirtNo(capTeam, nextPl) : null;
+    const curNo = curPl ? getShirtNo(capTeam, curPl) : null;
+    const isMeNewCap = Boolean(isMeTagInText || nextPl?.me || (isPlayerMode && myPlayerSquadObj && nextCapName === myPlayerSquadObj.n));
+    const reasonTrim = reasonTxt.trim();
+    const reasonKind: 'injury' | 'red' | 'subOut' = reasonTrim.includes('เจ็บ')
+      ? 'injury'
+      : reasonTrim.includes('แดง')
+        ? 'red'
+        : 'subOut';
+
+    return (
+      <div className="rounded-lg bg-amber-500/8 border border-amber-500/30 px-2 py-1.5 mland:px-1.5 mland:py-1 space-y-1">
+        <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="min-w-[26px] text-center px-1 py-[1px] rounded-md bg-amber-500/22 text-amber-800 dark:text-amber-300 font-extrabold tabular shrink-0">
+              {l.m}&apos;
+            </span>
+            <CaptainBadge team={capTeam} state={state} size="xs" className="shrink-0" />
+            <span className="shrink-0 inline-flex">
+              <ClubCrest name={capTeam.name} size={13} team={capTeam} club={state.club} isMyClub={isMyClub} />
+            </span>
+            <span className="font-bold text-[var(--ink)] truncate">{capTeam.name}</span>
+            <span className="text-[var(--mut)] font-medium shrink-0 hidden sm:inline">· เปลี่ยนกัปตัน</span>
+          </div>
+          <span className="inline-flex items-center gap-1 text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)] shrink-0">
+            <StatIconBadge kind={reasonKind} size="xs" />
+            <span>{reasonTrim}</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1">
+          <div className="flex items-center gap-1 min-w-0 px-1.5 py-0.5 rounded-md bg-amber-500/12 border border-amber-500/20">
+            <CaptainBadge team={capTeam} state={state} size="xs" className="shrink-0" />
+            <span className="text-[9.5px] mland:text-[8px] font-extrabold text-amber-800 dark:text-amber-300 shrink-0">รับปลอกแขน</span>
+            {nextPl && (
+              <MatchPlayerThumb
+                player={nextPl}
+                team={capTeam}
+                state={state}
+                kitColor={nextPl.pos === 'GK' ? tGkKit : tKit}
+                trimColor={nextPl.pos === 'GK' ? undefined : tTrim}
+                size="xs"
+                ringClassName="ring-amber-400/65"
+              />
+            )}
+            {nextPl?.ro && <PositionBadge role={nextPl.ro} size="2xs" />}
+            {nextNo != null && (
+              <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
+                #{nextNo}
+              </span>
+            )}
+            <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate min-w-0">
+              {nextCapName}
+            </span>
+            <span className="flex-1" />
+            {isMeNewCap && (
+              <span className="text-[8.5px] font-black text-[#b45309] dark:text-[var(--lamp)] shrink-0">
+                ★ คุณ
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1 min-w-0 px-1.5 py-0.5 rounded-md bg-[var(--surface-2)]/75">
+            <StatIconBadge kind={reasonKind} size="xs" title={reasonTrim} />
+            <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0">เดิม</span>
+            {curPl && (
+              <MatchPlayerThumb
+                player={curPl}
+                team={capTeam}
+                state={state}
+                kitColor={curPl.pos === 'GK' ? tGkKit : tKit}
+                trimColor={curPl.pos === 'GK' ? undefined : tTrim}
+                size="xs"
+              />
+            )}
+            {curPl?.ro && <PositionBadge role={curPl.ro} size="2xs" />}
+            {curNo != null && (
+              <span className="text-[9.5px] mland:text-[8px] font-bold tabular text-[var(--mut)] shrink-0">
+                #{curNo}
+              </span>
+            )}
+            <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)]/85 truncate min-w-0">
+              {curCapName}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const vis = resolveLogVisual(l.text, matchVisualIndex, isPlayerMode, myPlayerSquadObj, meTeamOrig);
   const vTeam = vis.team;
   const vPlayer = vis.playerEntry;
@@ -442,9 +673,10 @@ export const MatchLogRow = React.memo<{
   }
 
   const renderTextSeg = (seg: string, keyPrefix: string) => {
-    const tokens = seg.split(/(✚|🔼|🔽|🟨➡🟥|🟨🟥|🟨|🟥|⚽|👟)/);
+    const tokens = seg.split(/(©️|©|✚|🔼|🔽|🟨➡🟥|🟨🟥|🟨|🟥|⚽|👟)/);
     if (tokens.length === 1) return seg;
     return tokens.map((tok, i) => {
+      if (tok === '©️' || tok === '©') return <CaptainBadge key={`${keyPrefix}-${i}`} size="xs" className="mx-0.5" />;
       if (tok === '✚') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="injury" size="xs" />;
       if (tok === '🔼') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="subIn" size="xs" />;
       if (tok === '🔽') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="subOut" size="xs" />;
@@ -473,6 +705,7 @@ export const MatchLogRow = React.memo<{
         const htGkKit = htIsHome ? homeGkKit : awayGkKit;
         const htTrim = htIsHome ? homeTrim : awayTrim;
         const htIsMe = htTeam.id === state.me && state.mode === 'm';
+        const htIsCap = isCapForTeam(htTeam, htPlayer.n);
         nodes.push(
           <span key={`p-${hIdx}`} className="inline-flex items-center gap-1 align-middle mx-0.5 text-[var(--ink)]">
             <span className="shrink-0 inline-flex">
@@ -491,6 +724,7 @@ export const MatchLogRow = React.memo<{
               #{h.entry.no}
             </span>
             <span className="font-bold">{l.text.slice(h.start, h.end)}</span>
+            {htIsCap && <CaptainBadge team={htTeam} state={state} size="xs" className="shrink-0" />}
           </span>
         );
         cursor = h.end;
@@ -587,6 +821,9 @@ export const MatchLogRow = React.memo<{
           <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">
             #{vPlayer.no}
           </span>
+          {isCapForTeam(vPlayer.team, vPlayer.player.n) && (
+            <CaptainBadge team={vPlayer.team} state={state} size="xs" className="shrink-0" />
+          )}
         </span>
       )}
 
@@ -636,80 +873,100 @@ export const MatchStatsPanel: React.FC<{
 }> = ({ homeOrig, awayOrig, state, matchStats, matchCards }) => {
   const homeId = homeOrig.id;
   const awayId = awayOrig.id;
-  const yH = matchCards.filter((c) => c.t === homeId && c.type === 'Y').length;
-  const yA = matchCards.filter((c) => c.t === awayId && c.type === 'Y').length;
+  const yH = matchCards.filter((c) => c.t === homeId && (c.type === 'Y' || c.type === 'Y2R')).length;
+  const yA = matchCards.filter((c) => c.t === awayId && (c.type === 'Y' || c.type === 'Y2R')).length;
   const rH = matchCards.filter((c) => c.t === homeId && (c.type === 'R' || c.type === 'Y2R')).length;
   const rA = matchCards.filter((c) => c.t === awayId && (c.type === 'R' || c.type === 'Y2R')).length;
+  const totPasses = matchStats.passesH + matchStats.passesA;
+  const passPctH = totPasses > 0 ? Math.round((matchStats.passesH / totPasses) * 100) : 0;
+  const passPctA = totPasses > 0 ? 100 - passPctH : 0;
+
   const statRows: { label: string; hVal: number; aVal: number; hText: string; aText: string }[] = [
     { label: 'ครองบอล', hVal: matchStats.possH, aVal: 100 - matchStats.possH, hText: `${matchStats.possH}%`, aText: `${100 - matchStats.possH}%` },
     { label: 'โอกาสยิง (เข้ากรอบ)', hVal: matchStats.shotsH, aVal: matchStats.shotsA, hText: `${matchStats.shotsH} (${matchStats.onTargetH})`, aText: `${matchStats.shotsA} (${matchStats.onTargetA})` },
-    { label: 'ความแม่นยำประตู (xG)', hVal: matchStats.xgH, aVal: matchStats.xgA, hText: matchStats.xgH.toFixed(2), aText: matchStats.xgA.toFixed(2) },
-    { label: 'จ่ายบอลสำเร็จ', hVal: matchStats.passesH, aVal: matchStats.passesA, hText: `${matchStats.passesH}`, aText: `${matchStats.passesA}` }
+    { label: 'ประตูคาดหวัง (xG)', hVal: matchStats.xgH, aVal: matchStats.xgA, hText: matchStats.xgH.toFixed(2), aText: matchStats.xgA.toFixed(2) },
+    { label: 'จ่ายบอลสำเร็จ', hVal: matchStats.passesH, aVal: matchStats.passesA, hText: `${passPctH}%`, aText: `${passPctA}%` }
   ];
 
   return (
     <div>
-      <div className="px-3 sm:px-3.5 mland:px-2.5 py-2 mland:py-1.5 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/70 flex items-center justify-between gap-2 text-[11px] mland:text-[10px] font-bold">
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-            <ClubCrest name={homeOrig.name} size={20} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+      <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)]/70 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 text-[10.5px] mland:text-[9.5px] font-bold">
+        <div className="flex items-center gap-1.5 min-w-0" title={homeOrig.name}>
+          <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+            <ClubCrest name={homeOrig.name} size={16} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
           </div>
-          <span className="leading-tight break-words text-[var(--ink)]">{homeOrig.name}</span>
+          <span className="truncate font-extrabold text-[var(--g)]">{homeOrig.name}</span>
           {homeId === state.me && <MyTeamBadge size="2xs" />}
         </div>
-        <span className="text-[10px] mland:text-[9px] text-[var(--mut)] font-extrabold uppercase tracking-wider shrink-0">📊 สถิติ</span>
-        <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 text-right">
+        <span className="px-1.5 py-[2px] rounded-md bg-[var(--surface)] border border-[var(--line)]/80 text-[9.5px] mland:text-[8.5px] text-[var(--mut)] font-extrabold tracking-wide shrink-0 whitespace-nowrap">
+          📊 สถิติ
+        </span>
+        <div className="flex items-center justify-end gap-1.5 min-w-0 text-right" title={awayOrig.name}>
           {awayId === state.me && <MyTeamBadge size="2xs" />}
-          <span className="leading-tight break-words text-[var(--ink)]">{awayOrig.name}</span>
-          <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-            <ClubCrest name={awayOrig.name} size={20} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+          <span className="truncate font-extrabold text-amber-600 dark:text-amber-400">{awayOrig.name}</span>
+          <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+            <ClubCrest name={awayOrig.name} size={16} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
           </div>
         </div>
       </div>
 
-      <div className="p-3 sm:p-3.5 mland:p-2 space-y-2.5 mland:space-y-1.5">
-        <div className="space-y-2 mland:space-y-1.5">
+      <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 space-y-1.5 mland:space-y-1">
+        <div className="space-y-1.5 mland:space-y-1">
           {statRows.map((row) => {
             const tot = Math.max(0.01, row.hVal + row.aVal);
             const hPct = row.hVal === 0 && row.aVal === 0 ? 50 : clamp((row.hVal / tot) * 100, 6, 94);
             return (
-              <div key={row.label} className="space-y-1 mland:space-y-0.5 text-[11px] mland:text-[10px]">
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 tabular">
+              <div key={row.label} className="space-y-0.5 text-[10.5px] mland:text-[9.5px]">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 tabular leading-tight">
                   <span className={`font-extrabold ${row.hVal >= row.aVal ? 'text-[var(--ink)]' : 'text-[var(--mut)]'}`}>{row.hText}</span>
-                  <span className="text-[10px] text-[var(--mut)] font-semibold text-center">{row.label}</span>
+                  <span className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)] font-semibold text-center whitespace-nowrap">{row.label}</span>
                   <span className={`font-extrabold text-right ${row.aVal >= row.hVal ? 'text-[var(--ink)]' : 'text-[var(--mut)]'}`}>{row.aText}</span>
                 </div>
-                <div className="h-1.5 rounded-full overflow-hidden bg-[var(--surface-2)] flex gap-0.5">
+                <div className="h-1.5 mland:h-1 rounded-full overflow-hidden bg-[var(--surface-2)] flex gap-0.5">
                   <div className="h-full rounded-l-full transition-all duration-300" style={{ width: `${hPct}%`, backgroundColor: 'var(--g)' }} />
-                  <div className="h-full rounded-r-full transition-all duration-300 bg-amber-500/85" style={{ width: `${100 - hPct}%` }} />
+                  <div className="h-full rounded-r-full transition-all duration-300 bg-amber-500/90" style={{ width: `${100 - hPct}%` }} />
                 </div>
               </div>
             );
           })}
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-[var(--line)]/60 text-[10px] mland:text-[9px] tabular">
-          <div className="px-2 py-1 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1">
-            <span className="font-bold">{matchStats.cornersH}</span>
-            <span className="text-[var(--mut)] font-semibold">เตะมุม</span>
-            <span className="font-bold">{matchStats.cornersA}</span>
+        <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.15fr)_minmax(0,0.95fr)] gap-1 pt-1.5 mland:pt-1 border-t border-[var(--line)]/60 text-[10px] mland:text-[8.5px] tabular">
+          <div className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/50 flex items-center justify-between gap-1 min-w-0">
+            <span className={`font-extrabold shrink-0 ${matchStats.cornersH >= matchStats.cornersA ? 'text-[var(--ink)]' : 'text-[var(--mut)]'}`}>{matchStats.cornersH}</span>
+            <span className="text-[var(--mut)] font-semibold truncate text-center">เตะมุม</span>
+            <span className={`font-extrabold shrink-0 ${matchStats.cornersA >= matchStats.cornersH ? 'text-[var(--ink)]' : 'text-[var(--mut)]'}`}>{matchStats.cornersA}</span>
           </div>
-          <div className="px-2 py-1 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1">
-            <span className="font-bold">{matchStats.foulsH}/{matchStats.offsidesH}</span>
-            <span className="text-[var(--mut)] font-semibold">ฟาวล์/ล้ำ</span>
-            <span className="font-bold">{matchStats.foulsA}/{matchStats.offsidesA}</span>
+          <div className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/50 flex items-center justify-between gap-1 min-w-0">
+            <span className="font-extrabold shrink-0 text-[var(--ink)]">{matchStats.foulsH}/{matchStats.offsidesH}</span>
+            <span className="text-[var(--mut)] font-semibold truncate text-center">ฟาวล์/ล้ำ</span>
+            <span className="font-extrabold shrink-0 text-[var(--ink)]">{matchStats.foulsA}/{matchStats.offsidesA}</span>
           </div>
-          <div className="px-2 py-1 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1">
-            <span className="inline-flex items-center gap-0.5 font-bold">
-              <span className={yH === 0 ? 'opacity-45' : ''}><StatIconBadge kind="yellow" count={Math.max(1, yH)} size="xs" /></span>
-              {yH === 0 && <span>0</span>}
-              {rH > 0 && <StatIconBadge kind="red" count={rH} size="xs" />}
+          <div className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/50 flex items-center justify-between gap-1 min-w-0">
+            <span className="inline-flex items-center gap-1 font-extrabold shrink-0">
+              <span className={`inline-flex items-center gap-0.5 ${yH === 0 ? 'opacity-45 text-[var(--mut)]' : 'text-[var(--ink)]'}`}>
+                <StatIconBadge kind="yellow" size="xs" />
+                <span>{yH}</span>
+              </span>
+              {rH > 0 && (
+                <span className="inline-flex items-center gap-0.5 text-[var(--red)]">
+                  <StatIconBadge kind="red" size="xs" />
+                  <span>{rH}</span>
+                </span>
+              )}
             </span>
-            <span className="text-[var(--mut)] font-semibold">ใบ</span>
-            <span className="inline-flex items-center gap-0.5 font-bold">
-              {rA > 0 && <StatIconBadge kind="red" count={rA} size="xs" />}
-              <span className={yA === 0 ? 'opacity-45' : ''}><StatIconBadge kind="yellow" count={Math.max(1, yA)} size="xs" /></span>
-              {yA === 0 && <span>0</span>}
+            <span className="text-[var(--mut)] font-semibold shrink-0">ใบ</span>
+            <span className="inline-flex items-center gap-1 font-extrabold shrink-0">
+              {rA > 0 && (
+                <span className="inline-flex items-center gap-0.5 text-[var(--red)]">
+                  <span>{rA}</span>
+                  <StatIconBadge kind="red" size="xs" />
+                </span>
+              )}
+              <span className={`inline-flex items-center gap-0.5 ${yA === 0 ? 'opacity-45 text-[var(--mut)]' : 'text-[var(--ink)]'}`}>
+                <span>{yA}</span>
+                <StatIconBadge kind="yellow" size="xs" />
+              </span>
             </span>
           </div>
         </div>
@@ -729,8 +986,8 @@ export const MatchTimelinePanel: React.FC<{
   awayGkKit: string;
   homeTrim: string;
   awayTrim: string;
+  captains?: { H: string; A: string };
   standalone?: boolean;
-  defaultChronological?: boolean;
 }> = ({
   timelineEvents,
   homeOrig,
@@ -742,10 +999,9 @@ export const MatchTimelinePanel: React.FC<{
   awayGkKit,
   homeTrim,
   awayTrim,
-  standalone = false,
-  defaultChronological = false
+  captains,
+  standalone = false
 }) => {
-  const [sortAsc, setSortAsc] = useState(defaultChronological);
   const homeId = homeOrig.id;
   const awayId = awayOrig.id;
 
@@ -842,45 +1098,26 @@ export const MatchTimelinePanel: React.FC<{
 
   const sortedTimeline = timelineEvents
     .slice()
-    .sort((a, b) => (sortAsc ? (a.m - b.m) || (a.seq - b.seq) : (b.m - a.m) || (b.seq - a.seq)));
+    .sort((a, b) => (b.m - a.m) || (b.seq - a.seq));
   const keyEventCount = sortedTimeline.filter((t) => t.side !== 'N').length;
 
   return (
     <div className={standalone ? '' : 'border-t border-[var(--line)]'}>
-      <div className="px-3 sm:px-3.5 mland:px-2.5 py-1.5 mland:py-1 bg-[var(--surface-2)]/50 border-b border-[var(--line)]/65 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
-        <div className="flex items-center justify-end gap-1.5 min-w-0">
+      <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/55 border-b border-[var(--line)]/65 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
+        <div className="flex items-center justify-end gap-1 min-w-0">
           {homeId === state.me && <MyTeamBadge size="2xs" />}
           <span className="text-[10px] mland:text-[9px] font-bold text-[var(--g)] truncate">เหย้า</span>
-          <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
-            <ClubCrest name={homeOrig.name} size={16} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-          </div>
         </div>
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="text-[10px] mland:text-[9px] font-extrabold text-[var(--mut)] tabular">
-            ⏱️ ไทม์ไลน์{keyEventCount > 0 ? ` (${keyEventCount})` : ''}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              SFX.tap();
-              setSortAsc((prev) => !prev);
-            }}
-            className="px-1.5 py-[1px] rounded bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--ink)]/35 text-[9px] mland:text-[8px] font-bold text-[var(--ink)]/85 tabular cursor-pointer transition-colors"
-            title={sortAsc ? 'เรียงตามเวลา 0 นาที → 90 นาที' : 'เรียงจากเหตุการณ์ล่าสุด 90 นาที → 0 นาที'}
-          >
-            {sortAsc ? "0'→90'" : "90'→0'"}
-          </button>
-        </div>
-        <div className="flex items-center justify-start gap-1.5 min-w-0">
-          <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
-            <ClubCrest name={awayOrig.name} size={16} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-          </div>
+        <span className="text-[10px] mland:text-[9px] font-extrabold text-[var(--mut)] tabular whitespace-nowrap">
+          ⏱️ ไทม์ไลน์{keyEventCount > 0 ? ` (${keyEventCount})` : ''}
+        </span>
+        <div className="flex items-center justify-start gap-1 min-w-0">
           <span className="text-[10px] mland:text-[9px] font-bold text-amber-600 dark:text-amber-400 truncate">เยือน</span>
           {awayId === state.me && <MyTeamBadge size="2xs" />}
         </div>
       </div>
 
-      <div className="p-3 sm:p-3.5 mland:p-2 relative">
+      <div className="p-2.5 mland:p-1.5 relative">
         <div className="pointer-events-none absolute top-2 bottom-2 left-1/2 -translate-x-1/2 w-px bg-[var(--line)]" />
 
         <div className="space-y-1.5">
@@ -934,6 +1171,8 @@ export const MatchTimelinePanel: React.FC<{
             const tlNo = tlPlayer ? getShirtNo(sideTeam, tlPlayer) : null;
             const sideKit = sideId === homeOrig.id ? homeKit : awayKit;
             const sideTrim = sideId === homeOrig.id ? homeTrim : awayTrim;
+            const sideCap = sideId === homeId ? captains?.H : captains?.A;
+            const isTlCap = Boolean(tlPlayer && (sideCap || sideTeam.cap) === tlPlayer.n);
 
             return (
               <div key={item.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[10.5px] mland:text-[9.5px] relative">
@@ -942,9 +1181,6 @@ export const MatchTimelinePanel: React.FC<{
                     <>
                       <div className="min-w-0 leading-tight">
                         <div className={`truncate flex items-center justify-end gap-1 ${titleCls}`}>
-                          <span className="shrink-0 inline-flex">
-                            <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={sideId === state.me && state.mode === 'm'} />
-                          </span>
                           {tlPlayer && (
                             <MatchPlayerThumb
                               player={tlPlayer}
@@ -962,6 +1198,7 @@ export const MatchTimelinePanel: React.FC<{
                             </span>
                           )}
                           <span className="truncate">{shortWho}</span>
+                          {isTlCap && <CaptainBadge team={sideTeam} state={state} size="xs" className="shrink-0" />}
                         </div>
                         <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center justify-end gap-1">
                           {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
@@ -1004,9 +1241,6 @@ export const MatchTimelinePanel: React.FC<{
                       {iconForKind(item.kind, item.detail)}
                       <div className="min-w-0 leading-tight">
                         <div className={`truncate flex items-center gap-1 ${titleCls}`}>
-                          <span className="shrink-0 inline-flex">
-                            <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={sideId === state.me && state.mode === 'm'} />
-                          </span>
                           {tlPlayer && (
                             <MatchPlayerThumb
                               player={tlPlayer}
@@ -1024,6 +1258,7 @@ export const MatchTimelinePanel: React.FC<{
                             </span>
                           )}
                           <span className="truncate">{shortWho}</span>
+                          {isTlCap && <CaptainBadge team={sideTeam} state={state} size="xs" className="shrink-0" />}
                         </div>
                         <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
                           {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
@@ -1282,30 +1517,32 @@ export const MatchBroadcastHeader: React.FC<{
             </button>
           </div>
 
-          <div className="relative flex flex-col items-center justify-center gap-1 mland:gap-0.5 shrink-0">
-            <div className="flex items-center justify-center leading-none">
+          <div className="relative flex flex-col items-center justify-center gap-1 mland:gap-0.5 shrink-0 w-[96px] sm:w-[112px] md:w-[122px] mland:w-[86px]">
+            <div className="w-full flex items-center justify-center leading-none">
               {done ? (
-                <span className="px-2.5 py-0.5 rounded-md bg-[var(--g)] text-white font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] tracking-wide shadow-2xs">
+                <span className="w-full h-5 mland:h-4 px-1.5 rounded-md bg-[var(--g)] text-white font-extrabold tabular text-[11px] sm:text-xs mland:text-[9.5px] tracking-wide shadow-2xs inline-flex items-center justify-center whitespace-nowrap">
                   FT
                 </span>
               ) : matchPhaseUi === 'halftime' ? (
-                <span className="px-2.5 py-0.5 rounded-md bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
+                <span className="w-full h-5 mland:h-4 px-1.5 rounded-md bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[11px] sm:text-xs mland:text-[9.5px] shadow-2xs inline-flex items-center justify-center whitespace-nowrap">
                   HT
                 </span>
               ) : paused ? (
-                <span className="px-2 sm:px-2.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
-                  ⏸ {clockLabel}
+                <span className="w-full h-5 mland:h-4 px-1.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-extrabold tabular text-[10.5px] sm:text-[11.5px] mland:text-[9px] shadow-2xs inline-flex items-center justify-center gap-1 whitespace-nowrap">
+                  <span>⏸</span>
+                  <span>{clockLabel}</span>
+                  {stoppageBadge > 0 && <span className="opacity-75">(+{stoppageBadge}&apos;)</span>}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
-                  <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
+                <span className="w-full h-5 mland:h-4 px-1.5 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] font-extrabold tabular text-[10.5px] sm:text-[11.5px] mland:text-[9px] shadow-2xs inline-flex items-center justify-center gap-1 whitespace-nowrap">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--g)] animate-pulse shrink-0" />
                   <span>{clockLabel}</span>
                   {stoppageBadge > 0 && <span className="opacity-75">(+{stoppageBadge}&apos;)</span>}
                 </span>
               )}
             </div>
             <div
-              className={`relative overflow-hidden px-2.5 sm:px-3.5 md:px-4 mland:px-2 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[84px] sm:min-w-[106px] md:min-w-[118px] mland:min-w-[74px] transition-colors duration-200 shadow-xs ${
+              className={`relative overflow-hidden w-full px-2 sm:px-3 mland:px-1.5 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center transition-colors duration-200 shadow-xs ${
                 goalFlashInfo
                   ? goalFlashInfo.isOwnGoal
                     ? 'bg-gradient-to-b from-rose-50 to-rose-100/80 dark:from-[#2c0d17] dark:to-[#1b080e] border-rose-400 ring-2 ring-rose-400/55 goal-board-blink-og'
@@ -2463,7 +2700,7 @@ export const FullTimeMatchStage: React.FC<{
 
           <div className="p-2 sm:p-2.5 mland:p-1.5 space-y-1 mland:space-y-0.5">
             {(eventFilter === 'all' || eventFilter === 'goal') && (() => {
-              const sortedGoals = evs.slice().sort((a, b) => a.m - b.m);
+              const sortedGoals = evs.slice().sort((a, b) => b.m - a.m);
               const homeGoals = sortedGoals.filter((e) => e.t === homeOrig.id);
               const awayGoals = sortedGoals.filter((e) => e.t === awayOrig.id);
 
@@ -2718,19 +2955,21 @@ export const FullTimeMatchStage: React.FC<{
 
             {(eventFilter === 'card' || (eventFilter === 'all' && matchCards.length > 0)) && (() => {
               const cardRank = (tp: MatchCardEvent['type']) => (tp === 'Y' ? 0 : tp === 'Y2R' ? 1 : 2);
-              const sortedCards = matchCards
+              const chronoCards = matchCards
                 .slice()
                 .sort((a, b) => (a.m - b.m) || (cardRank(a.type) - cardRank(b.type)));
 
               const yellowOrdMap = new Map<MatchCardEvent, number>();
               const playerYellowCounts: Record<string, number> = {};
-              sortedCards.forEach((c) => {
+              chronoCards.forEach((c) => {
                 if (c.type === 'Y' || c.type === 'Y2R') {
                   const key = `${c.t}:${c.who}`;
                   playerYellowCounts[key] = (playerYellowCounts[key] || 0) + 1;
                   yellowOrdMap.set(c, playerYellowCounts[key]);
                 }
               });
+
+              const sortedCards = chronoCards.slice().reverse();
 
               const homeCards = sortedCards.filter((c) => c.t === homeOrig.id);
               const awayCards = sortedCards.filter((c) => c.t === awayOrig.id);
@@ -2884,7 +3123,7 @@ export const FullTimeMatchStage: React.FC<{
                         <StatIconBadge kind="red" size="xs" />
                       </span>
                       <span>สรุปใบเหลือง / ใบแดง</span>
-                      <span className="hidden sm:inline text-[9.5px] font-semibold text-[var(--mut)]">(0&apos;→90&apos;)</span>
+                      <span className="hidden sm:inline text-[9.5px] font-semibold text-[var(--mut)]">(90&apos;→0&apos;)</span>
                     </span>
                     <div className="inline-flex items-center gap-1.5 text-[10px] mland:text-[8.5px] font-extrabold tabular text-[var(--ink)] min-w-0">
                       <span className="inline-flex items-center gap-1 min-w-0">
@@ -2957,6 +3196,7 @@ export const FullTimeMatchStage: React.FC<{
                         homeTrim={homeTrim}
                         awayTrim={awayTrim}
                         state={state}
+                        captainName={sb.t === homeOrig.id ? captains.H : captains.A}
                       />
                     );
                   })
@@ -2964,14 +3204,11 @@ export const FullTimeMatchStage: React.FC<{
             ) : (() => {
               const filteredLogs = logs.filter((l) => {
                 if (eventFilter === 'goal') return l.tone === 'goal';
-                if (eventFilter === 'card') return l.tone === 'card';
-                if (eventFilter === 'var') return Boolean(l.varReplayId) || l.text.includes('VAR') || l.text.includes('จุดโทษ');
+                if (eventFilter === 'card') return isCardLogEntry(l);
+                if (eventFilter === 'var') return isVarLogEntry(l);
                 return true;
               });
-              const displayLogs =
-                eventFilter === 'card'
-                  ? filteredLogs.slice().sort((a, b) => a.m - b.m)
-                  : filteredLogs;
+              const displayLogs = filteredLogs.slice().sort((a, b) => b.m - a.m);
               if (!displayLogs.length) {
                 return <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีเหตุการณ์ในหมวดนี้</div>;
               }
@@ -2994,6 +3231,7 @@ export const FullTimeMatchStage: React.FC<{
                   state={state}
                   isPlayerMode={isPlayerMode}
                   myPlayerSquadObj={myPlayerSquadObj}
+                  captains={captains}
                   onOpenVarReplay={onOpenVarReplay}
                 />
               ));
@@ -3127,28 +3365,6 @@ export const FullTimeMatchStage: React.FC<{
             })()
           ) : (
             <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
-              <button
-                type="button"
-                onClick={() => onChangeRightTab('chat')}
-                className="w-full text-left rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)]/60 transition-colors px-3 py-2 mland:px-2.5 mland:py-1.5 cursor-pointer"
-              >
-                <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
-                  <span className="inline-flex items-center gap-1.5 font-bold text-[var(--ink)] min-w-0">
-                    <span className={`leading-none shrink-0 text-[10px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
-                    <span className="truncate">{broadcastChannel.short}: <b className="tabular">{liveViewers.toLocaleString()}</b> คนดู</span>
-                    <span className="text-[var(--mut)] font-medium hidden sm:inline shrink-0">({getViewerTierMeta(getStreamViewerTier(liveViewers)).label})</span>
-                  </span>
-                  <span className="font-bold text-[var(--g)] shrink-0">ดูแชท →</span>
-                </div>
-                {liveComments[0] && (
-                  <div className="mt-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
-                    <b className="text-[var(--ink)]">{liveComments[0].user}:</b>{' '}
-                    {liveComments[0].donateBaht ? `💎 ${liveComments[0].donateBaht}฿ ` : ''}
-                    {liveComments[0].text}
-                  </div>
-                )}
-              </button>
-
               <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
                 <MatchStatsPanel
                   homeOrig={homeOrig}
@@ -3168,7 +3384,7 @@ export const FullTimeMatchStage: React.FC<{
                   awayGkKit={awayGkKit}
                   homeTrim={homeTrim}
                   awayTrim={awayTrim}
-                  defaultChronological={true}
+                  captains={captains}
                 />
               </div>
             </div>

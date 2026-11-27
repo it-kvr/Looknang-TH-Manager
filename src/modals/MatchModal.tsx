@@ -51,6 +51,8 @@ import { MatchHighlightModal } from './MatchHighlightModal';
 import {
   buildMatchVisualIndex,
   FullTimeMatchStage,
+  isCardLogEntry,
+  isVarLogEntry,
   MatchBroadcastHeader,
   MatchLogRow,
   MatchPlayerThumb,
@@ -247,7 +249,7 @@ export const MatchModal: React.FC<{
       base.push({
         id: 5,
         m: 0,
-        text: `©️ กัปตันสนามวันนี้: ${homeOrig.name} (${initialHomeCap || '-'}) · ${awayOrig.name} (${initialAwayCap || '-'})`,
+        text: `กัปตันสนามวันนี้: ${homeOrig.name} (${initialHomeCap || '-'}) · ${awayOrig.name} (${initialAwayCap || '-'})`,
         tone: 'sys'
       });
       if (myInitialBanned) {
@@ -417,7 +419,7 @@ export const MatchModal: React.FC<{
     setMlandMatchTab('tactics');
     setPaused(true);
   };
-  const [eventFilter, setEventFilter] = useState<'all' | 'goal' | 'card' | 'sub'>('all');
+  const [eventFilter, setEventFilter] = useState<'all' | 'goal' | 'card' | 'var' | 'sub'>('all');
   const [htPitchMode, setHtPitchMode] = useState<'all' | 'H' | 'A'>(() => (meIsHome ? 'H' : 'A'));
   const [htPickedPlayer, setHtPickedPlayer] = useState<string | null>(null);
 
@@ -755,7 +757,7 @@ export const MatchModal: React.FC<{
       const isMeCap = isPlayerMode && nextCap === myPlayerName;
       pushLog(
         curMin,
-        `©️ กัปตันชั่วคราว (${orig.name}): มอบปลอกแขนให้ ${nextCap}${isMeCap ? ' (คุณ!)' : ''} แทน ${curCap} (${reasonTxt})`,
+        `กัปตันชั่วคราว (${orig.name}): มอบปลอกแขนให้ ${nextCap}${isMeCap ? ' (คุณ!)' : ''} แทน ${curCap} (${reasonTxt})`,
         'sys'
       );
     }
@@ -13193,7 +13195,17 @@ export const MatchModal: React.FC<{
                       [
                         ['all', 'ทั้งหมด'],
                         ['goal', <span key="g-tab" className="inline-flex items-center gap-1"><StatIconBadge kind="goal" size="xs" /><span>ประตู</span></span>],
-                        ['card', '🖥 VAR'],
+                        [
+                          'card',
+                          <span key="c-tab" className="inline-flex items-center gap-1">
+                            <span className="inline-flex items-center -space-x-1">
+                              <StatIconBadge kind="yellow" size="xs" />
+                              <StatIconBadge kind="red" size="xs" />
+                            </span>
+                            <span>ใบ{matchCards.length ? ` (${matchCards.length})` : ''}</span>
+                          </span>
+                        ],
+                        ['var', `🖥 VAR${varHistory.length ? ` (${varHistory.length})` : ''}`],
                         ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
                       ] as const
                     ).map(([k, lbl]) => (
@@ -13364,6 +13376,7 @@ export const MatchModal: React.FC<{
                               homeTrim={homeTrim}
                               awayTrim={awayTrim}
                               state={state}
+                              captainName={sb.t === homeOrig.id ? liveCaptains.H : liveCaptains.A}
                             />
                           );
                         })
@@ -13371,7 +13384,8 @@ export const MatchModal: React.FC<{
                   ) : (() => {
                     const filteredLogs = logs.filter((l) => {
                       if (eventFilter === 'goal') return l.tone === 'goal';
-                      if (eventFilter === 'card') return Boolean(l.varReplayId) || l.tone === 'card' || l.text.includes('VAR') || l.text.includes('จุดโทษ');
+                      if (eventFilter === 'card') return isCardLogEntry(l);
+                      if (eventFilter === 'var') return isVarLogEntry(l);
                       return true;
                     });
                     if (!filteredLogs.length) {
@@ -13396,6 +13410,7 @@ export const MatchModal: React.FC<{
                         state={state}
                         isPlayerMode={isPlayerMode}
                         myPlayerSquadObj={myPlayerSquadObj}
+                        captains={liveCaptains}
                         onOpenVarReplay={openVarReplayById}
                       />
                     ));
@@ -13833,29 +13848,6 @@ export const MatchModal: React.FC<{
                   renderLiveStreamChatPanel()
                 ) : (
                   <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
-                    {/* Compact Live Stream Ticker Strip (always visible alongside stats) */}
-                    <button
-                      type="button"
-                      onClick={() => setMlandMatchTab('chat')}
-                      className="w-full text-left rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)]/60 transition-colors px-3 py-2 mland:px-2.5 mland:py-1.5 cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
-                        <span className="inline-flex items-center gap-1.5 font-bold text-[var(--ink)] min-w-0">
-                          <span className={`leading-none shrink-0 text-[10px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
-                          <span className="truncate">{broadcastChannel.short}: <b className="tabular">{liveViewers.toLocaleString()}</b> คนดู</span>
-                          <span className="text-[var(--mut)] font-medium hidden sm:inline shrink-0">({getViewerTierMeta(getStreamViewerTier(liveViewers)).label})</span>
-                        </span>
-                        <span className="font-bold text-[var(--g)] shrink-0">ดูแชท →</span>
-                      </div>
-                      {liveComments[0] && (
-                        <div className="mt-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
-                          <b className="text-[var(--ink)]">{liveComments[0].user}:</b>{' '}
-                          {liveComments[0].donateBaht ? `💎 ${liveComments[0].donateBaht}฿ ` : ''}
-                          {liveComments[0].text}
-                        </div>
-                      )}
-                    </button>
-
                     <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
                       <MatchStatsPanel
                         homeOrig={homeOrig}
@@ -13875,6 +13867,7 @@ export const MatchModal: React.FC<{
                         awayGkKit={awayGkKit}
                         homeTrim={homeTrim}
                         awayTrim={awayTrim}
+                        captains={liveCaptains}
                       />
                     </div>
                   </div>
