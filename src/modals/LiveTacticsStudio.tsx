@@ -111,6 +111,14 @@ interface LiveTacticsStudioProps {
   };
 }
 
+interface CachedPitchDropNode {
+  name: string;
+  role?: SubRole;
+  pitchIdx: number;
+  cx: number;
+  cy: number;
+}
+
 interface DragRuntime {
   source: 'bench' | 'pitch';
   player: Player;
@@ -125,6 +133,9 @@ interface DragRuntime {
   active: boolean;
   immediate: boolean;
   holdTimer?: number;
+  cachedPitchRect: DOMRect | null;
+  cachedPitchNodes: CachedPitchDropNode[];
+  lockedPitchTargetName: string | null;
 }
 
 interface DropTargetState {
@@ -133,8 +144,6 @@ interface DropTargetState {
   role?: SubRole;
   pitchIdx?: number;
 }
-
-const TOUCH_LIFT_PX = 36;
 
 export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
   state,
@@ -253,12 +262,13 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragRuntime | null>(null);
 
-  const updateDragGhostPos = (rawX: number, rawY: number) => {
+  const updateDragGhostPos = (rawX: number, rawY: number, isTouch = false) => {
     const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 230) : rawX - 95;
-    const gy = typeof window !== 'undefined' ? clamp(rawY - 54, 8, window.innerHeight - 66) : rawY - 54;
+    const yOffset = isTouch ? 62 : 48;
+    const gy = typeof window !== 'undefined' ? clamp(rawY - yOffset, 8, window.innerHeight - 66) : rawY - yOffset;
     dragGhostPosRef.current = { x: gx, y: gy };
     if (dragGhostRef.current) {
-      dragGhostRef.current.style.transform = `translate3d(${gx}px, ${gy}px, 0)`;
+      dragGhostRef.current.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0)`;
     }
   };
 
@@ -362,37 +372,67 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     });
   }, [liveLu, meTeamOrig, mySlots, liveFitMap]);
 
-  const findNearestPitchTarget = (clientX: number, clientY: number, excludeName: string, liftPx: number): DropTargetState | null => {
+  const collectPitchDropNodes = (): { rect: DOMRect | null; nodes: CachedPitchDropNode[] } => {
     const host = pitchRef.current;
-    if (!host) return null;
+    if (!host) return { rect: null, nodes: [] };
     const rect = host.getBoundingClientRect();
+    const els = host.querySelectorAll<Element>('[data-tactics-drop-player]');
+    const nodes: CachedPitchDropNode[] = [];
+    els.forEach((el) => {
+      const name = el.getAttribute('data-tactics-drop-player');
+      if (!name || el.getAttribute('data-tactics-disabled') === '1') return;
+      const r = el.getBoundingClientRect();
+      nodes.push({
+        name,
+        role: (el.getAttribute('data-tactics-drop-slot') as SubRole) || undefined,
+        pitchIdx: Number(el.getAttribute('data-tactics-drop-idx') || '-1'),
+        cx: r.left + r.width * 0.5,
+        cy: r.top + r.height * 0.5
+      });
+    });
+    return { rect, nodes };
+  };
+
+  const findNearestPitchTarget = (
+    clientX: number,
+    clientY: number,
+    excludeName: string,
+    liftPx: number,
+    cachedRect?: DOMRect | null,
+    cachedNodes?: CachedPitchDropNode[],
+    lockedName?: string | null
+  ): DropTargetState | null => {
+    const host = pitchRef.current;
+    if (!host && !cachedRect) return null;
+    const rect = cachedRect || host!.getBoundingClientRect();
     const ty = clientY - liftPx;
     if (clientX < rect.left - 14 || clientX > rect.right + 14 || ty < rect.top - 14 || ty > rect.bottom + 14) {
       return null;
     }
-    const nodes = host.querySelectorAll<Element>('[data-tactics-drop-player]');
+    const nodes = cachedNodes && cachedNodes.length > 0 ? cachedNodes : collectPitchDropNodes().nodes;
+    const enterRadius = clamp(rect.width * 0.14, 24, 42);
+    const keepRadius = enterRadius * 1.22;
     let best: { state: DropTargetState; dist: number } | null = null;
-    nodes.forEach((el) => {
-      const name = el.getAttribute('data-tactics-drop-player');
-      if (!name || name === excludeName) return;
-      if (el.getAttribute('data-tactics-disabled') === '1') return;
-      const r = el.getBoundingClientRect();
-      const cx = r.left + r.width * 0.5;
-      const cy = r.top + r.height * 0.5;
-      const d = Math.hypot(clientX - cx, ty - cy);
-      if (d <= 54 && (!best || d < best.dist)) {
-        best = {
-          state: {
-            kind: 'pitch',
-            name,
-            role: (el.getAttribute('data-tactics-drop-slot') as SubRole) || undefined,
-            pitchIdx: Number(el.getAttribute('data-tactics-drop-idx') || '-1')
-          },
-          dist: d
-        };
+    let lockedMatch: { state: DropTargetState; dist: number } | null = null;
+
+    for (const node of nodes) {
+      if (node.name === excludeName) continue;
+      const d = Math.hypot(clientX - node.cx, ty - node.cy);
+      const st: DropTargetState = {
+        kind: 'pitch',
+        name: node.name,
+        role: node.role,
+        pitchIdx: node.pitchIdx
+      };
+      if (lockedName && node.name === lockedName && d <= keepRadius) {
+        lockedMatch = { state: st, dist: d };
       }
-    });
-    return best ? (best as { state: DropTargetState }).state : null;
+      if (d <= enterRadius && (!best || d < best.dist)) {
+        best = { state: st, dist: d };
+      }
+    }
+    const chosen = best || lockedMatch;
+    return chosen ? chosen.state : null;
   };
 
   const findDropTarget = (
@@ -400,8 +440,42 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     clientY: number,
     source: 'bench' | 'pitch',
     excludeName: string,
-    liftPx: number
+    liftPx: number,
+    cachedRect?: DOMRect | null,
+    cachedNodes?: CachedPitchDropNode[],
+    lockedName?: string | null
   ): DropTargetState | null => {
+    // 1. Exact finger check for bench rows (no Y offset so finger hits exact row)
+    if (source === 'pitch') {
+      const exactEls = document.elementsFromPoint(clientX, clientY);
+      for (const el of exactEls) {
+        const benchEl = (el as Element).closest?.('[data-tactics-drop-bench]');
+        if (benchEl) {
+          const name = benchEl.getAttribute('data-tactics-drop-bench');
+          if (name && name !== excludeName) {
+            return {
+              kind: 'bench',
+              name,
+              role: (benchEl.getAttribute('data-tactics-drop-slot') as SubRole) || undefined
+            };
+          }
+        }
+      }
+    }
+
+    // 2. Nearest cached pitch target with proportional lift & hysteresis
+    const nearestPitch = findNearestPitchTarget(
+      clientX,
+      clientY,
+      excludeName,
+      liftPx,
+      cachedRect,
+      cachedNodes,
+      lockedName
+    );
+    if (nearestPitch) return nearestPitch;
+
+    // 3. Fallback DOM check at lifted Y for pitch nodes
     const ty = clientY - liftPx;
     const els = document.elementsFromPoint(clientX, ty);
     for (const el of els) {
@@ -417,21 +491,8 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
           };
         }
       }
-      if (source === 'pitch') {
-        const benchEl = (el as Element).closest?.('[data-tactics-drop-bench]');
-        if (benchEl) {
-          const name = benchEl.getAttribute('data-tactics-drop-bench');
-          if (name && name !== excludeName) {
-            return {
-              kind: 'bench',
-              name,
-              role: (benchEl.getAttribute('data-tactics-drop-slot') as SubRole) || undefined
-            };
-          }
-        }
-      }
     }
-    return findNearestPitchTarget(clientX, clientY, excludeName, liftPx);
+    return null;
   };
 
   const actionsRef = useRef({
@@ -458,7 +519,15 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
   };
 
   useEffect(() => {
+    let rafId: number | null = null;
+    let latestMove: { clientX: number; clientY: number; pointerId: number } | null = null;
+
     const clearDrag = () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      latestMove = null;
       if (dragRef.current?.holdTimer) {
         window.clearTimeout(dragRef.current.holdTimer);
       }
@@ -467,11 +536,19 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
       setDropTargetIfChanged(null);
     };
 
-    const onMove = (e: PointerEvent) => {
+    const computePitchLift = (d: DragRuntime, dist: number) => {
+      if (!d.isTouch) return 0;
+      const pitchH = d.cachedPitchRect?.height || pitchRef.current?.getBoundingClientRect().height || 260;
+      const targetLift = clamp(pitchH * 0.08, 14, 24);
+      const liftRamp = clamp(dist / 22, 0, 1);
+      return targetLift * liftRamp;
+    };
+
+    const processPointerFrame = (clientX: number, clientY: number, pointerId: number) => {
       const d = dragRef.current;
-      if (!d || e.pointerId !== d.pointerId) return;
-      const dx = e.clientX - d.startX;
-      const dy = e.clientY - d.startY;
+      if (!d || pointerId !== d.pointerId) return;
+      const dx = clientX - d.startX;
+      const dy = clientY - d.startY;
       const dist = Math.hypot(dx, dy);
 
       if (!d.active) {
@@ -484,24 +561,54 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
             if (d.holdTimer) window.clearTimeout(d.holdTimer);
             d.active = true;
             d.immediate = true;
+            vibrate(10);
           }
-        } else if (dist > 5) {
+        } else if (dist > 4) {
           d.active = true;
         }
       }
       if (!d.active) return;
 
-      d.x = e.clientX;
-      d.y = e.clientY;
-      const liftPx = d.isTouch ? TOUCH_LIFT_PX : 0;
-      updateDragGhostPos(e.clientX, e.clientY - (d.isTouch ? 24 : 0));
+      d.x = clientX;
+      d.y = clientY;
+      if (d.cachedPitchNodes.length === 0) {
+        const snap = collectPitchDropNodes();
+        d.cachedPitchRect = snap.rect;
+        d.cachedPitchNodes = snap.nodes;
+      }
+      const liftPx = computePitchLift(d, dist);
+      updateDragGhostPos(clientX, clientY, d.isTouch);
       setDragUiIfChanged({
         source: d.source,
         player: d.player,
         role: d.role
       });
-      const hit = actionsRef.current.findDropTarget(e.clientX, e.clientY, d.source, d.player.n, liftPx);
+      const hit = actionsRef.current.findDropTarget(
+        clientX,
+        clientY,
+        d.source,
+        d.player.n,
+        liftPx,
+        d.cachedPitchRect,
+        d.cachedPitchNodes,
+        d.lockedPitchTargetName
+      );
+      d.lockedPitchTargetName = hit?.kind === 'pitch' ? hit.name : null;
       setDropTargetIfChanged(hit);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d || e.pointerId !== d.pointerId) return;
+      latestMove = { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId };
+      if (rafId === null) {
+        rafId = window.requestAnimationFrame(() => {
+          rafId = null;
+          if (latestMove) {
+            processPointerFrame(latestMove.clientX, latestMove.clientY, latestMove.pointerId);
+          }
+        });
+      }
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -514,34 +621,54 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     const onUp = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
-      const wasActive = d.active;
-      const liftPx = d.isTouch ? TOUCH_LIFT_PX : 0;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+        rafId = null;
+        processPointerFrame(e.clientX, e.clientY, e.pointerId);
+      }
+      const cur = dragRef.current;
+      if (!cur) return;
+      const wasActive = cur.active;
+      const dist = Math.hypot(e.clientX - cur.startX, e.clientY - cur.startY);
+      const liftPx = computePitchLift(cur, dist);
+      const cachedRect = cur.cachedPitchRect;
+      const cachedNodes = cur.cachedPitchNodes;
+      const lockedPitchName = cur.lockedPitchTargetName;
       clearDrag();
 
       if (!wasActive) {
-        if (d.source === 'pitch' && actionsRef.current.canInteractWithMyPitch && !actionsRef.current.sentOff.includes(d.player.n)) {
+        if (cur.source === 'pitch' && actionsRef.current.canInteractWithMyPitch && !actionsRef.current.sentOff.includes(cur.player.n)) {
           SFX.tap();
-          actionsRef.current.setSubPickOut(actionsRef.current.subPickOut === d.player.n ? null : d.player.n);
+          actionsRef.current.setSubPickOut(actionsRef.current.subPickOut === cur.player.n ? null : cur.player.n);
         }
         return;
       }
 
-      const hit = actionsRef.current.findDropTarget(e.clientX, e.clientY, d.source, d.player.n, liftPx);
+      const hit = actionsRef.current.findDropTarget(
+        e.clientX,
+        e.clientY,
+        cur.source,
+        cur.player.n,
+        liftPx,
+        cachedRect,
+        cachedNodes,
+        lockedPitchName
+      );
       if (!hit) return;
 
-      if (d.source === 'bench' && hit.kind === 'pitch') {
+      if (cur.source === 'bench' && hit.kind === 'pitch') {
         if (actionsRef.current.subsUsed.length >= 5) return;
-        actionsRef.current.onSubstitute(hit.name, d.player);
+        actionsRef.current.onSubstitute(hit.name, cur.player);
         return;
       }
-      if (d.source === 'pitch' && hit.kind === 'bench') {
+      if (cur.source === 'pitch' && hit.kind === 'bench') {
         if (actionsRef.current.subsUsed.length >= 5) return;
         const bObj = actionsRef.current.benchList.find((b) => b.n === hit.name);
-        if (bObj) actionsRef.current.onSubstitute(d.player.n, bObj);
+        if (bObj) actionsRef.current.onSubstitute(cur.player.n, bObj);
         return;
       }
-      if (d.source === 'pitch' && hit.kind === 'pitch' && hit.name !== d.player.n) {
-        actionsRef.current.onSwapStarters(d.player.n, hit.name);
+      if (cur.source === 'pitch' && hit.kind === 'pitch' && hit.name !== cur.player.n) {
+        actionsRef.current.onSwapStarters(cur.player.n, hit.name);
       }
     };
 
@@ -556,6 +683,7 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
     return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('pointerup', onUp);
@@ -593,6 +721,8 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
       }
     }
 
+    const snap = collectPitchDropNodes();
+
     let holdTimer: number | undefined;
     if (!immediate) {
       holdTimer = window.setTimeout(() => {
@@ -601,15 +731,29 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
         cur.active = true;
         cur.immediate = true;
         vibrate(14);
-        updateDragGhostPos(cur.x, cur.y - 24);
+        const curSnap = collectPitchDropNodes();
+        cur.cachedPitchRect = curSnap.rect;
+        cur.cachedPitchNodes = curSnap.nodes;
+        updateDragGhostPos(cur.x, cur.y, cur.isTouch);
         setDragUiIfChanged({
           source: cur.source,
           player: cur.player,
           role: cur.role
         });
-        const hit = actionsRef.current.findDropTarget(cur.x, cur.y, cur.source, cur.player.n, TOUCH_LIFT_PX);
+        const targetLift = cur.isTouch && cur.cachedPitchRect ? clamp(cur.cachedPitchRect.height * 0.08, 14, 24) : 0;
+        const hit = actionsRef.current.findDropTarget(
+          cur.x,
+          cur.y,
+          cur.source,
+          cur.player.n,
+          targetLift,
+          cur.cachedPitchRect,
+          cur.cachedPitchNodes,
+          cur.lockedPitchTargetName
+        );
+        cur.lockedPitchTargetName = hit?.kind === 'pitch' ? hit.name : null;
         setDropTargetIfChanged(hit);
-      }, 150);
+      }, 145);
     }
 
     dragRef.current = {
@@ -625,7 +769,10 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
       y: e.clientY,
       active: false,
       immediate,
-      holdTimer
+      holdTimer,
+      cachedPitchRect: snap.rect,
+      cachedPitchNodes: snap.nodes,
+      lockedPitchTargetName: null
     };
   };
 
@@ -1217,58 +1364,45 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
                                   : 'hover:bg-[var(--surface-2)]/65'
                       } ${subsUsed.length < 5 ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer opacity-75'}`}
                     >
-                      {/* 1. โลโก้ */}
-                      <div
-                        data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
-                        style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
-                        className="flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px]"
-                      >
-                        <ClubCrest
-                          name={meTeamOrig.name}
-                          size={15}
-                          team={meTeamOrig}
-                          club={state.club}
-                          isMyClub={meTeamOrig.id === state.me && state.mode === 'm'}
-                        />
-                      </div>
-
-                      {/* 2. รูป */}
+                      {/* 1-4. Unified Grip Zone (โลโก้ + รูป + ตำแหน่ง + เบอร์) */}
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={
                           subsUsed.length < 5
                             ? { touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
-                            : undefined
+                            : { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
                         }
                         title={subsUsed.length < 5 ? 'ลากลงสนามเพื่อเปลี่ยนตัว' : 'ใช้โควต้าครบแล้ว'}
-                        className="flex items-center justify-start"
+                        className="col-span-4 grid grid-cols-[16px_22px_34px_26px] mland:grid-cols-[14px_19px_30px_24px] items-center gap-1 mland:gap-0.5"
                       >
-                        <MatchPlayerThumb
-                          player={pl}
-                          team={meTeamOrig}
-                          state={state}
-                          kitColor={meKitColor}
-                          trimColor={meTrimColor}
-                          size="xs"
-                        />
-                      </div>
+                        <div className="flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px]">
+                          <ClubCrest
+                            name={meTeamOrig.name}
+                            size={15}
+                            team={meTeamOrig}
+                            club={state.club}
+                            isMyClub={meTeamOrig.id === state.me && state.mode === 'm'}
+                          />
+                        </div>
 
-                      {/* 3. ตำแหน่ง */}
-                      <div
-                        data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
-                        style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
-                        className="flex items-center justify-center"
-                      >
-                        <PositionBadge role={pl.ro} size="2xs" />
-                      </div>
+                        <div className="flex items-center justify-start">
+                          <MatchPlayerThumb
+                            player={pl}
+                            team={meTeamOrig}
+                            state={state}
+                            kitColor={meKitColor}
+                            trimColor={meTrimColor}
+                            size="xs"
+                          />
+                        </div>
 
-                      {/* 4. เบอร์ */}
-                      <div
-                        data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
-                        style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
-                        className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap"
-                      >
-                        #{no}
+                        <div className="flex items-center justify-center">
+                          <PositionBadge role={pl.ro} size="2xs" />
+                        </div>
+
+                        <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+                          #{no}
+                        </div>
                       </div>
 
                       {/* 5. ชื่อ */}

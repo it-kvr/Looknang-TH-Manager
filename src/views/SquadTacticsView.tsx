@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MainTab, Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
@@ -140,6 +140,11 @@ export const SquadTacticsView = React.memo<{
     active: boolean;
     immediate: boolean;
     holdTimer?: number;
+    grabDxSvg: number;
+    grabDySvg: number;
+    lockedSwapName: string | null;
+    cachedRect: DOMRect | null;
+    cachedInvCtm: DOMMatrix | null;
   } | null>(null);
   const [dragUi, setDragUi] = useState<{ player: Player; fromSlot?: SubRole } | null>(null);
   const dragUiRef = useRef<{ player: Player; fromSlot?: SubRole } | null>(null);
@@ -149,13 +154,62 @@ export const SquadTacticsView = React.memo<{
   const [pitchDragPreview, setPitchDragPreview] = useState<PitchDragPreview | null>(null);
   const pitchDragPreviewRef = useRef<PitchDragPreview | null>(null);
   const [touchAnchorPt, setTouchAnchorPt] = useState<{ px: number; py: number } | null>(null);
+  const pitchRenderCoordsRef = useRef<{
+    gx: number;
+    gy: number;
+    fpx: number;
+    fpy: number;
+    showTether: boolean;
+  } | null>(null);
 
-  const updateDragGhostPos = (rawX: number, rawY: number) => {
+  const syncPitchDragDom = () => {
+    const svg = pitchSvgRef.current;
+    const coords = pitchRenderCoordsRef.current;
+    if (!svg || !coords) return;
+    const { gx, gy, fpx, fpy, showTether } = coords;
+    const grp = svg.querySelector<SVGGElement>('[data-pitch-drag-group="1"]');
+    if (grp) {
+      grp.setAttribute('transform', `translate(${gx.toFixed(2)},${gy.toFixed(2)})`);
+      const pill = grp.querySelector<SVGGElement>('[data-pitch-drag-pill="1"]');
+      if (pill) {
+        const pillOffsetX = clamp(gx, 44, 256) - gx;
+        pill.setAttribute('transform', `translate(${pillOffsetX.toFixed(2)},-37)`);
+      }
+      const nameEl = grp.querySelector<SVGTextElement>('[data-pitch-drag-name="1"]');
+      if (nameEl) {
+        const nameOffsetX = clamp(gx, 28, 272) - gx;
+        nameEl.setAttribute('x', nameOffsetX.toFixed(2));
+      }
+    }
+    const tether = svg.querySelector<SVGLineElement>('[data-pitch-drag-tether="1"]');
+    if (tether) {
+      tether.setAttribute('x1', fpx.toFixed(2));
+      tether.setAttribute('y1', fpy.toFixed(2));
+      tether.setAttribute('x2', gx.toFixed(2));
+      tether.setAttribute('y2', gy.toFixed(2));
+      tether.setAttribute('opacity', showTether ? '0.85' : '0');
+    }
+    const finger = svg.querySelector<SVGCircleElement>('[data-pitch-drag-finger="1"]');
+    if (finger) {
+      finger.setAttribute('cx', fpx.toFixed(2));
+      finger.setAttribute('cy', fpy.toFixed(2));
+      finger.setAttribute('opacity', showTether ? '1' : '0');
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (pitchDragPreview) {
+      syncPitchDragDom();
+    }
+  }, [pitchDragPreview, touchAnchorPt]);
+
+  const updateDragGhostPos = (rawX: number, rawY: number, isTouch = false) => {
     const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 216) : rawX - 95;
-    const gy = typeof window !== 'undefined' ? clamp(rawY - 76, 8, window.innerHeight - 68) : rawY - 76;
+    const yOffset = isTouch ? 64 : 52;
+    const gy = typeof window !== 'undefined' ? clamp(rawY - yOffset, 8, window.innerHeight - 68) : rawY - yOffset;
     dragGhostPosRef.current = { x: gx, y: gy };
     if (dragGhostRef.current) {
-      dragGhostRef.current.style.transform = `translate3d(${gx}px, ${gy}px, 0)`;
+      dragGhostRef.current.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0)`;
     }
   };
 
@@ -181,10 +235,9 @@ export const SquadTacticsView = React.memo<{
         prev &&
         next &&
         prev.slotIdx === next.slotIdx &&
-        prev.x === next.x &&
-        prev.y === next.y &&
         prev.sp === next.sp &&
-        prev.zoneId === next.zoneId
+        prev.zoneId === next.zoneId &&
+        prev.player.n === next.player.n
       ) {
         return prev;
       }
@@ -194,10 +247,7 @@ export const SquadTacticsView = React.memo<{
 
   const setTouchAnchorPtIfChanged = (next: { px: number; py: number } | null) => {
     setTouchAnchorPt((prev) => {
-      if (!prev && !next) return prev;
-      if (prev && next && Math.round(prev.px) === Math.round(next.px) && Math.round(prev.py) === Math.round(next.py)) {
-        return prev;
-      }
+      if (Boolean(prev) === Boolean(next)) return prev;
       return next;
     });
   };
@@ -258,29 +308,46 @@ export const SquadTacticsView = React.memo<{
     onToast(`📍 ${playerName.split(' ')[0]} → ${newRole} (${zoneLabel}) · แผน ${df}-${mf}-${fw}`);
   };
 
+  const getSvgGeometry = (cachedRect?: DOMRect | null, cachedInvCtm?: DOMMatrix | null) => {
+    const svg = pitchSvgRef.current;
+    if (!svg) return null;
+    const rect = cachedRect || svg.getBoundingClientRect();
+    let invCtm = cachedInvCtm ?? null;
+    if (!invCtm) {
+      try {
+        const ctm = svg.getScreenCTM?.();
+        if (ctm) invCtm = ctm.inverse();
+      } catch {
+        invCtm = null;
+      }
+    }
+    return { svg, rect, invCtm };
+  };
+
   const clientToPitchCoords = (
     clientX: number,
     clientY: number,
-    liftPx = 0
-  ): { px: number; py: number; rawPx: number; rawPy: number; inside: boolean } | null => {
-    const svg = pitchSvgRef.current;
-    if (!svg) return null;
-    const rect = svg.getBoundingClientRect();
+    liftPx = 0,
+    cachedRect?: DOMRect | null,
+    cachedInvCtm?: DOMMatrix | null
+  ): { px: number; py: number; rawPx: number; rawPy: number; inside: boolean; rect: DOMRect } | null => {
+    const geom = getSvgGeometry(cachedRect, cachedInvCtm);
+    if (!geom) return null;
+    const { svg, rect, invCtm } = geom;
+    const maxLiftPad = Math.max(12, liftPx + 14);
     const rawInside =
-      clientX >= rect.left - 8 &&
-      clientX <= rect.right + 8 &&
-      clientY >= rect.top - 8 &&
-      clientY <= rect.bottom + Math.max(8, liftPx + 8);
-    const effectiveY = liftPx > 0 ? clamp(clientY - liftPx, rect.top + 6, rect.bottom - 6) : clientY;
+      clientX >= rect.left - 10 &&
+      clientX <= rect.right + 10 &&
+      clientY >= rect.top - 10 &&
+      clientY <= rect.bottom + maxLiftPad;
+    const effectiveY = liftPx > 0 ? clamp(clientY - liftPx, rect.top, rect.bottom) : clientY;
     const inside =
       rawInside &&
-      clientX >= rect.left - 4 &&
-      clientX <= rect.right + 4 &&
-      effectiveY >= rect.top - 4 &&
-      effectiveY <= rect.bottom + 4;
-    const ctm = svg.getScreenCTM?.();
-    if (ctm) {
-      const invCtm = ctm.inverse();
+      clientX >= rect.left - 6 &&
+      clientX <= rect.right + 6 &&
+      effectiveY >= rect.top - 6 &&
+      effectiveY <= rect.bottom + 6;
+    if (invCtm) {
       const pt = svg.createSVGPoint();
       pt.x = clientX;
       pt.y = effectiveY;
@@ -289,7 +356,7 @@ export const SquadTacticsView = React.memo<{
       rawPt.x = clientX;
       rawPt.y = clientY;
       const rawInv = rawPt.matrixTransform(invCtm);
-      return { px: inv.x, py: inv.y, rawPx: rawInv.x, rawPy: rawInv.y, inside };
+      return { px: inv.x, py: inv.y, rawPx: rawInv.x, rawPy: rawInv.y, inside, rect };
     }
     const w = Math.max(1, rect.width);
     const h = Math.max(1, rect.height);
@@ -298,12 +365,20 @@ export const SquadTacticsView = React.memo<{
       py: ((effectiveY - rect.top) / h) * 380,
       rawPx: ((clientX - rect.left) / w) * 300,
       rawPy: ((clientY - rect.top) / h) * 380,
-      inside
+      inside,
+      rect
     };
   };
 
-  const findNearestPitchStarter = (clientX: number, clientY: number, excludeName?: string, liftPx = 0): { name: string; slot?: string } | null => {
-    const pitchPt = clientToPitchCoords(clientX, clientY, liftPx);
+  const findNearestPitchStarter = (
+    clientX: number,
+    clientY: number,
+    excludeName?: string,
+    liftPx = 0,
+    cachedRect?: DOMRect | null,
+    cachedInvCtm?: DOMMatrix | null
+  ): { name: string; slot?: string } | null => {
+    const pitchPt = clientToPitchCoords(clientX, clientY, liftPx, cachedRect, cachedInvCtm);
     if (!pitchPt?.inside) return null;
     const { starters: curStarters, slots: curSlots } = dragActionsRef.current;
     let best: { name: string; slot?: string; dist: number } | null = null;
@@ -321,17 +396,39 @@ export const SquadTacticsView = React.memo<{
     return best ? { name: (best as { name: string }).name, slot: (best as { slot?: string }).slot } : null;
   };
 
-  const findDropAt = (x: number, y: number, excludeName?: string, liftPx = 0): { name: string; slot?: string } | null => {
-    const targetY = liftPx > 0 ? y - liftPx : y;
-    const els = document.elementsFromPoint(x, targetY);
+  const findDropAt = (
+    x: number,
+    y: number,
+    excludeName?: string,
+    pitchLiftPx = 0,
+    cachedRect?: DOMRect | null,
+    cachedInvCtm?: DOMMatrix | null
+  ): { name: string; slot?: string } | null => {
+    // 1. Exact finger check for squad/bench list rows (no Y offset so finger hits exact row)
+    const els = document.elementsFromPoint(x, y);
     for (const el of els) {
       const hit = (el as Element).closest?.('[data-drop-player]');
-      if (hit) {
+      if (hit && !pitchSvgRef.current?.contains(hit)) {
         const name = hit.getAttribute('data-drop-player');
         if (name && name !== excludeName) return { name, slot: hit.getAttribute('data-drop-slot') || undefined };
       }
     }
-    return findNearestPitchStarter(x, y, excludeName, liftPx);
+    // 2. Pitch check with progressive lift so thumb doesn't cover target node
+    const pitchHit = findNearestPitchStarter(x, y, excludeName, pitchLiftPx, cachedRect, cachedInvCtm);
+    if (pitchHit) return pitchHit;
+
+    // 3. Fallback DOM pitch node hit if near boundary
+    if (pitchLiftPx > 0) {
+      const liftedEls = document.elementsFromPoint(x, y - pitchLiftPx);
+      for (const el of liftedEls) {
+        const hit = (el as Element).closest?.('[data-drop-player]');
+        if (hit && pitchSvgRef.current?.contains(hit)) {
+          const name = hit.getAttribute('data-drop-player');
+          if (name && name !== excludeName) return { name, slot: hit.getAttribute('data-drop-slot') || undefined };
+        }
+      }
+    }
+    return null;
   };
 
   const handlePlayerPointerDown = (e: React.PointerEvent, q: Player, slotSp?: SubRole, slotIdx?: number) => {
@@ -349,6 +446,31 @@ export const SquadTacticsView = React.memo<{
         // Ignore capture errors on synthetic events
       }
     }
+
+    let cachedRect: DOMRect | null = null;
+    let cachedInvCtm: DOMMatrix | null = null;
+    let grabDxSvg = 0;
+    let grabDySvg = 0;
+    const svg = pitchSvgRef.current;
+    if (svg && isMgr) {
+      cachedRect = svg.getBoundingClientRect();
+      try {
+        const ctm = svg.getScreenCTM?.();
+        if (ctm) cachedInvCtm = ctm.inverse();
+      } catch {
+        cachedInvCtm = null;
+      }
+      if (slotIdx !== undefined && slots[slotIdx]) {
+        const startPt = clientToPitchCoords(e.clientX, e.clientY, 0, cachedRect, cachedInvCtm);
+        if (startPt) {
+          const slotPx = 18 + slots[slotIdx].x * 2.64;
+          const slotPy = 16 + slots[slotIdx].y * 3.48;
+          grabDxSvg = clamp(slotPx - startPt.rawPx, -16, 16);
+          grabDySvg = clamp(slotPy - startPt.rawPy, -16, 16);
+        }
+      }
+    }
+
     let holdTimer: number | undefined;
     if (!immediate && isMgr) {
       holdTimer = window.setTimeout(() => {
@@ -357,11 +479,12 @@ export const SquadTacticsView = React.memo<{
         cur.active = true;
         cur.immediate = true;
         vibrate(14);
-        updateDragGhostPos(cur.x, cur.y);
+        updateDragGhostPos(cur.x, cur.y, cur.isTouch);
         setDragUiIfChanged({ player: cur.player, fromSlot: cur.fromSlot });
-        const hit = findDropAt(cur.x, cur.y, cur.player.n);
+        const targetLift = cur.isTouch && cur.cachedRect ? clamp(cur.cachedRect.height * 0.085, 16, 26) : 0;
+        const hit = findDropAt(cur.x, cur.y, cur.player.n, targetLift, cur.cachedRect, cur.cachedInvCtm);
         setDropTargetIfChanged(hit);
-      }, 190);
+      }, 155);
     }
     dragRef.current = {
       player: q,
@@ -375,7 +498,12 @@ export const SquadTacticsView = React.memo<{
       y: e.clientY,
       active: false,
       immediate,
-      holdTimer
+      holdTimer,
+      grabDxSvg,
+      grabDySvg,
+      lockedSwapName: null,
+      cachedRect,
+      cachedInvCtm
     };
   };
 
@@ -404,25 +532,41 @@ export const SquadTacticsView = React.memo<{
   };
 
   useEffect(() => {
-    const TOUCH_LIFT_PX = 42;
+    let rafId: number | null = null;
+    let latestMove: { clientX: number; clientY: number; pointerId: number } | null = null;
+
     const clearDrag = () => {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      latestMove = null;
       if (dragRef.current?.holdTimer) {
         window.clearTimeout(dragRef.current.holdTimer);
       }
       dragRef.current = null;
       pitchDragPreviewRef.current = null;
+      pitchRenderCoordsRef.current = null;
       setDragUiIfChanged(null);
       setDropTargetIfChanged(null);
       setPitchDragPreviewIfChanged(null);
       setTouchAnchorPtIfChanged(null);
     };
 
-    const onMove = (e: PointerEvent) => {
+    const computePitchLift = (d: NonNullable<typeof dragRef.current>, dist: number) => {
+      if (!d.isTouch) return 0;
+      const pitchH = d.cachedRect?.height || pitchSvgRef.current?.getBoundingClientRect().height || 260;
+      const targetLift = clamp(pitchH * 0.085, 16, 26);
+      const liftRamp = clamp(dist / 24, 0, 1);
+      return targetLift * liftRamp;
+    };
+
+    const processPointerFrame = (clientX: number, clientY: number, pointerId: number) => {
       const d = dragRef.current;
-      if (!d || e.pointerId !== d.pointerId) return;
+      if (!d || pointerId !== d.pointerId) return;
       if (!dragActionsRef.current.isMgr) return;
-      const dx = e.clientX - d.startX;
-      const dy = e.clientY - d.startY;
+      const dx = clientX - d.startX;
+      const dy = clientY - d.startY;
       const dist = Math.hypot(dx, dy);
 
       if (!d.active) {
@@ -432,57 +576,75 @@ export const SquadTacticsView = React.memo<{
             clearDrag();
             return;
           }
-          if (dist > 10 && Math.abs(dx) >= Math.abs(dy)) {
+          if (dist > 9 && Math.abs(dx) >= Math.abs(dy)) {
             if (d.holdTimer) window.clearTimeout(d.holdTimer);
             d.active = true;
             d.immediate = true;
+            vibrate(10);
           }
-        } else if (dist > 6) {
+        } else if (dist > 4) {
           d.active = true;
         }
       }
       if (!d.active) return;
 
-      d.x = e.clientX;
-      d.y = e.clientY;
+      d.x = clientX;
+      d.y = clientY;
 
-      const liftPx = d.isTouch ? TOUCH_LIFT_PX : 0;
-      const pitchPt = clientToPitchCoords(e.clientX, e.clientY, liftPx);
+      const liftPx = computePitchLift(d, dist);
+      const liftRamp = d.isTouch ? clamp(dist / 24, 0, 1) : 1;
+      const pitchPt = clientToPitchCoords(clientX, clientY, liftPx, d.cachedRect, d.cachedInvCtm);
+
       if (d.fromPitchIdx !== undefined && d.fromPitchIdx >= 1 && pitchPt?.inside) {
-        if (d.isTouch) {
-          setTouchAnchorPtIfChanged({
-            px: clamp(pitchPt.rawPx, 8, 292),
-            py: clamp(pitchPt.rawPy, 8, 372)
-          });
-        } else {
-          setTouchAnchorPtIfChanged(null);
-        }
+        // Apply smoothly decaying grab offset so dragging starts right under finger with zero jump
+        const grabFade = 1 - liftRamp * 0.55;
+        const adjPx = pitchPt.px + d.grabDxSvg * grabFade;
+        const adjPy = pitchPt.py + d.grabDySvg * grabFade;
+
+        const fpx = clamp(pitchPt.rawPx, 8, 292);
+        const fpy = clamp(pitchPt.rawPy, 8, 372);
 
         const { starters: curStarters, slots: curSlots } = dragActionsRef.current;
+        const enterRadius = 18;
+        const keepRadius = 21.5;
         let closestSwap: { name: string; slot?: string; dist: number } | null = null;
+        let lockedMatch: { name: string; slot?: string; dist: number } | null = null;
+
         curStarters.forEach((other, idx) => {
           if (idx === d.fromPitchIdx) return;
           const oz = curSlots[idx];
           if (!oz) return;
           const ox = 18 + oz.x * 2.64;
           const oy = 16 + oz.y * 3.48;
-          const sDist = Math.hypot(pitchPt.px - ox, pitchPt.py - oy);
-          if (sDist < 15.5 && (!closestSwap || sDist < closestSwap.dist)) {
+          const sDist = Math.hypot(adjPx - ox, adjPy - oy);
+          if (other.n === d.lockedSwapName && sDist <= keepRadius) {
+            lockedMatch = { name: other.n, slot: oz.sp, dist: sDist };
+          }
+          if (sDist <= enterRadius && (!closestSwap || sDist < closestSwap.dist)) {
             closestSwap = { name: other.n, slot: oz.sp, dist: sDist };
           }
         });
-        if (closestSwap) {
-          const swapObj = closestSwap as { name: string; slot?: string };
+
+        const resolvedSwap = closestSwap || lockedMatch;
+        if (resolvedSwap) {
+          const swapObj = resolvedSwap as { name: string; slot?: string };
+          d.lockedSwapName = swapObj.name;
           pitchDragPreviewRef.current = null;
+          pitchRenderCoordsRef.current = null;
           setPitchDragPreviewIfChanged(null);
+          setTouchAnchorPtIfChanged(null);
           setDropTargetIfChanged({ name: swapObj.name, slot: swapObj.slot });
-          updateDragGhostPos(e.clientX, e.clientY - (d.isTouch ? 36 : 0));
-          setDragUiIfChanged({ player: d.player, fromSlot: d.fromSlot });
+          setDragUiIfChanged(null);
           return;
         }
 
-        const nx = clamp(Math.round((pitchPt.px - 18) / 2.64), 4, 96);
-        const ny = clamp(Math.round((pitchPt.py - 16) / 3.48), 8, 84);
+        d.lockedSwapName = null;
+        const rawNx = clamp((adjPx - 18) / 2.64, 4, 96);
+        const rawNy = clamp((adjPy - 16) / 3.48, 8, 84);
+        const gx = 18 + rawNx * 2.64;
+        const gy = 16 + rawNy * 3.48;
+        const nx = clamp(Math.round(rawNx), 4, 96);
+        const ny = clamp(Math.round(rawNy), 8, 84);
         const zone = getPitchZoneAt(nx, ny);
         const resolvedSp: SubRole = zone.sp;
         const preview: PitchDragPreview = {
@@ -495,19 +657,49 @@ export const SquadTacticsView = React.memo<{
           zoneLabel: zone.label
         };
         pitchDragPreviewRef.current = preview;
+        pitchRenderCoordsRef.current = {
+          gx,
+          gy,
+          fpx,
+          fpy,
+          showTether: d.isTouch && Math.hypot(fpx - gx, fpy - gy) > 8
+        };
+        if (d.isTouch) {
+          setTouchAnchorPtIfChanged({ px: fpx, py: fpy });
+        } else {
+          setTouchAnchorPtIfChanged(null);
+        }
         setPitchDragPreviewIfChanged(preview);
         setDropTargetIfChanged(null);
         setDragUiIfChanged(null);
+        syncPitchDragDom();
         return;
       }
 
+      d.lockedSwapName = null;
       pitchDragPreviewRef.current = null;
+      pitchRenderCoordsRef.current = null;
       setPitchDragPreviewIfChanged(null);
       setTouchAnchorPtIfChanged(null);
-      updateDragGhostPos(e.clientX, e.clientY);
+      updateDragGhostPos(clientX, clientY, d.isTouch);
       setDragUiIfChanged({ player: d.player, fromSlot: d.fromSlot });
-      const hit = findDropAt(e.clientX, e.clientY, d.player.n, d.fromPitchIdx === undefined && d.isTouch ? 34 : 0);
+      const hit = findDropAt(clientX, clientY, d.player.n, liftPx, d.cachedRect, d.cachedInvCtm);
       setDropTargetIfChanged(hit);
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d || e.pointerId !== d.pointerId) return;
+      if (!dragActionsRef.current.isMgr) return;
+      latestMove = { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId };
+      if (rafId === null) {
+        rafId = window.requestAnimationFrame(() => {
+          rafId = null;
+          if (latestMove) {
+            processPointerFrame(latestMove.clientX, latestMove.clientY, latestMove.pointerId);
+          }
+        });
+      }
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -520,13 +712,28 @@ export const SquadTacticsView = React.memo<{
     const onUp = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+        rafId = null;
+        processPointerFrame(e.clientX, e.clientY, e.pointerId);
+      }
+      const cur = dragRef.current;
+      if (!cur) return;
       const preview = pitchDragPreviewRef.current;
-      const wasActive = d.active;
-      const liftPx = d.isTouch ? (d.fromPitchIdx !== undefined ? TOUCH_LIFT_PX : 34) : 0;
+      const wasActive = cur.active;
+      const dist = Math.hypot(e.clientX - cur.startX, e.clientY - cur.startY);
+      const liftPx = computePitchLift(cur, dist);
+      const lockedSwap = cur.lockedSwapName;
+      const cachedRect = cur.cachedRect;
+      const cachedInvCtm = cur.cachedInvCtm;
       clearDrag();
 
       if (!wasActive) {
-        dragActionsRef.current.handleTapPlayerAction(d.player);
+        dragActionsRef.current.handleTapPlayerAction(cur.player);
+        return;
+      }
+      if (lockedSwap && lockedSwap !== cur.player.n) {
+        dragActionsRef.current.swapAnyPlayers(cur.player.n, lockedSwap);
         return;
       }
       if (preview) {
@@ -536,13 +743,13 @@ export const SquadTacticsView = React.memo<{
           preview.y,
           preview.sp,
           preview.zoneLabel,
-          d.player.n
+          cur.player.n
         );
         return;
       }
-      const hit = findDropAt(e.clientX, e.clientY, d.player.n, liftPx);
-      if (hit && hit.name !== d.player.n) {
-        dragActionsRef.current.swapAnyPlayers(d.player.n, hit.name);
+      const hit = findDropAt(e.clientX, e.clientY, cur.player.n, liftPx, cachedRect, cachedInvCtm);
+      if (hit && hit.name !== cur.player.n) {
+        dragActionsRef.current.swapAnyPlayers(cur.player.n, hit.name);
       }
     };
 
@@ -557,6 +764,7 @@ export const SquadTacticsView = React.memo<{
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
     return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('pointerup', onUp);
@@ -654,16 +862,6 @@ export const SquadTacticsView = React.memo<{
       >
         <div
           data-drag-grip={isMgr ? '1' : undefined}
-          style={isMgr ? { touchAction: 'none' } : undefined}
-          className={`flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px] ${
-            isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-          }`}
-        >
-          <ClubCrest name={me.name} size={15} team={me} club={state.club} isMyClub={isMgr} />
-        </div>
-
-        <div
-          data-drag-grip={isMgr ? '1' : undefined}
           onContextMenu={(e) => e.preventDefault()}
           style={
             isMgr
@@ -671,34 +869,32 @@ export const SquadTacticsView = React.memo<{
               : { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
           }
           title={isMgr ? 'ลากเพื่อเปลี่ยนหรือสลับตำแหน่ง' : 'กด 1 ครั้งเพื่อดูข้อมูล'}
-          className={`flex items-center justify-start ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
-        >
-          <MatchPlayerThumb
-            player={q}
-            team={me}
-            state={state}
-            kitColor={q.pos === 'GK' ? meGkKit : meKit}
-            trimColor={q.pos === 'GK' ? undefined : meTrim}
-            size="xs"
-          />
-        </div>
-
-        <div
-          data-drag-grip={isMgr ? '1' : undefined}
-          style={isMgr ? { touchAction: 'none' } : undefined}
-          className={`flex items-center justify-center ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
-        >
-          <PositionBadge role={slotSp || q.ro} size="2xs" />
-        </div>
-
-        <div
-          data-drag-grip={isMgr ? '1' : undefined}
-          style={isMgr ? { touchAction: 'none' } : undefined}
-          className={`text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap ${
+          className={`col-span-4 grid grid-cols-[16px_22px_34px_26px] mland:grid-cols-[14px_19px_30px_24px] items-center gap-1 mland:gap-0.5 ${
             isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
           }`}
         >
-          #{no}
+          <div className="flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px]">
+            <ClubCrest name={me.name} size={15} team={me} club={state.club} isMyClub={isMgr} />
+          </div>
+
+          <div className="flex items-center justify-start">
+            <MatchPlayerThumb
+              player={q}
+              team={me}
+              state={state}
+              kitColor={q.pos === 'GK' ? meGkKit : meKit}
+              trimColor={q.pos === 'GK' ? undefined : meTrim}
+              size="xs"
+            />
+          </div>
+
+          <div className="flex items-center justify-center">
+            <PositionBadge role={slotSp || q.ro} size="2xs" />
+          </div>
+
+          <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+            #{no}
+          </div>
         </div>
 
         <div className="flex items-center justify-start gap-1 min-w-0">
@@ -817,8 +1013,14 @@ export const SquadTacticsView = React.memo<{
                   </div>
                 )}
 
+                {isMgr && !pitchDragPreview && dropTarget && dragRef.current?.fromPitchIdx !== undefined && (
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 pointer-events-none px-2.5 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] border border-amber-300 text-[10.5px] mland:text-[9px] font-extrabold whitespace-nowrap shadow-md">
+                    🔀 สลับ {dragRef.current.player.n.split(' ')[0]} ↔ {dropTarget.name.split(' ')[0]}{dropTarget.slot ? ` (${dropTarget.slot})` : ''}
+                  </div>
+                )}
+
                 {/* Top-Right Inside Pitch: Compact Plan Pill (Tap to Expand, Tap Outside to Collapse) */}
-                {!(isMgr && pitchDragPreview) && (
+                {!(isMgr && (pitchDragPreview || (dropTarget && dragRef.current?.fromPitchIdx !== undefined))) && (
                   <div
                     ref={formationPopoverRef}
                     className="absolute top-2 right-2 mland:top-1.5 mland:right-1.5 z-20 flex flex-col items-end max-w-[calc(100%-16px)]"
@@ -911,7 +1113,7 @@ export const SquadTacticsView = React.memo<{
                     svgRef={isMgr ? pitchSvgRef : undefined}
                     showPositionZones={isMgr && Boolean(pitchDragPreview)}
                     subAlertFitTh={65}
-                    dragSourceName={isMgr ? (dragUi?.player.n || null) : null}
+                    dragSourceName={isMgr ? (dragUi?.player.n || (dropTarget && dragRef.current?.fromPitchIdx !== undefined ? dragRef.current.player.n : null)) : null}
                     dropTargetName={isMgr ? (dropTarget?.name || null) : null}
                     dragPreview={isMgr ? pitchDragPreview : null}
                     touchPointerPitchPt={isMgr ? touchAnchorPt : null}

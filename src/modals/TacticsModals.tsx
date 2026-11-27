@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { SubRole, CustomSlot, Team } from '../types/game';
 import { FSD, LINE, SPN, ROLE_HINT, POSL } from '../data/thaiFootballData';
 import { PITCH_SVG_BASE } from '../components/SvgVisuals';
 import { PositionBadge, getPositionBadgeClass } from '../components/PositionBadge';
+import { clamp } from '../utils/math';
 
 export const CustomFormationModal: React.FC<{
   team: Team;
@@ -16,8 +17,30 @@ export const CustomFormationModal: React.FC<{
   const [slots, setSlots] = useState<CustomSlot[]>(initial);
   const [selIdx, setSelIdx] = useState(1);
   const [dragIdx, setDragIdx] = useState(-1);
-  const [dragIsTouch, setDragIsTouch] = useState(false);
-  const [fingerSvgPt, setFingerSvgPt] = useState<{ px: number; py: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const dragStateRef = useRef<{
+    idx: number;
+    pointerId: number;
+    isTouch: boolean;
+    startX: number;
+    startY: number;
+    grabDxSvg: number;
+    grabDySvg: number;
+    cachedRect: DOMRect | null;
+    cachedInvCtm: DOMMatrix | null;
+    curRole: SubRole;
+    curNx: number;
+    curNy: number;
+    curGx: number;
+    curGy: number;
+    fpx: number;
+    fpy: number;
+    showTether: boolean;
+    rafId: number | null;
+    latestX: number;
+    latestY: number;
+  } | null>(null);
 
   const autoRole = (x: number, y: number): SubRole => {
     const L = x < 22;
@@ -31,19 +54,147 @@ export const CustomFormationModal: React.FC<{
 
   const countPos = (p: string) => slots.filter((z) => LINE[z[0]] === p).length;
 
+  const clientToSvg = (
+    clientX: number,
+    clientY: number,
+    cachedRect?: DOMRect | null,
+    cachedInvCtm?: DOMMatrix | null
+  ): { px: number; py: number; rect: DOMRect } | null => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = cachedRect || svg.getBoundingClientRect();
+    let invCtm = cachedInvCtm ?? null;
+    if (!invCtm) {
+      try {
+        const ctm = svg.getScreenCTM?.();
+        if (ctm) invCtm = ctm.inverse();
+      } catch {
+        invCtm = null;
+      }
+    }
+    if (invCtm) {
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const inv = pt.matrixTransform(invCtm);
+      return { px: inv.x, py: inv.y, rect };
+    }
+    const w = Math.max(1, rect.width);
+    const h = Math.max(1, rect.height);
+    return {
+      px: ((clientX - rect.left) / w) * 300,
+      py: ((clientY - rect.top) / h) * 380,
+      rect
+    };
+  };
+
+  const syncCustomDragDom = () => {
+    const svg = svgRef.current;
+    const ds = dragStateRef.current;
+    if (!svg || !ds) return;
+    const grp = svg.querySelector<SVGGElement>(`[data-custom-slot="${ds.idx}"]`);
+    if (grp) {
+      grp.setAttribute('transform', `translate(${ds.curGx.toFixed(2)},${ds.curGy.toFixed(2)})`);
+      const lbl = grp.querySelector<SVGTextElement>('text');
+      if (lbl && lbl.textContent !== ds.curRole) {
+        lbl.textContent = ds.curRole;
+      }
+    }
+    const tether = svg.querySelector<SVGLineElement>('[data-custom-tether="1"]');
+    if (tether) {
+      tether.setAttribute('x1', ds.fpx.toFixed(2));
+      tether.setAttribute('y1', ds.fpy.toFixed(2));
+      tether.setAttribute('x2', ds.curGx.toFixed(2));
+      tether.setAttribute('y2', ds.curGy.toFixed(2));
+      tether.setAttribute('opacity', ds.showTether ? '0.9' : '0');
+    }
+    const finger = svg.querySelector<SVGCircleElement>('[data-custom-finger="1"]');
+    if (finger) {
+      finger.setAttribute('cx', ds.fpx.toFixed(2));
+      finger.setAttribute('cy', ds.fpy.toFixed(2));
+      finger.setAttribute('opacity', ds.showTether ? '1' : '0');
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (dragIdx > 0) syncCustomDragDom();
+  }, [dragIdx, slots]);
+
+  useEffect(() => () => {
+    if (dragStateRef.current?.rafId != null) {
+      window.cancelAnimationFrame(dragStateRef.current.rafId);
+    }
+  }, []);
+
+  const processDragFrame = (clientX: number, clientY: number) => {
+    const ds = dragStateRef.current;
+    if (!ds) return;
+    const dist = Math.hypot(clientX - ds.startX, clientY - ds.startY);
+    const pitchH = ds.cachedRect?.height || svgRef.current?.getBoundingClientRect().height || 260;
+    const targetLift = ds.isTouch ? clamp(pitchH * 0.085, 16, 26) : 0;
+    const liftRamp = ds.isTouch ? clamp(dist / 24, 0, 1) : 1;
+    const liftPx = targetLift * liftRamp;
+
+    const rawPt = clientToSvg(clientX, clientY, ds.cachedRect, ds.cachedInvCtm);
+    const liftPt = clientToSvg(clientX, clientY - liftPx, ds.cachedRect, ds.cachedInvCtm);
+    if (!rawPt || !liftPt) return;
+
+    const grabFade = 1 - liftRamp * 0.55;
+    const adjPx = liftPt.px + ds.grabDxSvg * grabFade;
+    const adjPy = liftPt.py + ds.grabDySvg * grabFade;
+
+    const rawNx = clamp((adjPx - 18) / 2.64, 3, 97);
+    const rawNy = clamp((adjPy - 16) / 3.48, 8, 86);
+    const gx = 18 + rawNx * 2.64;
+    const gy = 16 + rawNy * 3.48;
+    const nx = Math.round(rawNx);
+    const ny = Math.round(rawNy);
+    const nextRole = autoRole(nx, ny);
+    const fpx = clamp(rawPt.px, 8, 292);
+    const fpy = clamp(rawPt.py, 8, 372);
+    const roleChanged = nextRole !== ds.curRole;
+
+    ds.curNx = nx;
+    ds.curNy = ny;
+    ds.curGx = gx;
+    ds.curGy = gy;
+    ds.curRole = nextRole;
+    ds.fpx = fpx;
+    ds.fpy = fpy;
+    ds.showTether = ds.isTouch && Math.hypot(fpx - gx, fpy - gy) > 8;
+
+    syncCustomDragDom();
+    if (roleChanged) {
+      setSlots((prev) => prev.map((z, idx) => (idx === ds.idx ? [nextRole, nx, ny] : z)));
+    }
+  };
+
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (dragIdx < 1) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const isTouch = e.pointerType !== 'mouse' || dragIsTouch;
-    const rawPx = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 300;
-    const rawPy = ((e.clientY - rect.top) / Math.max(1, rect.height)) * 380;
-    const liftClientY = isTouch ? e.clientY - 38 : e.clientY;
-    const px = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 300;
-    const py = ((liftClientY - rect.top) / Math.max(1, rect.height)) * 380;
-    const nx = Math.max(3, Math.min(97, Math.round((px - 18) / 2.64)));
-    const ny = Math.max(8, Math.min(86, Math.round((py - 16) / 3.48)));
-    if (isTouch) setFingerSvgPt({ px: Math.max(8, Math.min(292, rawPx)), py: Math.max(8, Math.min(372, rawPy)) });
-    setSlots((prev) => prev.map((z, idx) => (idx === dragIdx ? [autoRole(nx, ny), nx, ny] : z)));
+    const ds = dragStateRef.current;
+    if (!ds || e.pointerId !== ds.pointerId) return;
+    ds.latestX = e.clientX;
+    ds.latestY = e.clientY;
+    if (ds.rafId === null) {
+      ds.rafId = window.requestAnimationFrame(() => {
+        if (!dragStateRef.current) return;
+        dragStateRef.current.rafId = null;
+        processDragFrame(dragStateRef.current.latestX, dragStateRef.current.latestY);
+      });
+    }
+  };
+
+  const finishDrag = (e: React.PointerEvent<SVGSVGElement>) => {
+    const ds = dragStateRef.current;
+    if (!ds || e.pointerId !== ds.pointerId) return;
+    if (ds.rafId !== null) {
+      window.cancelAnimationFrame(ds.rafId);
+      ds.rafId = null;
+      processDragFrame(e.clientX, e.clientY);
+    }
+    const { idx, curRole, curNx, curNy } = ds;
+    dragStateRef.current = null;
+    setDragIdx(-1);
+    setSlots((prev) => prev.map((z, i) => (i === idx ? [curRole, curNx, curNy] : z)));
   };
 
   return (
@@ -60,39 +211,92 @@ export const CustomFormationModal: React.FC<{
         <div className="flex-1 min-h-0 overflow-hidden p-3 mland:p-2 grid grid-cols-[245px_1fr] mland:grid-cols-[205px_1fr] gap-3.5 mland:gap-2.5 items-stretch">
           <div className="flex flex-col items-center justify-center h-full min-h-0">
             <svg
+              ref={svgRef}
               viewBox="0 0 300 380"
+              style={{ touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
               className="h-full max-h-[300px] mland:max-h-[210px] w-auto max-w-full mx-auto rounded-xl select-none touch-none border border-[var(--line)]"
               onPointerMove={handlePointerMove}
-              onPointerUp={() => { setDragIdx(-1); setDragIsTouch(false); setFingerSvgPt(null); }}
-              onPointerCancel={() => { setDragIdx(-1); setDragIsTouch(false); setFingerSvgPt(null); }}
+              onPointerUp={finishDrag}
+              onPointerCancel={finishDrag}
+              onContextMenu={(e) => e.preventDefault()}
             >
               <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
-              {dragIdx > 0 && fingerSvgPt && slots[dragIdx] && (() => {
-                const tx = 18 + slots[dragIdx][1] * 2.64;
-                const ty = 16 + slots[dragIdx][2] * 3.48;
-                return (
-                  <g className="pointer-events-none">
-                    <line x1={fingerSvgPt.px} y1={fingerSvgPt.py} x2={tx} y2={ty} stroke="#fde047" strokeWidth="1.6" strokeDasharray="3.5 2.5" />
-                    <circle cx={fingerSvgPt.px} cy={fingerSvgPt.py} r="6" fill="rgba(255,255,255,0.2)" stroke="#fff" strokeWidth="1.2" />
-                  </g>
-                );
-              })()}
+              {dragIdx > 0 && (
+                <g className="pointer-events-none">
+                  <line
+                    data-custom-tether="1"
+                    x1={0}
+                    y1={0}
+                    x2={0}
+                    y2={0}
+                    stroke="#fde047"
+                    strokeWidth="1.6"
+                    strokeDasharray="3.5 2.5"
+                    opacity="0"
+                  />
+                  <circle
+                    data-custom-finger="1"
+                    cx={0}
+                    cy={0}
+                    r="6"
+                    fill="rgba(255,255,255,0.2)"
+                    stroke="#fff"
+                    strokeWidth="1.2"
+                    opacity="0"
+                  />
+                </g>
+              )}
               {slots.map((z, i) => {
                 const cx = 18 + z[1] * 2.64;
                 const cy = 16 + z[2] * 3.48;
                 return (
                   <g
                     key={i}
+                    data-custom-slot={i}
                     transform={`translate(${cx},${cy})`}
                     onPointerDown={(e) => {
                       if (i === 0) return;
                       e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId);
+                      const svg = svgRef.current;
+                      const cachedRect = svg?.getBoundingClientRect() ?? null;
+                      let cachedInvCtm: DOMMatrix | null = null;
+                      try {
+                        const ctm = svg?.getScreenCTM?.();
+                        if (ctm) cachedInvCtm = ctm.inverse();
+                      } catch {
+                        cachedInvCtm = null;
+                      }
+                      const startPt = clientToSvg(e.clientX, e.clientY, cachedRect, cachedInvCtm);
+                      const grabDxSvg = startPt ? clamp(cx - startPt.px, -16, 16) : 0;
+                      const grabDySvg = startPt ? clamp(cy - startPt.py, -16, 16) : 0;
+                      dragStateRef.current = {
+                        idx: i,
+                        pointerId: e.pointerId,
+                        isTouch: e.pointerType !== 'mouse',
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        grabDxSvg,
+                        grabDySvg,
+                        cachedRect,
+                        cachedInvCtm,
+                        curRole: z[0],
+                        curNx: z[1],
+                        curNy: z[2],
+                        curGx: cx,
+                        curGy: cy,
+                        fpx: startPt ? clamp(startPt.px, 8, 292) : cx,
+                        fpy: startPt ? clamp(startPt.py, 8, 372) : cy,
+                        showTether: false,
+                        rafId: null,
+                        latestX: e.clientX,
+                        latestY: e.clientY
+                      };
                       setDragIdx(i);
-                      setDragIsTouch(e.pointerType !== 'mouse');
                       setSelIdx(i);
                     }}
-                    className={i ? 'cursor-grab' : 'cursor-default'}
+                    className={i ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
                   >
+                    <circle r={22} fill="transparent" />
                     <circle r={i === selIdx ? 18 : 15} fill={kitColor} stroke={i === selIdx ? '#f5c242' : '#fff'} strokeWidth={3} />
                     <text y="4" textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff" className="pointer-events-none">{z[0]}</text>
                   </g>

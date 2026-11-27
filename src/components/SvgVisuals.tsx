@@ -1283,6 +1283,43 @@ export const FormationPitch: React.FC<{
   const pitchCrestSpec = showPitchCrest
     ? resolveCrestSpec(team.name, team, state.club, state.mode === 'm' && team.id === state.me)
     : null;
+  const starterFaceHtmls = React.useMemo(() => {
+    return starters.map((q, i) => {
+      const z = slots[i] || { sp: 'CM', x: 50, y: 50 };
+      const slotIsGK = z.sp === 'GK';
+      const kc = slotIsGK ? gkCol : col;
+      const slotTrim = slotIsGK ? gkTrCol : trCol;
+      return faceBodySvg(
+        visOf(q, state.p),
+        kc,
+        slotTrim,
+        32,
+        '#10281d',
+        true,
+        false,
+        resolveKitVisualForFace(team, state, null, undefined, kc, slotTrim, slotIsGK, `${uid}-p-${i}`, q.n)
+      );
+    });
+  }, [starters, slots, state, team, col, trCol, gkCol, gkTrCol, uid]);
+
+  const dragPreviewFaceHtml = React.useMemo(() => {
+    if (!dragPreview) return '';
+    const pq = dragPreview.player;
+    const dragIsGK = dragPreview.sp === 'GK';
+    const kc = dragIsGK ? gkCol : col;
+    const dragTrim = dragIsGK ? gkTrCol : trCol;
+    return faceBodySvg(
+      visOf(pq, state.p),
+      kc,
+      dragTrim,
+      32,
+      '#10281d',
+      true,
+      false,
+      resolveKitVisualForFace(team, state, null, undefined, kc, dragTrim, dragIsGK, `${uid}-drag`, pq.n)
+    );
+  }, [dragPreview?.player, dragPreview?.sp, team, state, col, trCol, gkCol, gkTrCol, uid]);
+
   const zoneLineColors: Record<Position, { stroke: string; fill: string; text: string }> = {
     FW: { stroke: 'rgba(239, 68, 68, 0.58)', fill: 'rgba(220, 38, 38, 0.1)', text: 'rgba(254, 202, 202, 0.92)' },
     MF: { stroke: 'rgba(59, 130, 246, 0.58)', fill: 'rgba(37, 99, 235, 0.1)', text: 'rgba(191, 219, 254, 0.92)' },
@@ -1454,7 +1491,7 @@ export const FormationPitch: React.FC<{
             }}
             className={`${isDisabled ? 'cursor-default' : dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}${isRecentSubIn ? ' sub-node-pop' : ''}`}
           >
-            <circle cx={cx} cy={cy} r={24} fill="transparent" />
+            <circle cx={cx} cy={cy} r={25} fill="transparent" />
             {isRecentSubIn && (
               <>
                 <circle
@@ -1500,18 +1537,7 @@ export const FormationPitch: React.FC<{
             <g
               transform={`translate(${(cx - 30 * sc).toFixed(1)},${(cy - 31 * sc).toFixed(1)}) scale(${sc})`}
               clipPath={`url(#fc-${uid})`}
-              dangerouslySetInnerHTML={{
-                __html: faceBodySvg(
-                  visOf(q, state.p),
-                  kc,
-                  slotTrim,
-                  32,
-                  '#10281d',
-                  true,
-                  false,
-                  resolveKitVisualForFace(team, state, null, undefined, kc, slotTrim, slotIsGK, `${uid}-p-${i}`, q.n)
-                )
-              }}
+              dangerouslySetInnerHTML={{ __html: starterFaceHtmls[i] || '' }}
             />
 
             {/* Top Center: Role Badge (in front of avatar, raised cleanly onto top rim to clear hair) */}
@@ -1844,68 +1870,65 @@ export const FormationPitch: React.FC<{
         const ed = pn === 0 ? '#4ade80' : pn === 1 ? '#facc15' : '#f87171';
         const dragIsGK = dragPreview.sp === 'GK';
         const kc = dragIsGK ? gkCol : col;
-        const dragTrim = dragIsGK ? gkTrCol : trCol;
         const sc = 0.56;
+        const pillOffsetX = clamp(gx, 44, 256) - gx;
+        const nameOffsetX = clamp(gx, 28, 272) - gx;
+        const fpx = touchPointerPitchPt?.px ?? gx;
+        const fpy = touchPointerPitchPt?.py ?? gy;
+        const showTether = Boolean(touchPointerPitchPt && Math.hypot(fpx - gx, fpy - gy) > 8);
         return (
           <g className="pointer-events-none">
-            {touchPointerPitchPt && Math.hypot(touchPointerPitchPt.px - gx, touchPointerPitchPt.py - gy) > 8 && (
-              <>
-                <line
-                  x1={touchPointerPitchPt.px}
-                  y1={touchPointerPitchPt.py}
-                  x2={gx}
-                  y2={gy}
-                  stroke={ed}
-                  strokeWidth="1.6"
-                  strokeDasharray="3.5 2.5"
-                  opacity="0.85"
-                />
-                <circle
-                  cx={touchPointerPitchPt.px}
-                  cy={touchPointerPitchPt.py}
-                  r="6"
-                  fill="rgba(255,255,255,0.18)"
-                  stroke="rgba(255,255,255,0.65)"
-                  strokeWidth="1.2"
-                />
-              </>
-            )}
-            <circle cx={gx} cy={gy} r={23} fill={`${ed}30`} stroke={ed} strokeWidth="2" strokeDasharray="3 2" />
-            <circle cx={gx} cy={gy} r={18} fill={kc} stroke="#fff" strokeWidth="2.5" />
-            <g
-              transform={`translate(${(gx - 30 * sc).toFixed(1)},${(gy - 31 * sc).toFixed(1)}) scale(${sc})`}
-              clipPath={`url(#fc-${uid})`}
-              dangerouslySetInnerHTML={{
-                __html: faceBodySvg(
-                  visOf(pq, state.p),
-                  kc,
-                  dragTrim,
-                  32,
-                  '#10281d',
-                  true,
-                  false,
-                  resolveKitVisualForFace(team, state, null, undefined, kc, dragTrim, dragIsGK, `${uid}-drag`, pq.n)
-                )
-              }}
+            <line
+              data-pitch-drag-tether="1"
+              x1={fpx}
+              y1={fpy}
+              x2={gx}
+              y2={gy}
+              stroke={ed}
+              strokeWidth="1.6"
+              strokeDasharray="3.5 2.5"
+              opacity={showTether ? '0.85' : '0'}
             />
-            <rect x={clamp(gx - 38, 6, 218)} y={gy - 37} width="76" height="14" rx="7" fill="#0b2018" stroke={ed} strokeWidth="1.3" />
-            <text x={clamp(gx, 44, 256)} y={gy - 27.2} textAnchor="middle" fontSize="8.2" fontWeight="800" fontFamily="Sarabun" fill={ed}>
-              {dragPreview.sp} · {dragPreview.zoneLabel}
-            </text>
-            <text
-              x={clamp(gx, 28, 272)}
-              y={gy + 29}
-              textAnchor="middle"
-              fontSize="9"
-              fontWeight="800"
-              fontFamily="Sarabun"
-              fill="#fde047"
-              stroke="#0b2018"
-              strokeWidth="2.6"
-              paintOrder="stroke"
-            >
-              {pq.n.split(' ')[0]}
-            </text>
+            <circle
+              data-pitch-drag-finger="1"
+              cx={fpx}
+              cy={fpy}
+              r="6"
+              fill="rgba(255,255,255,0.18)"
+              stroke="rgba(255,255,255,0.65)"
+              strokeWidth="1.2"
+              opacity={showTether ? '1' : '0'}
+            />
+            <g data-pitch-drag-group="1" transform={`translate(${gx.toFixed(2)},${gy.toFixed(2)})`}>
+              <circle cx={0} cy={0} r={23} fill={`${ed}30`} stroke={ed} strokeWidth="2" strokeDasharray="3 2" />
+              <circle cx={0} cy={0} r={18} fill={kc} stroke="#fff" strokeWidth="2.5" />
+              <g
+                transform={`translate(${(-30 * sc).toFixed(1)},${(-31 * sc).toFixed(1)}) scale(${sc})`}
+                clipPath={`url(#fc-${uid})`}
+                dangerouslySetInnerHTML={{ __html: dragPreviewFaceHtml }}
+              />
+              <g data-pitch-drag-pill="1" transform={`translate(${pillOffsetX.toFixed(2)},-37)`}>
+                <rect x={-38} y={0} width="76" height="14" rx="7" fill="#0b2018" stroke={ed} strokeWidth="1.3" />
+                <text x={0} y={9.8} textAnchor="middle" fontSize="8.2" fontWeight="800" fontFamily="Sarabun" fill={ed}>
+                  {dragPreview.sp} · {dragPreview.zoneLabel}
+                </text>
+              </g>
+              <text
+                data-pitch-drag-name="1"
+                x={nameOffsetX}
+                y={29}
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="800"
+                fontFamily="Sarabun"
+                fill="#fde047"
+                stroke="#0b2018"
+                strokeWidth="2.6"
+                paintOrder="stroke"
+              >
+                {pq.n.split(' ')[0]}
+              </text>
+            </g>
           </g>
         );
       })()}
