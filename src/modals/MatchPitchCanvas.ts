@@ -6146,7 +6146,6 @@ export const drawLivePitchToCanvas = (
     const bothShouting =
       coachSpeechDrawQueue.filter((item) => Boolean(item.c.shoutText && item.c.shoutTimer > 0)).length >= 2;
     const midSplitX = px(50);
-    const touchBot = padY + ph;
 
     // Pass 1: Coach Speech Bubbles
     coachSpeechDrawQueue.forEach(({ c, cx, cy, cr, kit }) => {
@@ -6206,23 +6205,15 @@ export const drawLivePitchToCanvas = (
       ctx.restore();
     });
 
-    // Pass 2: Coach Mood Emojis (no background, placed cleanly in unobstructed sideline apron beside coach)
+    // Pass 2: Coach Mood Emojis (no background, placed directly above the coach)
     coachSpeechDrawQueue.forEach(({ c, cx, cy, cr, warmupPhase }) => {
       if ((c.shoutText && c.shoutTimer > 0) || !c.moodEmoji || (c.moodTimer || 0) <= 0) return;
       const mTimer = c.moodTimer || 0;
       const mAlpha = clamp(mTimer / 0.35, 0, 1);
       const bob = Math.sin(warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
       const emSize = Math.round(clamp(cr * 1.65, 12, 15));
-      const emOffset = cr + 9.5;
-      let emX: number;
-      if (c.side === 'H') {
-        const innerX = cx + emOffset;
-        emX = innerX <= midSplitX - 8 ? innerX : Math.max(10, cx - emOffset);
-      } else {
-        const innerX = cx - emOffset;
-        emX = innerX >= midSplitX + 8 ? innerX : Math.min(cssW - 10, cx + emOffset);
-      }
-      const emY = clamp(cy - cr * 0.35 + bob, touchBot + emSize * 0.52, cssH - emSize * 0.55);
+      const emX = clamp(cx, 12, cssW - 12);
+      const emY = clamp(cy - cr - emSize * 0.58 + bob, emSize * 0.55, cssH - emSize * 0.55);
 
       ctx.save();
       ctx.globalAlpha = mAlpha;
