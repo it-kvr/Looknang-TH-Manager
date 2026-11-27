@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { IdCard, Lock, RefreshCw, Search, Star, Trash2, Unlock, Users, X } from 'lucide-react';
-import type { SubRole, MainTab, Player, Team, ScoutMission, GameState } from '../types/game';
+import type { SubRole, MainTab, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -23,7 +23,9 @@ import {
   removeShortlistPlayer,
   resolveShortlistEntry,
   getLoanedOutPlayers,
-  recallLoanedOutPlayer
+  recallLoanedOutPlayer,
+  recordTransferLog,
+  getSeasonTransferStats
 } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
@@ -103,7 +105,7 @@ export function evalOffer(q: Player, st: OfferDraft, me: Team) {
   return { type, yr, role, wb, wg, sgBonus, swapQ, swapVal, cashNow, dueLater, loanOpt, chance, p0 };
 }
 
-type MarketTab = 'buy' | 'shortlist' | 'sell' | 'scout' | 'con';
+type MarketTab = 'buy' | 'shortlist' | 'sell' | 'scout' | 'con' | 'history';
 
 export const MarketView = React.memo<{
   state: GameState;
@@ -121,11 +123,20 @@ export const MarketView = React.memo<{
   const [createdRefresh, setCreatedRefresh] = useState(0);
   const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW' | 'FREE'>('ALL');
   const [loanOnlyFilter, setLoanOnlyFilter] = useState(false);
+  const [ageRangeFilter, setAgeRangeFilter] = useState<'ALL' | 'u21' | 'prime' | 'vet'>('ALL');
+  const [minOvFilter, setMinOvFilter] = useState<number>(0);
+  const [maxBudgetFilter, setMaxBudgetFilter] = useState<'ALL' | 'AFFORD' | '15' | '35' | '70' | '120'>('ALL');
   const [subFilter, setSubFilter] = useState<'ALL' | SubRole>('ALL');
   const [sortBy, setSortBy] = useState<'default' | 'ov_desc' | 'price_asc' | 'age_asc'>('default');
   const [searchQuery, setSearchQuery] = useState('');
   const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER'>('MY_TIER');
   const [shortlistFilter, setShortlistFilter] = useState<'all' | 'ready' | 'free' | 'club'>('all');
+
+  const [histSeason, setHistSeason] = useState<number | 'all'>(state.season);
+  const [histScope, setHistScope] = useState<'all' | 'mine' | 'ai' | 'loan'>('all');
+  const [histKind, setHistKind] = useState<'all' | 'perm' | 'free' | 'loan'>('all');
+  const [histSearch, setHistSearch] = useState('');
+  const [histSortClubs, setHistSortClubs] = useState<'net_desc' | 'spent_desc' | 'recv_desc' | 'net_asc'>('net_desc');
 
   const [scoutRole, setScoutRole] = useState<SubRole | ''>('');
   const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
@@ -151,7 +162,8 @@ export const MarketView = React.memo<{
       navIntent.sub === 'scout' ||
       navIntent.sub === 'con' ||
       navIntent.sub === 'buy' ||
-      navIntent.sub === 'shortlist'
+      navIntent.sub === 'shortlist' ||
+      navIntent.sub === 'history'
     ) {
       setActiveTab(navIntent.sub);
     } else if (navIntent.sub === 'club') {
@@ -169,6 +181,20 @@ export const MarketView = React.memo<{
   }, [filter]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const maxBudgetCap = useMemo(() => {
+    if (maxBudgetFilter === 'ALL') return Infinity;
+    if (maxBudgetFilter === 'AFFORD') return Math.max(0, state.money);
+    return Number(maxBudgetFilter);
+  }, [maxBudgetFilter, state.money]);
+
+  const matchesBuyDetailFilters = (q: Player, effectivePrice: number) => {
+    if (ageRangeFilter === 'u21' && q.age > 21) return false;
+    if (ageRangeFilter === 'prime' && (q.age < 22 || q.age > 28)) return false;
+    if (ageRangeFilter === 'vet' && q.age < 29) return false;
+    if (minOvFilter > 0 && q.ov < minOvFilter) return false;
+    if (maxBudgetCap !== Infinity && effectivePrice > maxBudgetCap) return false;
+    return true;
+  };
 
   const marketList = useMemo(() => {
     const base = (state.mk || [])
@@ -177,18 +203,20 @@ export const MarketView = React.memo<{
         const lineOk = filter === 'ALL' || (filter === 'FREE' ? !!q.free : q.pos === filter);
         const subOk = subFilter === 'ALL' || q.ro === subFilter;
         const loanOk = !loanOnlyFilter || !q.free;
+        const effPrice = q.free ? 0 : q.price || vlu(q);
+        const detailOk = matchesBuyDetailFilters(q, effPrice);
         const searchOk =
           !normalizedQuery ||
           q.n.toLowerCase().includes(normalizedQuery) ||
           q.ro.toLowerCase().includes(normalizedQuery) ||
           (SPN[q.ro] || '').toLowerCase().includes(normalizedQuery);
-        return lineOk && subOk && loanOk && searchOk;
+        return lineOk && subOk && loanOk && detailOk && searchOk;
       });
     if (sortBy === 'ov_desc') return [...base].sort((a, b) => b.q.ov - a.q.ov);
     if (sortBy === 'price_asc') return [...base].sort((a, b) => (a.q.free ? 0 : a.q.price || vlu(a.q)) - (b.q.free ? 0 : b.q.price || vlu(b.q)));
     if (sortBy === 'age_asc') return [...base].sort((a, b) => a.q.age - b.q.age || b.q.ov - a.q.ov);
     return base;
-  }, [state.mk, filter, subFilter, loanOnlyFilter, sortBy, normalizedQuery]);
+  }, [state.mk, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, sortBy, normalizedQuery]);
 
   const clubBasePool = useMemo(() => {
     if (activeTab !== 'buy' || marketSource !== 'club') return [];
@@ -205,16 +233,17 @@ export const MarketView = React.memo<{
   }, [activeTab, marketSource, state.teams, state.me, me.tier, clubTierFilter]);
 
   const clubMarketList = useMemo(() => {
-    const items = clubBasePool.filter(({ q, team: t }) => {
+    const items = clubBasePool.filter(({ q, team: t, price }) => {
       const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
       const subOk = subFilter === 'ALL' || q.ro === subFilter;
       const loanOk = !loanOnlyFilter || (t.sq.length > 16 && (q.age <= 26 || q.ov <= 76));
+      const detailOk = matchesBuyDetailFilters(q, price);
       const searchOk =
         !normalizedQuery ||
         q.n.toLowerCase().includes(normalizedQuery) ||
         t.name.toLowerCase().includes(normalizedQuery) ||
         q.ro.toLowerCase().includes(normalizedQuery);
-      return lineOk && subOk && loanOk && searchOk;
+      return lineOk && subOk && loanOk && detailOk && searchOk;
     });
     const sorted = items.slice().sort((a, b) => {
       if (sortBy === 'price_asc') return a.price - b.price || b.q.ov - a.q.ov;
@@ -222,7 +251,7 @@ export const MarketView = React.memo<{
       return b.q.ov - a.q.ov;
     });
     return sorted.slice(0, 60);
-  }, [clubBasePool, filter, subFilter, loanOnlyFilter, sortBy, normalizedQuery]);
+  }, [clubBasePool, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, sortBy, normalizedQuery]);
 
   const loanInPlayers = useMemo(
     () => me.sq.map((q, i) => ({ q, i })).filter(({ q }) => !!q.loan),
@@ -323,27 +352,74 @@ export const MarketView = React.memo<{
       const q = c.player;
       const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
       const subOk = subFilter === 'ALL' || q.ro === subFilter;
+      const detailOk = matchesBuyDetailFilters(q, c.price);
       const searchOk =
         !normalizedQuery ||
         q.n.toLowerCase().includes(normalizedQuery) ||
         c.sourceLabel.toLowerCase().includes(normalizedQuery) ||
         (c.archName || '').toLowerCase().includes(normalizedQuery);
-      return lineOk && subOk && searchOk;
+      return lineOk && subOk && detailOk && searchOk;
     });
     if (sortBy === 'ov_desc') return [...items].sort((a, b) => b.ov - a.ov);
     if (sortBy === 'price_asc') return [...items].sort((a, b) => a.price - b.price);
     if (sortBy === 'age_asc') return [...items].sort((a, b) => a.player.age - b.player.age || b.ov - a.ov);
     return items;
-  }, [createdPool, filter, subFilter, sortBy, normalizedQuery]);
+  }, [createdPool, filter, subFilter, ageRangeFilter, minOvFilter, maxBudgetCap, sortBy, normalizedQuery]);
+
+  const transferHistoryStats = useMemo(
+    () => getSeasonTransferStats(state, histSeason),
+    [state, histSeason]
+  );
+
+  const filteredHistoryEntries = useMemo(() => {
+    const qNorm = histSearch.trim().toLowerCase();
+    return transferHistoryStats.entries.filter((tr) => {
+      if (histScope === 'mine' && tr.toTeamId !== state.me && tr.fromTeamId !== state.me) return false;
+      if (histScope === 'ai' && (tr.toTeamId === state.me || tr.fromTeamId === state.me)) return false;
+      if (histScope === 'loan' && tr.kind !== 'loan' && tr.kind !== 'loanopt') return false;
+      if (histKind === 'perm' && tr.kind !== 'buy' && tr.kind !== 'swap' && tr.kind !== 'buyout') return false;
+      if (histKind === 'free' && tr.kind !== 'free' && tr.kind !== 'youth') return false;
+      if (histKind === 'loan' && tr.kind !== 'loan' && tr.kind !== 'loanopt') return false;
+      if (
+        qNorm &&
+        !tr.playerName.toLowerCase().includes(qNorm) &&
+        !tr.fromTeamName.toLowerCase().includes(qNorm) &&
+        !tr.toTeamName.toLowerCase().includes(qNorm) &&
+        !tr.ro.toLowerCase().includes(qNorm)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [transferHistoryStats.entries, histScope, histKind, histSearch, state.me]);
+
+  const sortedClubNetSpend = useMemo(() => {
+    const list = transferHistoryStats.clubSummaries.slice();
+    if (histSortClubs === 'spent_desc') return list.sort((a, b) => b.spent - a.spent || b.netSpend - a.netSpend);
+    if (histSortClubs === 'recv_desc') return list.sort((a, b) => b.received - a.received || a.netSpend - b.netSpend);
+    if (histSortClubs === 'net_asc') return list.sort((a, b) => a.netSpend - b.netSpend || b.received - a.received);
+    return list.sort((a, b) => b.netSpend - a.netSpend || b.spent - a.spent);
+  }, [transferHistoryStats.clubSummaries, histSortClubs]);
 
   const expiringCount = contractList.filter(({ c }) => c.yr <= 1).length;
   const activeCount = marketSource === 'mk' ? marketList.length : marketSource === 'club' ? clubMarketList.length : createdMarketList.length;
-  const hasBuyFilters = filter !== 'ALL' || subFilter !== 'ALL' || loanOnlyFilter || sortBy !== 'default' || searchQuery.trim() !== '';
+  const hasBuyFilters =
+    filter !== 'ALL' ||
+    subFilter !== 'ALL' ||
+    loanOnlyFilter ||
+    ageRangeFilter !== 'ALL' ||
+    minOvFilter > 0 ||
+    maxBudgetFilter !== 'ALL' ||
+    sortBy !== 'default' ||
+    searchQuery.trim() !== '';
 
   const resetBuyFilters = () => {
     setFilter('ALL');
     setSubFilter('ALL');
     setLoanOnlyFilter(false);
+    setAgeRangeFilter('ALL');
+    setMinOvFilter(0);
+    setMaxBudgetFilter('ALL');
     setSortBy('default');
     setSearchQuery('');
   };
@@ -511,6 +587,33 @@ export const MarketView = React.memo<{
         t.sq.push(incoming);
         assignTeamShirtNumbers(t);
         removeShortlistPlayer(d, incoming.n);
+        const logKind: TransferLogKind =
+          deal.type === 'free'
+            ? 'free'
+            : deal.type === 'swap'
+              ? 'swap'
+              : deal.type === 'loan'
+                ? 'loan'
+                : deal.type === 'loanopt'
+                  ? 'loanopt'
+                  : 'buy';
+        recordTransferLog(d, {
+          season: d.season,
+          md: d.md,
+          playerName: incoming.n,
+          pos: incoming.pos,
+          ro: incoming.ro,
+          age: incoming.age,
+          ov: incoming.ov,
+          kind: logKind,
+          fromTeamId: sellerRef ? sellerRef.id : -1,
+          fromTeamName: sellerRef ? sellerRef.name : target.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขายกลาง',
+          toTeamId: d.me,
+          toTeamName: t.name,
+          fee: deal.cashNow + (deal.dueLater || 0),
+          ...(incoming.loanOpt ? { buyOption: incoming.loanOpt } : {}),
+          wage: deal.wg
+        });
         pushFeed(
           d,
           incoming.loan ? 'ยืมตัวเข้าทีม' : 'เสริมทัพ',
@@ -1342,7 +1445,8 @@ export const MarketView = React.memo<{
               : undefined
     },
     { id: 'scout', icon: '🔍', label: 'แมวมอง', count: state.scout?.results ? 'พร้อม' : state.scout ? `${state.scout.turnsLeft} นัด` : undefined },
-    { id: 'con', icon: '📋', label: 'สัญญา · ยืม', count: expiringCount + loanInPlayers.length > 0 ? `${expiringCount + loanInPlayers.length}` : undefined }
+    { id: 'con', icon: '📋', label: 'สัญญา · ยืม', count: expiringCount + loanInPlayers.length > 0 ? `${expiringCount + loanInPlayers.length}` : undefined },
+    { id: 'history', icon: '📊', label: 'ประวัติลีก', count: transferHistoryStats.entries.length > 0 ? `${transferHistoryStats.entries.length}` : undefined }
   ];
 
   const scoutFocusCards: { focus: ScoutMission['focus']; icon: string; title: string; desc: string }[] = [
@@ -1429,8 +1533,8 @@ export const MarketView = React.memo<{
         </div>
       </div>
 
-      {/* 5-Section Market Navigation */}
-      <div className="seg-bar grid grid-cols-5 w-full shrink-0">
+      {/* 6-Section Market Navigation */}
+      <div className="seg-bar grid grid-cols-3 sm:grid-cols-6 mland:grid-cols-6 w-full shrink-0">
         {marketTabs.map((t) => {
           const active = activeTab === t.id;
           return (
@@ -1583,6 +1687,49 @@ export const MarketView = React.memo<{
                   <option value="ov_desc">เรียง: OVR สูงสุด</option>
                   <option value="price_asc">เรียง: ค่าตัวถูกสุด</option>
                   <option value="age_asc">เรียง: อายุน้อยสุด</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5 mland:space-y-1">
+                <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">อายุ · OVR · งบประมาณ</div>
+                <div className="grid grid-cols-2 gap-1">
+                  <select
+                    aria-label="กรองช่วงอายุ"
+                    value={ageRangeFilter}
+                    onChange={(e) => setAgeRangeFilter(e.target.value as 'ALL' | 'u21' | 'prime' | 'vet')}
+                    className="w-full px-2 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer focus:outline-none focus:border-[var(--g)]"
+                  >
+                    <option value="ALL">อายุ: ทั้งหมด</option>
+                    <option value="u21">≤ 21 ปี (ดาวรุ่ง)</option>
+                    <option value="prime">22–28 ปี (พีค)</option>
+                    <option value="vet">29+ ปี (เก๋าเกม)</option>
+                  </select>
+                  <select
+                    aria-label="กรอง OVR ขั้นต่ำ"
+                    value={minOvFilter}
+                    onChange={(e) => setMinOvFilter(Number(e.target.value))}
+                    className="w-full px-2 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer focus:outline-none focus:border-[var(--g)]"
+                  >
+                    <option value={0}>OVR: ทั้งหมด</option>
+                    <option value={60}>OVR 60+</option>
+                    <option value={65}>OVR 65+</option>
+                    <option value={70}>OVR 70+</option>
+                    <option value={75}>OVR 75+</option>
+                    <option value={80}>OVR 80+</option>
+                  </select>
+                </div>
+                <select
+                  aria-label="กรองงบประมาณสูงสุด"
+                  value={maxBudgetFilter}
+                  onChange={(e) => setMaxBudgetFilter(e.target.value as 'ALL' | 'AFFORD' | '15' | '35' | '70' | '120')}
+                  className="w-full px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer focus:outline-none focus:border-[var(--g)]"
+                >
+                  <option value="ALL">งบค่าตัว: ไม่จำกัด</option>
+                  <option value="AFFORD">งบ: ไม่เกินงบที่มี ({fmtMoneyNum(Math.max(0, Math.floor(state.money)))})</option>
+                  <option value="15">งบ: ≤ {fmtMoneyNum(15)}</option>
+                  <option value="35">งบ: ≤ {fmtMoneyNum(35)}</option>
+                  <option value="70">งบ: ≤ {fmtMoneyNum(70)}</option>
+                  <option value="120">งบ: ≤ {fmtMoneyNum(120)}</option>
                 </select>
               </div>
 
@@ -1951,6 +2098,22 @@ export const MarketView = React.memo<{
                       );
                       t.sq.push(incoming);
                       assignTeamShirtNumbers(t);
+                      recordTransferLog(d, {
+                        season: d.season,
+                        md: d.md,
+                        playerName: incoming.n,
+                        pos: incoming.pos,
+                        ro: incoming.ro,
+                        age: incoming.age,
+                        ov: incoming.ov,
+                        kind: fee > 0 ? 'buy' : 'youth',
+                        fromTeamId: -1,
+                        fromTeamName: cand.clubName || 'เด็กปั้นสโมสร',
+                        toTeamId: d.me,
+                        toTeamName: t.name,
+                        fee,
+                        wage: wg
+                      });
                       pushFeed(
                         d,
                         fee > 0 ? 'ซื้อตัวสร้างเอง' : 'เด็กปั้นสโมสร',
@@ -3147,6 +3310,22 @@ export const MarketView = React.memo<{
                               target.signedMd = d.md;
                               target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
                               appendPlayerCareerLog(target, `🤝 เซ็นสัญญาถาวรกับ ${d.teams[d.me].name} ซีซั่น ${d.season}`);
+                              recordTransferLog(d, {
+                                season: d.season,
+                                md: d.md,
+                                playerName: target.n,
+                                pos: target.pos,
+                                ro: target.ro,
+                                age: target.age,
+                                ov: target.ov,
+                                kind: 'buyout',
+                                fromTeamId: q.loanFromTeamId ?? -1,
+                                fromTeamName: q.loanFromTeamName || 'ต้นสังกัดเดิม',
+                                toTeamId: d.me,
+                                toTeamName: d.teams[d.me].name,
+                                fee: cost,
+                                wage: target.con.wg
+                              });
                             });
                             onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
                           }}
@@ -3245,6 +3424,22 @@ export const MarketView = React.memo<{
                             t.sq.push(y);
                             assignTeamShirtNumbers(t);
                             d.yth.splice(i, 1);
+                            recordTransferLog(d, {
+                              season: d.season,
+                              md: d.md,
+                              playerName: y.n,
+                              pos: y.pos,
+                              ro: y.ro,
+                              age: y.age,
+                              ov: y.ov,
+                              kind: 'youth',
+                              fromTeamId: -1,
+                              fromTeamName: 'อะคาเดมี่สโมสร',
+                              toTeamId: d.me,
+                              toTeamName: t.name,
+                              fee: 0,
+                              wage: y.con.wg
+                            });
                           });
                           onToast(`เซ็นเยาวชน ${q.n} สัญญา 3 ปี`);
                         }}
@@ -3260,6 +3455,324 @@ export const MarketView = React.memo<{
                     <div className="text-xs font-bold">ยังไม่มีเยาวชนชุดใหม่ในรอบนี้</div>
                     <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
                       ปลายซีซั่นจะมีเด็กเยาวชนชุดใหม่เข้ามา (อัปเกรดอะคาเดมี่เพื่อรับเด็กฝีเท้าดีขึ้น)
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION 5: LEAGUE TRANSFER HISTORY & NET SPEND */}
+      {activeTab === 'history' && (
+        <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
+          {/* Top Filter Strip */}
+          <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+              <select
+                aria-label="เลือกซีซั่นประวัติย้ายทีม"
+                value={histSeason === 'all' ? 'all' : String(histSeason)}
+                onChange={(e) => setHistSeason(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold cursor-pointer focus:outline-none focus:border-[var(--g)]"
+              >
+                <option value="all">ทุกซีซั่น</option>
+                {transferHistoryStats.seasonsAvailable.map((sn) => (
+                  <option key={sn} value={sn}>
+                    ซีซั่น {sn}
+                  </option>
+                ))}
+              </select>
+
+              <div className="seg-bar shrink-0">
+                {(
+                  [
+                    ['all', 'ทั้งหมด'],
+                    ['mine', 'ทีมเรา'],
+                    ['ai', 'ทีมอื่นในลีก'],
+                    ['loan', 'ดีลยืมตัว']
+                  ] as const
+                ).map(([k, l]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setHistScope(k)}
+                    className={`seg-btn px-2 ${histScope === k ? 'seg-btn-active' : ''}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              <select
+                aria-label="กรองประเภทดีล"
+                value={histKind}
+                onChange={(e) => setHistKind(e.target.value as 'all' | 'perm' | 'free' | 'loan')}
+                className="px-2 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer focus:outline-none focus:border-[var(--g)]"
+              >
+                <option value="all">ประเภท: ทั้งหมด</option>
+                <option value="perm">ซื้อ-ขายขาด</option>
+                <option value="free">ฟรี / อะคาเดมี่</option>
+                <option value="loan">ยืมตัว</option>
+              </select>
+            </div>
+
+            <div className="relative w-full sm:w-52 mland:w-44">
+              <Search className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--mut)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={histSearch}
+                onChange={(e) => setHistSearch(e.target.value)}
+                placeholder="ค้นหานักเตะ / สโมสร..."
+                aria-label="ค้นหาประวัติย้ายทีม"
+                className="w-full pl-7.5 pr-6 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] focus:outline-none focus:border-[var(--g)]"
+              />
+              {histSearch && (
+                <button
+                  type="button"
+                  onClick={() => setHistSearch('')}
+                  aria-label="ล้างคำค้นหาประวัติ"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 2-Column Feed & Net Spend */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] mland:grid-cols-[1.12fr_0.88fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+            {/* Left: Transfer Feed */}
+            <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+              <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
+                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+                  📰 ความเคลื่อนไหวตลาด ({filteredHistoryEntries.length} ดีล)
+                </h3>
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
+                  หมุนเวียนรวม {fmtMoneyNum(transferHistoryStats.totalVolume)}
+                </span>
+              </div>
+
+              {/* My Club KPI Strip */}
+              <div className="shrink-0 grid grid-cols-4 divide-x divide-[var(--line)]/70 border-b border-[var(--line)] bg-[var(--surface-2)]/20 px-2 py-2 mland:py-1.5 text-center tabular">
+                <div className="px-1">
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">ดีลในตัวกรอง</div>
+                  <div className="text-xs sm:text-sm mland:text-[11px] font-extrabold text-[var(--ink)]">{filteredHistoryEntries.length}</div>
+                </div>
+                <div className="px-1">
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">ทีมเราซื้อ/ยืม</div>
+                  <div className="text-xs sm:text-sm mland:text-[11px] font-extrabold text-[var(--ink)]">{fmtMoneyNum(transferHistoryStats.mySpent)}</div>
+                </div>
+                <div className="px-1">
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">ทีมเราขายได้</div>
+                  <div className="text-xs sm:text-sm mland:text-[11px] font-extrabold text-[var(--g)]">{fmtMoneyNum(transferHistoryStats.myReceived)}</div>
+                </div>
+                <div className="px-1">
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">Net Spend เรา</div>
+                  <div
+                    className={`text-xs sm:text-sm mland:text-[11px] font-extrabold ${
+                      transferHistoryStats.myNetSpend > 0
+                        ? 'text-[var(--red)]'
+                        : transferHistoryStats.myNetSpend < 0
+                          ? 'text-[var(--g)]'
+                          : 'text-[var(--ink)]'
+                    }`}
+                  >
+                    {transferHistoryStats.myNetSpend > 0
+                      ? `-${fmtMoneyNum(transferHistoryStats.myNetSpend)}`
+                      : transferHistoryStats.myNetSpend < 0
+                        ? `+${fmtMoneyNum(Math.abs(transferHistoryStats.myNetSpend))}`
+                        : fmtMoneyNum(0)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+                {filteredHistoryEntries.length > 0 ? (
+                  filteredHistoryEntries.map((tr) => {
+                    const isMineIn = tr.toTeamId === state.me;
+                    const isMineOut = tr.fromTeamId === state.me;
+                    const kindText =
+                      tr.kind === 'free'
+                        ? 'ฟรีเอเยนต์'
+                        : tr.kind === 'swap'
+                          ? 'แลกตัว+เงิน'
+                          : tr.kind === 'loan'
+                            ? 'ยืมตัว'
+                            : tr.kind === 'loanopt'
+                              ? 'ยืม+ออปชันซื้อ'
+                              : tr.kind === 'buyout'
+                                ? 'ใช้ออปชันซื้อขาด'
+                                : tr.kind === 'youth'
+                                  ? 'อะคาเดมี่'
+                                  : 'ซื้อขาด';
+                    const fromTeam = tr.fromTeamId >= 0 ? state.teams.find((t) => t.id === tr.fromTeamId) : undefined;
+                    const toTeam = tr.toTeamId >= 0 ? state.teams.find((t) => t.id === tr.toTeamId) : undefined;
+                    const inspectTarget = () => {
+                      const inTo = toTeam?.sq.find((p) => p.n === tr.playerName);
+                      if (inTo && toTeam) {
+                        onInspectPlayer(inTo, toTeam);
+                        return;
+                      }
+                      for (const tm of state.teams) {
+                        const found = tm.sq.find((p) => p.n === tr.playerName);
+                        if (found) {
+                          onInspectPlayer(found, tm);
+                          return;
+                        }
+                      }
+                      const inMk = (state.mk || []).find((p) => p.n === tr.playerName);
+                      if (inMk) onInspectPlayer(inMk, null);
+                    };
+
+                    return (
+                      <div
+                        key={tr.id}
+                        className={`flex items-center gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/45 transition-colors ${
+                          isMineIn ? 'bg-[var(--g-soft)]/25' : isMineOut ? 'bg-[var(--lamp-soft)]/18' : ''
+                        }`}
+                      >
+                        <OvrBadge ov={tr.ov} size="sm" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate leading-tight flex items-center gap-1.5">
+                            <PositionBadge role={tr.ro} size="xs" />
+                            <button
+                              type="button"
+                              onClick={inspectTarget}
+                              className="truncate hover:underline text-left cursor-pointer"
+                            >
+                              {tr.playerName}
+                            </button>
+                            <span className="text-[10.5px] mland:text-[9px] font-semibold text-[var(--mut)] shrink-0">
+                              · {kindText}
+                            </span>
+                          </div>
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular mt-0.5 flex flex-wrap items-center gap-x-1">
+                            <span className="inline-flex items-center gap-1 min-w-0">
+                              {fromTeam && <ClubCrest name={fromTeam.name} size={12} team={fromTeam} club={state.club} />}
+                              <span className={isMineOut ? 'text-[var(--ink)] font-bold' : ''}>{tr.fromTeamName}</span>
+                            </span>
+                            <span aria-hidden="true">→</span>
+                            <span className="inline-flex items-center gap-1 min-w-0">
+                              {toTeam && <ClubCrest name={toTeam.name} size={12} team={toTeam} club={state.club} />}
+                              <span className={isMineIn ? 'text-[var(--g)] font-bold' : 'text-[var(--ink)] font-semibold'}>
+                                {tr.toTeamName}
+                              </span>
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span>
+                              ซีซั่น {tr.season} {tr.md > 0 ? `นัดที่ ${tr.md}` : 'เปิดฤดูกาล'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right tabular shrink-0">
+                          <div className={`text-xs mland:text-[10.5px] font-extrabold ${tr.fee === 0 ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                            {tr.fee === 0 ? 'ฟรี' : fmtMoneyNum(tr.fee)}
+                          </div>
+                          {tr.buyOption ? (
+                            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                              ซื้อขาด {fmtMoneyNum(tr.buyOption)}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                              {tr.age} ปี
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-1.5">
+                    <div className="text-2xl opacity-75">📰</div>
+                    <div className="text-xs sm:text-sm font-bold text-[var(--ink)]">ยังไม่มีประวัติย้ายทีมตามตัวกรอง</div>
+                    <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
+                      ดีลซื้อ-ขายและยืมตัวของทั้งทีมคุณและสโมสรอื่นในลีกจะถูกบันทึกไว้ที่นี่ตลอดซีซั่น
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Right: Club Net Spend Ranking */}
+            <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+              <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
+                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+                  💰 ตาราง Net Spend สโมสร ({sortedClubNetSpend.length})
+                </h3>
+                <select
+                  aria-label="เรียงตาราง Net Spend"
+                  value={histSortClubs}
+                  onChange={(e) => setHistSortClubs(e.target.value as 'net_desc' | 'spent_desc' | 'recv_desc' | 'net_asc')}
+                  className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-semibold cursor-pointer focus:outline-none focus:border-[var(--g)]"
+                >
+                  <option value="net_desc">Net Spend สูงสุด</option>
+                  <option value="spent_desc">ทุ่มซื้อสูงสุด</option>
+                  <option value="recv_desc">ขายทำเงินสูงสุด</option>
+                  <option value="net_asc">กำไรตลาดสูงสุด</option>
+                </select>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+                {sortedClubNetSpend.length > 0 ? (
+                  sortedClubNetSpend.map((cs, idx) => {
+                    const tm = state.teams.find((t) => t.id === cs.teamId);
+                    const isMine = cs.teamId === state.me;
+                    const totalIn = cs.inCount + cs.loanInCount;
+                    const totalOut = cs.outCount + cs.loanOutCount;
+                    return (
+                      <div
+                        key={cs.teamId}
+                        className={`flex items-center gap-2.5 mland:gap-1.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 ${
+                          isMine ? 'bg-[var(--g-soft)]/35' : ''
+                        }`}
+                      >
+                        <span className="w-5 text-center text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] tabular shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="shrink-0">
+                          <ClubCrest name={cs.teamName} size={22} team={tm} club={state.club} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1">
+                            <span className={`truncate ${isMine ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>{cs.teamName}</span>
+                            <span className="text-[10px] mland:text-[8.5px] font-normal text-[var(--mut)] shrink-0">
+                              · {TN[cs.tier] || ''}
+                            </span>
+                          </div>
+                          <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5">
+                            เข้า {totalIn} · ออก {totalOut} · จ่าย {fmtMoneyNum(cs.spent)} · รับ {fmtMoneyNum(cs.received)}
+                          </div>
+                        </div>
+                        <div className="text-right tabular shrink-0 min-w-[66px]">
+                          <div
+                            className={`text-xs mland:text-[10.5px] font-extrabold ${
+                              cs.netSpend > 0
+                                ? 'text-[var(--red)]'
+                                : cs.netSpend < 0
+                                  ? 'text-[var(--g)]'
+                                  : 'text-[var(--mut)]'
+                            }`}
+                          >
+                            {cs.netSpend > 0
+                              ? `-${fmtMoneyNum(cs.netSpend)}`
+                              : cs.netSpend < 0
+                                ? `+${fmtMoneyNum(Math.abs(cs.netSpend))}`
+                                : fmtMoneyNum(0)}
+                          </div>
+                          <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">
+                            {cs.netSpend > 0 ? 'จ่ายสุทธิ' : cs.netSpend < 0 ? 'กำไรสุทธิ' : 'สมดุล'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-1.5">
+                    <div className="text-2xl opacity-75">📊</div>
+                    <div className="text-xs font-bold">ยังไม่มีสรุปยอด Net Spend</div>
+                    <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
+                      เมื่อมีการซื้อ-ขายหรือยืมตัวเกิดขึ้นในซีซั่นนี้ ตาราง Net Spend จะอัปเดตอัตโนมัติ
                     </p>
                   </div>
                 )}

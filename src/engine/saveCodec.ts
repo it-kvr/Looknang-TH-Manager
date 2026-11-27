@@ -1,4 +1,4 @@
-import type { Position, SubRole, Mentality, CoreAttrs, CupCompKey, PlayerCupStatRecord, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState, ClubIdentity, PlayerCareerProfile } from '../types/game';
+import type { Position, SubRole, Mentality, CoreAttrs, CupCompKey, PlayerCupStatRecord, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState, ClubIdentity, PlayerCareerProfile, TransferLogEntry, TransferLogKind } from '../types/game';
 import { ALL_SUB_ROLES } from '../data/thaiFootballData';
 import { ensureAiTeamPhilosophies, assignTeamShirtNumbers, OVF } from './playerCore';
 
@@ -462,6 +462,26 @@ export const packSaveState = (s: GameState): Record<string, unknown> => {
       snapshot: packSavePlayer(entry.snapshot)
     }));
   }
+  if (Array.isArray(s.transferLog) && s.transferLog.length) {
+    out.transferLog = s.transferLog.map((tr) => [
+      tr.id,
+      tr.season,
+      tr.md,
+      tr.playerName,
+      SAVE_POS.indexOf(tr.pos),
+      ALL_SUB_ROLES.indexOf(tr.ro),
+      tr.age,
+      tr.ov,
+      tr.kind,
+      tr.fromTeamId,
+      tr.fromTeamName,
+      tr.toTeamId,
+      tr.toTeamName,
+      tr.fee,
+      tr.buyOption ?? 0,
+      tr.wage ?? 0
+    ]);
+  }
   return out;
 };
 
@@ -484,6 +504,31 @@ export const unpackSaveState = (raw: Record<string, unknown>): GameState => {
       return {
         ...entry,
         snapshot: unpackSavePlayer(entry.snapshot)
+      };
+    });
+  }
+  if (Array.isArray(raw.transferLog)) {
+    copy.transferLog = raw.transferLog.map((row): TransferLogEntry => {
+      if (!Array.isArray(row)) return row as TransferLogEntry;
+      const pv = Number(row[4]);
+      const rv = Number(row[5]);
+      return {
+        id: String(row[0] || ''),
+        season: Number(row[1] || 1),
+        md: Number(row[2] || 0),
+        playerName: String(row[3] || ''),
+        pos: SAVE_POS[pv] || 'MF',
+        ro: ALL_SUB_ROLES[rv] || 'CM',
+        age: Number(row[6] || 24),
+        ov: Number(row[7] || 60),
+        kind: (row[8] as TransferLogKind) || 'buy',
+        fromTeamId: Number(row[9] ?? -1),
+        fromTeamName: String(row[10] || ''),
+        toTeamId: Number(row[11] ?? -1),
+        toTeamName: String(row[12] || ''),
+        fee: Number(row[13] || 0),
+        ...(Number(row[14]) > 0 ? { buyOption: Number(row[14]) } : {}),
+        ...(Number(row[15]) > 0 ? { wage: Number(row[15]) } : {})
       };
     });
   }

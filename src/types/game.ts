@@ -508,6 +508,27 @@ export interface ShortlistEntry {
   snapshot: Player;
 }
 
+export type TransferLogKind = 'buy' | 'free' | 'swap' | 'loan' | 'loanopt' | 'buyout' | 'youth';
+
+export interface TransferLogEntry {
+  id: string;
+  season: number;
+  md: number;
+  playerName: string;
+  pos: Position;
+  ro: SubRole;
+  age: number;
+  ov: number;
+  kind: TransferLogKind;
+  fromTeamId: number;
+  fromTeamName: string;
+  toTeamId: number;
+  toTeamName: string;
+  fee: number;
+  buyOption?: number;
+  wage?: number;
+}
+
 export interface ActiveDilemma {
   id: string;
   title: string;
@@ -974,6 +995,7 @@ export interface GameState {
   off?: TransferOffer | null;
   offers?: TransferOffer[];
   shortlist?: ShortlistEntry[];
+  transferLog?: TransferLogEntry[];
   res?: string[];
   matchHighlights?: MatchHighlightsSummary[];
   news?: string;
