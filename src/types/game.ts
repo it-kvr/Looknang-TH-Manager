@@ -1502,6 +1502,8 @@ export interface PendingSetPiece {
   wallPlayers?: { x: number; y: number }[];
   takerId?: string;
   wallIds?: string[];
+  throwSupportIds?: string[];
+  throwDefIds?: string[];
   setupElapsed?: number;
 }
 

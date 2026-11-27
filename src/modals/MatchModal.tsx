@@ -2512,6 +2512,21 @@ export const MatchModal: React.FC<{
         }
         if (pickedTaker) setPiece.takerId = pickedTaker.id;
       }
+      if (setPiece.type === 'throwin') {
+        if (!setPiece.throwSupportIds?.length) {
+          setPiece.throwSupportIds = activeAgents
+            .filter((z) => z.side === setPiece.side && z.pos !== 'GK' && z.id !== setPiece.takerId)
+            .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))
+            .map((z) => z.id);
+        }
+        if (!setPiece.throwDefIds?.length) {
+          setPiece.throwDefIds = activeAgents
+            .filter((z) => z.side !== setPiece.side && z.pos !== 'GK')
+            .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))
+            .slice(0, 3)
+            .map((z) => z.id);
+        }
+      }
       if (setPiece.type === 'freekick' && setPiece.wallPlayers?.length && !setPiece.wallIds?.length) {
         setPiece.wallIds = activeAgents
           .filter((z) => z.side !== setPiece.side && (z.pos === 'DF' || z.pos === 'MF'))
@@ -3036,7 +3051,7 @@ export const MatchModal: React.FC<{
         }
       }
 
-      // Throw-in positioning on touchline (cached taker avoids swapping mid-run)
+      // Throw-in positioning on touchline (cached taker & support order avoids swapping/flickering mid-run)
       if (setPiece && setPiece.type === 'throwin' && ag.pos !== 'GK') {
         const isAtt = ag.side === setPiece.side;
         const throwRight = isAttackRight(w, setPiece.side);
@@ -3045,15 +3060,12 @@ export const MatchModal: React.FC<{
         if (isAtt) {
           if (throwTakerId === ag.id) {
             ag.tx = clamp(setPiece.x, 4, 96);
-            ag.ty = setPiece.y < 50 ? 2.6 : 97.4;
+            ag.ty = setPiece.y < 50 ? 1.8 : 98.2;
             ag.intent = 'RESET';
             lockedTargetIds.add(ag.id);
             return;
           }
-          const supportOrder = activeAgents
-            .filter((z) => z.side === setPiece.side && z.pos !== 'GK' && z.id !== throwTakerId)
-            .sort((u, v) => Math.hypot(u.tx - setPiece.x, u.ty - setPiece.y) - Math.hypot(v.tx - setPiece.x, v.ty - setPiece.y));
-          const idxT = supportOrder.findIndex((z) => z.id === ag.id);
+          const idxT = setPiece.throwSupportIds ? setPiece.throwSupportIds.indexOf(ag.id) : -1;
           const nearSideY = setPiece.y < 50 ? 12 : 88;
           const spNormX = throwRight ? setPiece.x : 100 - setPiece.x;
           if (idxT === 0) {
@@ -3084,11 +3096,7 @@ export const MatchModal: React.FC<{
           }
         } else {
           // Defenders mark close around the throw-in zone
-          const nearDef = activeAgents
-            .filter((z) => z.side === ag.side && z.pos !== 'GK')
-            .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))
-            .slice(0, 3);
-          const dIdx = nearDef.findIndex((z) => z.id === ag.id);
+          const dIdx = setPiece.throwDefIds ? setPiece.throwDefIds.indexOf(ag.id) : -1;
           if (dIdx >= 0) {
             ag.tx = clamp(setPiece.x + (dIdx - 1) * 7, 7, 93);
             ag.ty = clamp(setPiece.y < 50 ? 12 + dIdx * 6 : 88 - dIdx * 6, 10, 90);
@@ -4829,8 +4837,8 @@ export const MatchModal: React.FC<{
             .sort((u, v) => Math.hypot(u.x - sp.x, u.y - sp.y) - Math.hypot(v.x - sp.x, v.y - sp.y))[0] ||
           attPool[0];
         if (!taker) return;
-        const releaseX = clamp(sp.x, 6, 94);
-        const releaseY = sp.y < 50 ? 2.6 : 97.4;
+        const releaseX = clamp(taker.x, 4, 96);
+        const releaseY = clamp(taker.y, 1.2, 98.8);
         const spNormX = attRight ? releaseX : 100 - releaseX;
         const longThrowSpecialist = agentHasTrait(taker, 'long_throw_counter') || taker.d.str >= 70 || taker.sig === 'str';
         const doLongThrow = spNormX >= 68 && Math.random() < (longThrowSpecialist ? 0.56 : 0.30);
@@ -4847,13 +4855,17 @@ export const MatchModal: React.FC<{
             target.tx = bx;
             target.ty = by;
             target.intent = 'PASS_TARGET';
+            b.x = releaseX;
+            b.y = releaseY;
+            b.z = 1.8;
+            b.trail.length = 0;
             b.fromX = releaseX;
             b.fromY = releaseY;
             b.toX = bx;
             b.toY = by;
             b.curve = 0;
             b.maxZ = 13.5;
-            b.startZ = 0;
+            b.startZ = 1.8;
             b.endZ = 3.2;
             b.progress = 0;
             b.duration = 0.68;
@@ -4895,49 +4907,54 @@ export const MatchModal: React.FC<{
           .sort((u, v) => Math.hypot(u.x - releaseX, u.y - releaseY) - Math.hypot(v.x - releaseX, v.y - releaseY));
 
         const preferBack = spNormX < 40 ? Math.random() < 0.42 : Math.random() < 0.34;
-        const target = preferBack ? (backCands[0] || forwardCands[0] || cands[0]) : (forwardCands[0] || backCands[0] || cands[0]);
-        if (target) {
-          const isBackThrow = attRight ? target.x < releaseX - 1 : target.x > releaseX + 1;
-          const destX = clamp(target.x + (isBackThrow ? -dir * 1.5 : dir * 3), 6, 94);
-          const destY = clamp(target.y, 8, 92);
-          taker.facing = Math.atan2(destY - taker.y, destX - taker.x);
-          target.tx = destX;
-          target.ty = destY;
-          target.intent = 'PASS_TARGET';
-          b.fromX = releaseX;
-          b.fromY = releaseY;
-          b.toX = destX;
-          b.toY = destY;
-          b.curve = 0;
-          b.maxZ = 3.2;
-          b.startZ = 0;
-          b.endZ = 0;
-          b.progress = 0;
-          b.duration = clamp(Math.hypot(destX - releaseX, destY - releaseY) / 40, 0.36, 0.60);
-          b.flightType = 'throwin';
-          b.shotStyle = undefined;
-          b.carrierId = null;
-          b.targetId = target.id;
-          b.lastPasserId = taker.id;
-          b.possessionSide = sp.side;
-          bumpPlayerStat(taker.id, 'setpieces');
-          addWorldFx(w, {
-            type: 'throwin',
-            x: releaseX,
-            y: releaseY,
-            toX: destX,
-            toY: destY,
-            label: isBackThrow ? `↩️ ทุ่มกลับให้ ${target.shortName}` : `↗️ ทุ่มขึ้นหน้าให้ ${target.shortName}`,
-            color: '#38bdf8',
-            ttl: 1.4,
-            maxTtl: 1.4
-          });
-          w.phaseLabel = isBackThrow
-            ? `🤲 ${taker.shortName} ทุ่มกลับตั้งเกมให้ ${target.shortName}`
-            : `🤲 ${taker.shortName} ทุ่มขึ้นหน้าให้ ${target.shortName}`;
-          w.phaseTone = 'normal';
-          SFX.pass();
-        }
+        const target =
+          (preferBack ? backCands[0] || forwardCands[0] || cands[0] : forwardCands[0] || backCands[0] || cands[0]) ||
+          attPool.find((a) => a.id !== taker.id) ||
+          taker;
+        const isBackThrow = attRight ? target.x < releaseX - 1 : target.x > releaseX + 1;
+        const destX = clamp(target.x + (isBackThrow ? -dir * 1.5 : dir * 3), 6, 94);
+        const destY = clamp(target.y, 8, 92);
+        taker.facing = Math.atan2(destY - taker.y, destX - taker.x);
+        target.tx = destX;
+        target.ty = destY;
+        target.intent = 'PASS_TARGET';
+        b.x = releaseX;
+        b.y = releaseY;
+        b.z = 1.8;
+        b.trail.length = 0;
+        b.fromX = releaseX;
+        b.fromY = releaseY;
+        b.toX = destX;
+        b.toY = destY;
+        b.curve = 0;
+        b.maxZ = 3.2;
+        b.startZ = 1.8;
+        b.endZ = 0;
+        b.progress = 0;
+        b.duration = clamp(Math.hypot(destX - releaseX, destY - releaseY) / 40, 0.36, 0.60);
+        b.flightType = 'throwin';
+        b.shotStyle = undefined;
+        b.carrierId = null;
+        b.targetId = target.id;
+        b.lastPasserId = taker.id;
+        b.possessionSide = sp.side;
+        bumpPlayerStat(taker.id, 'setpieces');
+        addWorldFx(w, {
+          type: 'throwin',
+          x: releaseX,
+          y: releaseY,
+          toX: destX,
+          toY: destY,
+          label: isBackThrow ? `↩️ ทุ่มกลับให้ ${target.shortName}` : `↗️ ทุ่มขึ้นหน้าให้ ${target.shortName}`,
+          color: '#38bdf8',
+          ttl: 1.4,
+          maxTtl: 1.4
+        });
+        w.phaseLabel = isBackThrow
+          ? `🤲 ${taker.shortName} ทุ่มกลับตั้งเกมให้ ${target.shortName}`
+          : `🤲 ${taker.shortName} ทุ่มขึ้นหน้าให้ ${target.shortName}`;
+        w.phaseTone = 'normal';
+        SFX.pass();
         return;
       }
     }
@@ -5907,22 +5924,24 @@ export const MatchModal: React.FC<{
           bumpPlayerStat(nearestDef.id, 'tackles');
           // Wide tackles near the touchline can deflect out for a Throw-in!
           if ((carrier.y < 18 || carrier.y > 82) && Math.random() < 0.26) {
-            const outY = carrier.y < 50 ? 2.2 : 97.8;
+            const outY = carrier.y < 50 ? 1.6 : 98.4;
             const outX = clamp(nearestDef.x, 8, 92);
             b.fromX = nearestDef.x;
             b.fromY = nearestDef.y;
             b.toX = outX;
-            b.toY = outY < 50 ? -0.4 : 100.4;
+            b.toY = outY < 50 ? -0.5 : 100.5;
             b.curve = 0;
             b.maxZ = 2.8;
+            b.startZ = 0;
+            b.endZ = 0;
             b.progress = 0;
-            b.duration = 0.32;
+            b.duration = 0.34;
             b.flightType = 'bounce';
             b.shotStyle = undefined;
             b.carrierId = null;
             b.targetId = null;
             b.bounceNext = {
-              setPiece: { type: 'throwin', side: defSide, x: outX, y: outY, waitSec: 0.72 },
+              setPiece: { type: 'throwin', side: defSide, x: outX, y: outY, waitSec: 0.68 },
               phaseLabel: `🤲 บอลแฉลบออกข้าง! ${defTeam.name} ได้ทุ่ม`,
               phaseTone: 'setpiece'
             };
@@ -7744,6 +7763,8 @@ export const MatchModal: React.FC<{
       if (bn.setPiece) w.pendingSetPiece = bn.setPiece;
       b.carrierId = null;
       b.targetId = null;
+      b.flightType = 'carry';
+      b.trail.length = 0;
       b.shotStyle = undefined;
       b.startZ = 0;
       b.endZ = 0;
@@ -7950,6 +7971,9 @@ export const MatchModal: React.FC<{
         }
         w.pendingSetPiece = bn.setPiece;
         b.carrierId = null;
+        b.targetId = null;
+        b.flightType = 'carry';
+        b.trail.length = 0;
         b.shotStyle = undefined;
         b.startZ = 0;
         b.endZ = 0;
@@ -8664,6 +8688,10 @@ export const MatchModal: React.FC<{
             maxTtl: 2.0
           });
           w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 0.95 };
+          b.carrierId = null;
+          b.targetId = null;
+          b.flightType = 'carry';
+          b.trail.length = 0;
           b.shotStyle = undefined;
           w.phaseLabel = `🚩 บอลแฉลบ ${plan.deflectedFrom} ออกหลัง · ได้เตะมุม!`;
           w.phaseTone = 'setpiece';
@@ -8701,6 +8729,10 @@ export const MatchModal: React.FC<{
           y: 50,
           waitSec: b.flightType === 'penalty' ? 1.3 : 0.75
         };
+        b.carrierId = null;
+        b.targetId = null;
+        b.flightType = 'carry';
+        b.trail.length = 0;
         b.shotStyle = undefined;
         w.phaseLabel = `😮 ยิงหลุดกรอบ · ตั้งเตะจากประตู`;
         w.phaseTone = 'normal';
@@ -9708,17 +9740,32 @@ export const MatchModal: React.FC<{
         .filter((d) => d.pos !== 'GK')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
 
-      // Pressured sideline passes can drift over the touchline -> Throw-in!
+      // Pressured sideline passes bounce/roll visibly over the touchline -> Throw-in (no warp!)
       if ((b.flightType === 'pass' || b.flightType === 'lofted' || b.flightType === 'trivela_pass') && (b.toY < 13 || b.toY > 87) && nearestOpp && Math.hypot(nearestOpp.x - b.toX, nearestOpp.y - b.toY) < 6 && Math.random() < 0.24) {
-        const outY = b.toY < 50 ? 2.2 : 97.8;
-        const outX = clamp(b.toX, 8, 92);
-        w.pendingSetPiece = { type: 'throwin', side: defSide, x: outX, y: outY, waitSec: 0.72 };
+        const outY = b.toY < 50 ? 1.6 : 98.4;
+        const attDir = isAttackRight(w, side) ? 1 : -1;
+        const outX = clamp(b.toX + attDir * 1.5, 8, 92);
+        b.fromX = b.toX;
+        b.fromY = b.toY;
+        b.toX = outX;
+        b.toY = outY < 50 ? -0.5 : 100.5;
+        b.curve = 0;
+        b.maxZ = b.flightType === 'lofted' ? 3.2 : 1.35;
+        b.startZ = 0;
+        b.endZ = 0;
+        b.progress = 0;
+        b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 28, 0.26, 0.44);
+        b.flightType = 'bounce';
+        b.shotStyle = undefined;
         b.carrierId = null;
         b.targetId = null;
-        b.progress = 1;
-        b.flightType = 'carry';
-        w.phaseLabel = `🤲 บอลหลุดเส้นข้าง! ${defTeam.name} ได้ทุ่ม`;
-        w.phaseTone = 'setpiece';
+        b.bounceNext = {
+          setPiece: { type: 'throwin', side: defSide, x: outX, y: outY, waitSec: 0.68 },
+          phaseLabel: `🤲 บอลหลุดเส้นข้าง! ${defTeam.name} ได้ทุ่ม`,
+          phaseTone: 'setpiece'
+        };
+        w.phaseLabel = `🤲 บอลไหลออกเส้นข้าง!`;
+        w.phaseTone = 'normal';
         SFX.pass();
         return;
       }
@@ -11913,8 +11960,8 @@ export const MatchModal: React.FC<{
             const isSpTaker = Boolean(w.pendingSetPiece && w.pendingSetPiece.type !== 'kickoff' && w.pendingSetPiece.takerId === ag.id);
             const minX = isSpTaker ? 1.5 : ag.pos === 'GK' ? 1.6 : 3;
             const maxX = isSpTaker ? 98.5 : ag.pos === 'GK' ? 98.4 : 97;
-            const minY = isSpTaker ? 2.2 : 4;
-            const maxY = isSpTaker ? 97.8 : 96;
+            const minY = isSpTaker ? 1.2 : 4;
+            const maxY = isSpTaker ? 98.8 : 96;
             ag.x = clamp(ag.x + ag.vx * rawDt, minX, maxX);
             ag.y = clamp(ag.y + ag.vy * rawDt, minY, maxY);
             ag.stride += curSpd * rawDt * 0.85;
@@ -12081,7 +12128,21 @@ export const MatchModal: React.FC<{
             const setPieceReady = (takerReady && penGkReady && wallReady && boxAttackersReady) || timedOut;
             sp.waitSec = Math.max(setPieceReady ? 0 : 0.36, sp.waitSec - rawDt * spRate);
             const keepBallOutForGoalKick = spType === 'goalkick' && sp.waitSec > 0.45;
-            if (!keepBallOutForGoalKick) {
+            if (spType === 'throwin') {
+              w.ball.trail.length = 0;
+              const pickupDist = spTaker ? Math.hypot(spTaker.x - w.ball.x, spTaker.y - w.ball.y) : 0;
+              if (takerReady || pickupDist <= 2.4) {
+                const handX = spTaker ? spTaker.x : sp.x;
+                const handY = spTaker ? spTaker.y : sp.y;
+                const lerpA = Math.min(1, rawDt * 18);
+                w.ball.x += (handX - w.ball.x) * lerpA;
+                w.ball.y += (handY - w.ball.y) * lerpA;
+                w.ball.z += (1.8 - w.ball.z) * lerpA;
+              } else {
+                w.ball.z = 0;
+              }
+            } else if (!keepBallOutForGoalKick) {
+              w.ball.trail.length = 0;
               w.ball.x = sp.x;
               w.ball.y = sp.y;
               w.ball.z = 0;
