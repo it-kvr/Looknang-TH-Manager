@@ -18,8 +18,8 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
-import { QuickSortSelect, type QuickSortOption } from '../components/QuickSortSelect';
-import { comparePlayerFitnessStatus } from '../utils/playerSort';
+import { SortableColHeader } from '../components/SortableColHeader';
+import { comparePlayerFitnessStatus, type SortDir } from '../utils/playerSort';
 import { FormTrendBadge, buildRecentRatingsMap, getPlayerFormTrend, type PlayerFormTrend } from '../components/FormTrendBadge';
 import {
   getActiveFavBoost,
@@ -30,16 +30,6 @@ import {
 } from '../engine/wellbeing';
 
 type SquadSortKey = 'pos' | 'ov' | 'age' | 'fit' | 'form' | 'val' | 'goals';
-
-const SQUAD_SORT_OPTIONS: readonly QuickSortOption<SquadSortKey>[] = [
-  { value: 'pos', label: 'เรียงด่วน: ตำแหน่ง' },
-  { value: 'ov', label: 'เรียงด่วน: OVR สูงสุด' },
-  { value: 'age', label: 'เรียงด่วน: อายุน้อยสุด' },
-  { value: 'fit', label: 'เรียงด่วน: ความฟิต / พร้อมเล่น' },
-  { value: 'form', label: 'เรียงด่วน: ฟอร์มล่าสุด' },
-  { value: 'val', label: 'เรียงด่วน: มูลค่าสูงสุด' },
-  { value: 'goals', label: 'เรียงด่วน: ดาวซัลโว' }
-];
 
 export const SquadTacticsView = React.memo<{
   state: GameState;
@@ -56,6 +46,7 @@ export const SquadTacticsView = React.memo<{
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
   const [squadSort, setSquadSort] = useState<SquadSortKey>('pos');
+  const [squadSortDir, setSquadSortDir] = useState<SortDir>('asc');
   const [selectedSquadNames, setSelectedSquadNames] = useState<string[]>([]);
   const [renewTargetName, setRenewTargetName] = useState<string | null>(null);
   const [sellModalNames, setSellModalNames] = useState<string[] | null>(null);
@@ -97,21 +88,45 @@ export const SquadTacticsView = React.memo<{
     });
     return map;
   }, [me, state, recentRatingsMap]);
+  const toggleSquadSort = (key: SquadSortKey) => {
+    if (squadSort === key) {
+      setSquadSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSquadSort(key);
+    setSquadSortDir(key === 'age' || key === 'pos' ? 'asc' : 'desc');
+  };
   const compareSquadPlayers = (a: Player, b: Player) => {
-    if (squadSort === 'ov') return b.ov - a.ov || (b.pot || b.ov) - (a.pot || a.ov);
-    if (squadSort === 'form') return (formTrendByName.get(b.n)?.score ?? 0) - (formTrendByName.get(a.n)?.score ?? 0) || b.ov - a.ov;
-    if (squadSort === 'fit') return comparePlayerFitnessStatus(a, b);
-    if (squadSort === 'age') return a.age - b.age || b.ov - a.ov;
-    if (squadSort === 'val') return vlu(b) - vlu(a) || b.ov - a.ov;
-    if (squadSort === 'goals') return (b.sg || 0) - (a.sg || 0) || (b.sa || 0) - (a.sa || 0) || b.ov - a.ov;
-    return POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
+    if (squadSort === 'ov') {
+      const cmp = (b.ov - a.ov) || ((b.pot || b.ov) - (a.pot || a.ov));
+      return squadSortDir === 'asc' ? -cmp : cmp;
+    }
+    if (squadSort === 'form') {
+      const cmp = ((formTrendByName.get(b.n)?.score ?? 0) - (formTrendByName.get(a.n)?.score ?? 0)) || (b.ov - a.ov);
+      return squadSortDir === 'asc' ? -cmp : cmp;
+    }
+    if (squadSort === 'fit') return comparePlayerFitnessStatus(a, b, squadSortDir);
+    if (squadSort === 'age') {
+      const cmp = (a.age - b.age) || (b.ov - a.ov);
+      return squadSortDir === 'desc' ? -cmp : cmp;
+    }
+    if (squadSort === 'val') {
+      const cmp = (vlu(b) - vlu(a)) || (b.ov - a.ov);
+      return squadSortDir === 'asc' ? -cmp : cmp;
+    }
+    if (squadSort === 'goals') {
+      const cmp = ((b.sg || 0) - (a.sg || 0)) || ((b.sa || 0) - (a.sa || 0)) || (b.ov - a.ov);
+      return squadSortDir === 'asc' ? -cmp : cmp;
+    }
+    const cmp = (POS.indexOf(a.pos) - POS.indexOf(b.pos)) || (b.ov - a.ov);
+    return squadSortDir === 'desc' ? -cmp : cmp;
   };
   const bench = useMemo(
     () =>
       me.sq
         .filter((q) => !starters.includes(q))
         .sort(compareSquadPlayers),
-    [me.sq, starters, squadSort, formTrendByName]
+    [me.sq, starters, squadSort, squadSortDir, formTrendByName]
   );
   const incomingOffers = useMemo(() => (isMgr ? getIncomingOffers(state) : []), [isMgr, state]);
   const incomingOfferCountsByName = useMemo(() => {
@@ -1191,16 +1206,6 @@ export const SquadTacticsView = React.memo<{
                       onUpdateState((d) => { d.teams[d.me].lu = null; });
                       onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
                     }}
-                    sortControl={
-                      <QuickSortSelect
-                        value={squadSort}
-                        onChange={setSquadSort}
-                        options={SQUAD_SORT_OPTIONS}
-                        defaultValue="pos"
-                        ariaLabel="เรียงด่วนนักเตะสำรอง"
-                        size="xs"
-                      />
-                    }
                   />
 
                   {/* Player Rows (Scrollable Starters + Bench) */}
@@ -1215,9 +1220,38 @@ export const SquadTacticsView = React.memo<{
                     <div className="divide-y divide-[var(--line)]/50">
                       {starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}
                     </div>
-                    <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
-                      <span>ตัวสำรอง</span>
-                      <span className="tabular text-[var(--mut)]">{bench.length} คน</span>
+                    <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between gap-1 text-[9.5px] mland:text-[8px] font-extrabold text-[var(--ink)]">
+                      <span className="shrink-0">ตัวสำรอง ({bench.length})</span>
+                      <div className="flex items-center gap-1.5 mland:gap-1 shrink-0 font-bold">
+                        <SortableColHeader
+                          label="ตำแหน่ง"
+                          active={squadSort === 'pos'}
+                          dir={squadSortDir}
+                          onClick={() => toggleSquadSort('pos')}
+                          className="text-[9.5px] mland:text-[8px]"
+                        />
+                        <SortableColHeader
+                          label="อายุ"
+                          active={squadSort === 'age'}
+                          dir={squadSortDir}
+                          onClick={() => toggleSquadSort('age')}
+                          className="text-[9.5px] mland:text-[8px]"
+                        />
+                        <SortableColHeader
+                          label="ฟิต"
+                          active={squadSort === 'fit'}
+                          dir={squadSortDir}
+                          onClick={() => toggleSquadSort('fit')}
+                          className="text-[9.5px] mland:text-[8px]"
+                        />
+                        <SortableColHeader
+                          label="OVR"
+                          active={squadSort === 'ov'}
+                          dir={squadSortDir}
+                          onClick={() => toggleSquadSort('ov')}
+                          className="text-[9.5px] mland:text-[8px]"
+                        />
+                      </div>
                     </div>
                     <div className="divide-y divide-[var(--line)]/50">
                       {bench.map((q) => renderPlayerRow(q))}
@@ -1925,15 +1959,21 @@ export const SquadTacticsView = React.memo<{
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <QuickSortSelect
-                      value={squadSort}
-                      onChange={setSquadSort}
-                      options={SQUAD_SORT_OPTIONS}
-                      defaultValue="pos"
-                      ariaLabel="เรียงด่วนรายชื่อนักเตะทั้งทีม"
-                      size="sm"
-                    />
+                  <div className="hidden sm:flex mland:flex items-center gap-1.5 text-[10.5px] mland:text-[9px] text-[var(--mut)] shrink-0">
+                    <span>กดหัวตารางเพื่อเรียงลำดับ</span>
+                    {(squadSort !== 'pos' || squadSortDir !== 'asc') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setSquadSort('pos');
+                          setSquadSortDir('asc');
+                        }}
+                        className="text-[var(--g)] font-bold hover:underline cursor-pointer"
+                      >
+                        รีเซ็ต
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -2093,12 +2133,64 @@ export const SquadTacticsView = React.memo<{
                         />
                       </div>
                     )}
-                    <div>นักเตะ</div>
-                    <div className={`text-center ${isMgr ? 'hidden sm:block mland:block' : ''}`}>อายุ</div>
-                    <div className="text-center">ฟอร์ม/OVR</div>
-                    <div className="text-center">สถานะ/ฟิต</div>
-                    <div className={`text-center ${isMgr ? 'hidden lg:block mland:hidden' : ''}`}>ผลงาน</div>
-                    <div className={`text-right ${isMgr ? 'hidden sm:block mland:block' : ''}`}>ค่าเหนื่อย / ค่าตัว</div>
+                    <div className="flex items-center justify-start min-w-0">
+                      <SortableColHeader
+                        label="นักเตะ"
+                        active={squadSort === 'pos'}
+                        dir={squadSortDir}
+                        onClick={() => toggleSquadSort('pos')}
+                        align="left"
+                        title="เรียงตามตำแหน่ง (GK → DF → MF → FW)"
+                      />
+                    </div>
+                    <div className={`flex items-center justify-center ${isMgr ? 'hidden sm:flex mland:flex' : ''}`}>
+                      <SortableColHeader
+                        label="อายุ"
+                        active={squadSort === 'age'}
+                        dir={squadSortDir}
+                        onClick={() => toggleSquadSort('age')}
+                      />
+                    </div>
+                    <div className="flex items-center justify-center gap-1">
+                      <SortableColHeader
+                        label="ฟอร์ม"
+                        active={squadSort === 'form'}
+                        dir={squadSortDir}
+                        onClick={() => toggleSquadSort('form')}
+                        className="hidden sm:inline-flex mland:inline-flex"
+                      />
+                      <SortableColHeader
+                        label="OVR"
+                        active={squadSort === 'ov'}
+                        dir={squadSortDir}
+                        onClick={() => toggleSquadSort('ov')}
+                      />
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <SortableColHeader
+                        label="สถานะ/ฟิต"
+                        active={squadSort === 'fit'}
+                        dir={squadSortDir}
+                        onClick={() => toggleSquadSort('fit')}
+                      />
+                    </div>
+                    <div className={`flex items-center justify-center ${isMgr ? 'hidden lg:flex mland:hidden' : ''}`}>
+                      <SortableColHeader
+                        label="ผลงาน"
+                        active={squadSort === 'goals'}
+                        dir={squadSortDir}
+                        onClick={() => toggleSquadSort('goals')}
+                      />
+                    </div>
+                    <div className={`flex items-center justify-end ${isMgr ? 'hidden sm:flex mland:flex' : ''}`}>
+                      <SortableColHeader
+                        label="ค่าเหนื่อย / ค่าตัว"
+                        active={squadSort === 'val'}
+                        dir={squadSortDir}
+                        onClick={() => toggleSquadSort('val')}
+                        align="right"
+                      />
+                    </div>
                     {isMgr && <div className="text-right">จัดการ</div>}
                   </div>
 

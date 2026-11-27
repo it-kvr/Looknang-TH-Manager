@@ -11,7 +11,6 @@ interface SquadListHeaderBarProps {
   onRestTired?: () => void;
   isAutoLineup?: boolean;
   onAutoLineup?: () => void;
-  sortControl?: React.ReactNode;
 }
 
 export const SquadListHeaderBar: React.FC<SquadListHeaderBarProps> = ({
@@ -22,8 +21,7 @@ export const SquadListHeaderBar: React.FC<SquadListHeaderBarProps> = ({
   isRestCritical = false,
   onRestTired,
   isAutoLineup = false,
-  onAutoLineup,
-  sortControl
+  onAutoLineup
 }) => {
   const [showStaminaGuide, setShowStaminaGuide] = useState(false);
   const staminaGuideRef = useRef<HTMLDivElement | null>(null);
@@ -48,7 +46,7 @@ export const SquadListHeaderBar: React.FC<SquadListHeaderBarProps> = ({
 
   return (
     <div className="relative z-20 shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)]">
-      <div className="flex flex-wrap items-center justify-between gap-1.5 mland:gap-1 min-w-0">
+      <div className="flex items-center justify-between gap-1.5 min-w-0">
         <div className="flex items-center gap-1 min-w-0">
           <span className="font-bold text-[11.5px] mland:text-[10px] text-[var(--ink)] whitespace-nowrap truncate">
             👥 รายชื่อทีม
@@ -122,10 +120,9 @@ export const SquadListHeaderBar: React.FC<SquadListHeaderBarProps> = ({
           </div>
         </div>
 
-        {(sortControl || canEdit) && (
-          <div className="flex flex-wrap items-center gap-1 shrink-0 ml-auto">
-            {sortControl}
-            {canEdit && tiredCount > 0 && onRestTired && (
+        {canEdit && (
+          <div className="flex items-center gap-1 shrink-0">
+            {tiredCount > 0 && onRestTired && (
               <button
                 type="button"
                 onClick={onRestTired}
@@ -139,7 +136,7 @@ export const SquadListHeaderBar: React.FC<SquadListHeaderBarProps> = ({
                 🛌 พักล้า ({tiredCount})
               </button>
             )}
-            {canEdit && onAutoLineup && (
+            {onAutoLineup && (
               <button
                 type="button"
                 title={isAutoLineup ? 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ' : 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ'}

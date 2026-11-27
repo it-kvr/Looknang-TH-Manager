@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Lock, RefreshCw, Search, SlidersHorizontal, Star, Trash2, Unlock, Users, X } from 'lucide-react';
 import type { SubRole, MainTab, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
+import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, dtInfo, xi, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { appendPlayerCareerLog } from '../engine/history';
@@ -28,7 +28,7 @@ import {
   getSeasonTransferStats
 } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
-import { PlayerBioStrip } from '../components/PlayerBioStrip';
+import { FootPairIcon, PlayerBioStrip, getFootColorMeta } from '../components/PlayerBioStrip';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { TalentBadge } from '../components/TalentBadge';
@@ -37,28 +37,43 @@ import { AnimatedMoney } from '../components/AnimatedMoney';
 import { TransferMarketIcon } from '../components/TransferMarketIcon';
 import { OvrBadge } from '../components/OvrBadge';
 import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
+import { getStaminaMeta } from '../components/StaminaBar';
 import { getRatingPalette } from '../components/RatingBadge';
-import { QuickSortSelect, type QuickSortOption } from '../components/QuickSortSelect';
-import { comparePlayerFitnessStatus } from '../utils/playerSort';
+import { SortableColHeader } from '../components/SortableColHeader';
+import { comparePlayerFitnessStatus, type SortDir } from '../utils/playerSort';
 import { SquadSellModal, SquadLoanOutModal } from '../modals/SquadActionModals';
 
-type MarketBuySortKey = 'default' | 'ov_desc' | 'age_asc' | 'fit_desc' | 'price_asc';
-type MarketSellSortKey = 'default' | 'ov_desc' | 'age_asc' | 'fit_desc';
+type MarketSortCol = 'default' | 'pos' | 'age' | 'ov' | 'fit' | 'price';
 
-const MARKET_BUY_SORT_OPTIONS: readonly QuickSortOption<MarketBuySortKey>[] = [
-  { value: 'default', label: 'เรียงด่วน: แนะนำ' },
-  { value: 'ov_desc', label: 'เรียงด่วน: OVR สูงสุด' },
-  { value: 'age_asc', label: 'เรียงด่วน: อายุน้อยสุด' },
-  { value: 'fit_desc', label: 'เรียงด่วน: ความฟิต / พร้อมเล่น' },
-  { value: 'price_asc', label: 'เรียงด่วน: ค่าตัวถูกสุด' }
-];
-
-const MARKET_SELL_SORT_OPTIONS: readonly QuickSortOption<MarketSellSortKey>[] = [
-  { value: 'default', label: 'เรียงด่วน: ตั้งขายก่อน' },
-  { value: 'ov_desc', label: 'เรียงด่วน: OVR สูงสุด' },
-  { value: 'age_asc', label: 'เรียงด่วน: อายุน้อยสุด' },
-  { value: 'fit_desc', label: 'เรียงด่วน: ความฟิต / พร้อมเล่น' }
-];
+const comparePlayersByColumn = (
+  a: Player,
+  b: Player,
+  col: MarketSortCol,
+  dir: SortDir,
+  priceA: number,
+  priceB: number
+): number => {
+  if (col === 'pos') {
+    const cmp = POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
+    return dir === 'desc' ? -cmp : cmp;
+  }
+  if (col === 'age') {
+    const cmp = a.age - b.age || b.ov - a.ov;
+    return dir === 'desc' ? -cmp : cmp;
+  }
+  if (col === 'ov') {
+    const cmp = b.ov - a.ov || (b.pot || b.ov) - (a.pot || a.ov);
+    return dir === 'asc' ? -cmp : cmp;
+  }
+  if (col === 'fit') {
+    return comparePlayerFitnessStatus(a, b, dir);
+  }
+  if (col === 'price') {
+    const cmp = priceA - priceB || b.ov - a.ov;
+    return dir === 'desc' ? -cmp : cmp;
+  }
+  return 0;
+};
 
 export interface OfferDraft {
   source: 'mk' | 'scout' | 'club';
@@ -161,13 +176,16 @@ export const MarketView = React.memo<{
   const [minOvFilter, setMinOvFilter] = useState<number>(0);
   const [maxBudgetFilter, setMaxBudgetFilter] = useState<'ALL' | 'AFFORD' | '15' | '35' | '70' | '120'>('ALL');
   const [subFilter, setSubFilter] = useState<'ALL' | SubRole>('ALL');
-  const [sortBy, setSortBy] = useState<MarketBuySortKey>('default');
+  const [buySortCol, setBuySortCol] = useState<MarketSortCol>('default');
+  const [buySortDir, setBuySortDir] = useState<SortDir>('desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER'>('MY_TIER');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [shortlistFilter, setShortlistFilter] = useState<'all' | 'ready' | 'free' | 'club'>('all');
-  const [shortlistSort, setShortlistSort] = useState<MarketBuySortKey>('default');
-  const [scoutSort, setScoutSort] = useState<MarketBuySortKey>('default');
+  const [shortlistSortCol, setShortlistSortCol] = useState<MarketSortCol>('default');
+  const [shortlistSortDir, setShortlistSortDir] = useState<SortDir>('desc');
+  const [scoutSortCol, setScoutSortCol] = useState<MarketSortCol>('default');
+  const [scoutSortDir, setScoutSortDir] = useState<SortDir>('desc');
 
   const [histSeason, setHistSeason] = useState<number | 'all'>(state.season);
   const [histScope, setHistScope] = useState<'all' | 'mine' | 'ai' | 'loan'>('all');
@@ -183,8 +201,23 @@ export const MarketView = React.memo<{
   const [sellSubView, setSellSubView] = useState<'all' | 'listed' | 'loan_list' | 'loaned_out'>('all');
   const [sellPosFilter, setSellPosFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW'>('ALL');
   const [sellSearch, setSellSearch] = useState('');
-  const [sellSort, setSellSort] = useState<MarketSellSortKey>('default');
+  const [sellSortCol, setSellSortCol] = useState<MarketSortCol>('default');
+  const [sellSortDir, setSellSortDir] = useState<SortDir>('desc');
   const [selectedSellNames, setSelectedSellNames] = useState<string[]>([]);
+
+  const toggleSortCol = (
+    col: Exclude<MarketSortCol, 'default'>,
+    curCol: MarketSortCol,
+    setCol: React.Dispatch<React.SetStateAction<MarketSortCol>>,
+    setDir: React.Dispatch<React.SetStateAction<SortDir>>
+  ) => {
+    if (curCol === col) {
+      setDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setCol(col);
+    setDir(col === 'age' || col === 'price' || col === 'pos' ? 'asc' : 'desc');
+  };
   const [contractFilter, setContractFilter] = useState<'all' | 'expiring'>('all');
 
   const [renewIdx, setRenewIdx] = useState<number | null>(null);
@@ -250,12 +283,18 @@ export const MarketView = React.memo<{
           (SPN[q.ro] || '').toLowerCase().includes(normalizedQuery);
         return lineOk && subOk && loanOk && detailOk && searchOk;
       });
-    if (sortBy === 'ov_desc') return [...base].sort((a, b) => b.q.ov - a.q.ov);
-    if (sortBy === 'price_asc') return [...base].sort((a, b) => (a.q.free ? 0 : a.q.price || vlu(a.q)) - (b.q.free ? 0 : b.q.price || vlu(b.q)));
-    if (sortBy === 'age_asc') return [...base].sort((a, b) => a.q.age - b.q.age || b.q.ov - a.q.ov);
-    if (sortBy === 'fit_desc') return [...base].sort((a, b) => comparePlayerFitnessStatus(a.q, b.q));
-    return base;
-  }, [state.mk, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, sortBy, normalizedQuery]);
+    if (buySortCol === 'default') return base;
+    return [...base].sort((a, b) =>
+      comparePlayersByColumn(
+        a.q,
+        b.q,
+        buySortCol,
+        buySortDir,
+        a.q.free ? 0 : a.q.price || vlu(a.q),
+        b.q.free ? 0 : b.q.price || vlu(b.q)
+      )
+    );
+  }, [state.mk, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, buySortCol, buySortDir, normalizedQuery]);
 
   const clubBasePool = useMemo(() => {
     if (activeTab !== 'buy' || marketSource !== 'club') return [];
@@ -285,13 +324,11 @@ export const MarketView = React.memo<{
       return lineOk && subOk && loanOk && detailOk && searchOk;
     });
     const sorted = items.slice().sort((a, b) => {
-      if (sortBy === 'price_asc') return a.price - b.price || b.q.ov - a.q.ov;
-      if (sortBy === 'age_asc') return a.q.age - b.q.age || b.q.ov - a.q.ov;
-      if (sortBy === 'fit_desc') return comparePlayerFitnessStatus(a.q, b.q);
-      return b.q.ov - a.q.ov;
+      if (buySortCol === 'default') return b.q.ov - a.q.ov;
+      return comparePlayersByColumn(a.q, b.q, buySortCol, buySortDir, a.price, b.price);
     });
     return sorted.slice(0, 60);
-  }, [clubBasePool, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, sortBy, normalizedQuery]);
+  }, [clubBasePool, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, buySortCol, buySortDir, normalizedQuery]);
 
   const loanInPlayers = useMemo(
     () => me.sq.map((q, i) => ({ q, i })).filter(({ q }) => !!q.loan),
@@ -346,14 +383,14 @@ export const MarketView = React.memo<{
       return true;
     });
     return [...base].sort((a, b) => {
-      if (sellSort === 'ov_desc') return b.ov - a.ov || (b.pot || b.ov) - (a.pot || a.ov);
-      if (sellSort === 'age_asc') return a.age - b.age || b.ov - a.ov;
-      if (sellSort === 'fit_desc') return comparePlayerFitnessStatus(a, b);
+      if (sellSortCol !== 'default') {
+        return comparePlayersByColumn(a, b, sellSortCol, sellSortDir, Math.max(5, vlu(a)), Math.max(5, vlu(b)));
+      }
       if (!!b.listed !== !!a.listed) return b.listed ? 1 : -1;
       if (!!b.loanListed !== !!a.loanListed) return b.loanListed ? 1 : -1;
       return b.ov - a.ov;
     });
-  }, [me.sq, sellSubView, sellPosFilter, sellSearchNorm, sellSort]);
+  }, [me.sq, sellSubView, sellPosFilter, sellSearchNorm, sellSortCol, sellSortDir]);
   const activeSelectedSell = useMemo(
     () =>
       selectedSellNames.filter((name) => {
@@ -387,27 +424,33 @@ export const MarketView = React.memo<{
       if (shortlistFilter === 'club') return resolved.status === 'club';
       return true;
     });
-    if (shortlistSort === 'ov_desc') return [...base].sort((a, b) => b.resolved.player.ov - a.resolved.player.ov);
-    if (shortlistSort === 'age_asc') return [...base].sort((a, b) => a.resolved.player.age - b.resolved.player.age || b.resolved.player.ov - a.resolved.player.ov);
-    if (shortlistSort === 'fit_desc') return [...base].sort((a, b) => comparePlayerFitnessStatus(a.resolved.player, b.resolved.player));
-    if (shortlistSort === 'price_asc') {
-      return [...base].sort(
-        (a, b) =>
-          (a.resolved.player.free ? 0 : a.resolved.estPrice) -
-          (b.resolved.player.free ? 0 : b.resolved.estPrice)
-      );
-    }
-    return base;
-  }, [shortlistResolved, shortlistFilter, shortlistSort, tx.tw.open]);
+    if (shortlistSortCol === 'default') return base;
+    return [...base].sort((a, b) =>
+      comparePlayersByColumn(
+        a.resolved.player,
+        b.resolved.player,
+        shortlistSortCol,
+        shortlistSortDir,
+        a.resolved.player.free ? 0 : a.resolved.estPrice,
+        b.resolved.player.free ? 0 : b.resolved.estPrice
+      )
+    );
+  }, [shortlistResolved, shortlistFilter, shortlistSortCol, shortlistSortDir, tx.tw.open]);
 
   const sortedScoutResults = useMemo(() => {
     const base = (state.scout?.results || []).map((q, i) => ({ q, i }));
-    if (scoutSort === 'ov_desc') return [...base].sort((a, b) => b.q.ov - a.q.ov);
-    if (scoutSort === 'age_asc') return [...base].sort((a, b) => a.q.age - b.q.age || b.q.ov - a.q.ov);
-    if (scoutSort === 'fit_desc') return [...base].sort((a, b) => comparePlayerFitnessStatus(a.q, b.q));
-    if (scoutSort === 'price_asc') return [...base].sort((a, b) => (a.q.free ? 0 : a.q.price || vlu(a.q)) - (b.q.free ? 0 : b.q.price || vlu(b.q)));
-    return base;
-  }, [state.scout?.results, scoutSort]);
+    if (scoutSortCol === 'default') return base;
+    return [...base].sort((a, b) =>
+      comparePlayersByColumn(
+        a.q,
+        b.q,
+        scoutSortCol,
+        scoutSortDir,
+        a.q.free ? 0 : a.q.price || vlu(a.q),
+        b.q.free ? 0 : b.q.price || vlu(b.q)
+      )
+    );
+  }, [state.scout?.results, scoutSortCol, scoutSortDir]);
 
   const createdPool = useMemo(() => listCreatedPlayersForManager(), [createdRefresh, state.md, state.season, me.sq.length]);
   const createdMarketList = useMemo(() => {
@@ -423,12 +466,11 @@ export const MarketView = React.memo<{
         (c.archName || '').toLowerCase().includes(normalizedQuery);
       return lineOk && subOk && detailOk && searchOk;
     });
-    if (sortBy === 'ov_desc') return [...items].sort((a, b) => b.ov - a.ov);
-    if (sortBy === 'price_asc') return [...items].sort((a, b) => a.price - b.price);
-    if (sortBy === 'age_asc') return [...items].sort((a, b) => a.player.age - b.player.age || b.ov - a.ov);
-    if (sortBy === 'fit_desc') return [...items].sort((a, b) => comparePlayerFitnessStatus(a.player, b.player));
-    return items;
-  }, [createdPool, filter, subFilter, ageRangeFilter, minOvFilter, maxBudgetCap, sortBy, normalizedQuery]);
+    if (buySortCol === 'default') return items;
+    return [...items].sort((a, b) =>
+      comparePlayersByColumn(a.player, b.player, buySortCol, buySortDir, a.price, b.price)
+    );
+  }, [createdPool, filter, subFilter, ageRangeFilter, minOvFilter, maxBudgetCap, buySortCol, buySortDir, normalizedQuery]);
 
   const transferHistoryStats = useMemo(
     () => getSeasonTransferStats(state, histSeason),
@@ -474,7 +516,7 @@ export const MarketView = React.memo<{
     ageRangeFilter !== 'ALL' ||
     minOvFilter > 0 ||
     maxBudgetFilter !== 'ALL' ||
-    sortBy !== 'default' ||
+    buySortCol !== 'default' ||
     searchQuery.trim() !== '';
 
   const resetBuyFilters = () => {
@@ -484,7 +526,8 @@ export const MarketView = React.memo<{
     setAgeRangeFilter('ALL');
     setMinOvFilter(0);
     setMaxBudgetFilter('ALL');
-    setSortBy('default');
+    setBuySortCol('default');
+    setBuySortDir('desc');
     setSearchQuery('');
   };
 
@@ -509,18 +552,24 @@ export const MarketView = React.memo<{
         }]
       : []),
     ...(loanOnlyFilter ? [{ key: 'loan', label: 'เฉพาะยืมตัวได้', clear: () => setLoanOnlyFilter(false) }] : []),
-    ...(sortBy !== 'default'
+    ...(buySortCol !== 'default'
       ? [{
           key: 'sort',
-          label:
-            sortBy === 'ov_desc'
-              ? 'เรียง: OVR'
-              : sortBy === 'price_asc'
-                ? 'เรียง: ราคา'
-                : sortBy === 'fit_desc'
-                  ? 'เรียง: ความฟิต'
-                  : 'เรียง: อายุ',
-          clear: () => setSortBy('default')
+          label: `เรียง: ${
+            buySortCol === 'ov'
+              ? 'OVR'
+              : buySortCol === 'price'
+                ? 'ค่าตัว'
+                : buySortCol === 'fit'
+                  ? 'ความฟิต'
+                  : buySortCol === 'pos'
+                    ? 'ตำแหน่ง'
+                    : 'อายุ'
+          } ${buySortDir === 'asc' ? '↑' : '↓'}`,
+          clear: () => {
+            setBuySortCol('default');
+            setBuySortDir('desc');
+          }
         }]
       : []),
     ...(searchQuery.trim() !== '' ? [{ key: 'q', label: `"${searchQuery.trim()}"`, clear: () => setSearchQuery('') }] : [])
@@ -2035,45 +2084,25 @@ export const MarketView = React.memo<{
                 </div>
               </div>
 
-              {/* Budget, Sort & Extra Options */}
+              {/* Budget & Extra Options */}
               <div className="pt-2.5 mland:pt-1.5 space-y-2 mland:space-y-1.5">
-                <div className="grid grid-cols-1 gap-1.5 mland:gap-1">
-                  <div className="space-y-0.5">
-                    <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                      งบค่าตัวสูงสุด
-                    </div>
-                    <select
-                      aria-label="กรองงบประมาณสูงสุด"
-                      value={maxBudgetFilter}
-                      onChange={(e) => setMaxBudgetFilter(e.target.value as 'ALL' | 'AFFORD' | '15' | '35' | '70' | '120')}
-                      className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
-                    >
-                      <option value="ALL">ไม่จำกัดงบ</option>
-                      <option value="AFFORD">ไม่เกินงบที่มี ({fmtMoneyNum(Math.max(0, Math.floor(state.money)))})</option>
-                      <option value="15">≤ {fmtMoneyNum(15)}</option>
-                      <option value="35">≤ {fmtMoneyNum(35)}</option>
-                      <option value="70">≤ {fmtMoneyNum(70)}</option>
-                      <option value="120">≤ {fmtMoneyNum(120)}</option>
-                    </select>
+                <div className="space-y-0.5">
+                  <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
+                    งบค่าตัวสูงสุด
                   </div>
-
-                  <div className="space-y-0.5">
-                    <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                      เรียงลำดับ
-                    </div>
-                    <select
-                      aria-label="เรียงลำดับนักเตะ"
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as MarketBuySortKey)}
-                      className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
-                    >
-                      <option value="default">แนะนำตามตลาด</option>
-                      <option value="ov_desc">OVR สูงสุดก่อน</option>
-                      <option value="age_asc">อายุน้อยสุดก่อน</option>
-                      <option value="fit_desc">ความฟิต / พร้อมเล่นสุดก่อน</option>
-                      <option value="price_asc">ค่าตัวถูกสุดก่อน</option>
-                    </select>
-                  </div>
+                  <select
+                    aria-label="กรองงบประมาณสูงสุด"
+                    value={maxBudgetFilter}
+                    onChange={(e) => setMaxBudgetFilter(e.target.value as 'ALL' | 'AFFORD' | '15' | '35' | '70' | '120')}
+                    className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
+                  >
+                    <option value="ALL">ไม่จำกัดงบ</option>
+                    <option value="AFFORD">ไม่เกินงบที่มี ({fmtMoneyNum(Math.max(0, Math.floor(state.money)))})</option>
+                    <option value="15">≤ {fmtMoneyNum(15)}</option>
+                    <option value="35">≤ {fmtMoneyNum(35)}</option>
+                    <option value="70">≤ {fmtMoneyNum(70)}</option>
+                    <option value="120">≤ {fmtMoneyNum(120)}</option>
+                  </select>
                 </div>
 
                 {marketSource === 'club' && (
@@ -2191,14 +2220,7 @@ export const MarketView = React.memo<{
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 shrink-0 ml-auto">
-                  <QuickSortSelect
-                    value={sortBy}
-                    onChange={setSortBy}
-                    options={MARKET_BUY_SORT_OPTIONS}
-                    defaultValue="default"
-                    ariaLabel="เรียงด่วนนักเตะในตลาด"
-                    size="sm"
-                  />
+                  <span className="hidden lg:inline text-[10px] text-[var(--mut)]">กดหัวตารางเพื่อเรียงลำดับ</span>
                   {marketSource === 'created' ? (
                     <span className="px-2 py-0.5 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/30 text-[10px] mland:text-[8.5px] text-[var(--g)] font-bold whitespace-nowrap">
                       🌱 ดึงเป็นเด็กปั้นได้ทุกเวลา
@@ -2232,25 +2254,58 @@ export const MarketView = React.memo<{
               )}
             </div>
 
-            {/* Aligned Column Header Bar */}
+            {/* Squad-Style Roster Table Header (Always Visible & Clickable to Sort) */}
             {activeCount > 0 && (
-              <div
-                className={`hidden md:grid mland:grid items-center gap-2.5 mland:gap-1.5 px-3.5 py-1.5 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)]/75 text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)] shrink-0 ${
-                  marketSource === 'created'
-                    ? 'md:grid-cols-[minmax(0,1fr)_44px_30px_190px] mland:grid-cols-[minmax(0,1fr)_38px_26px_156px]'
-                    : 'md:grid-cols-[minmax(0,1fr)_96px_44px_30px_166px] mland:grid-cols-[minmax(0,1fr)_78px_38px_26px_138px]'
-                }`}
-              >
-                <div>นักเตะ · ศักยภาพ · กายภาพ (กดเพื่อดูการ์ด)</div>
-                {marketSource !== 'created' && <div className="text-right">ค่าตัว / ค่าเหนื่อย</div>}
-                <div className="text-center">OVR</div>
-                <div className="text-center">สนใจ</div>
+              <div className="grid grid-cols-[minmax(0,1fr)_52px_56px_114px] sm:grid-cols-[minmax(0,1.4fr)_54px_58px_124px] md:grid-cols-[minmax(0,1.5fr)_34px_58px_64px_148px] lg:grid-cols-[minmax(0,1.65fr)_36px_64px_74px_92px_190px] mland:grid-cols-[minmax(0,1.45fr)_28px_48px_56px_128px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)] shrink-0">
+                <div className="flex items-center justify-start min-w-0">
+                  <SortableColHeader
+                    label="นักเตะ"
+                    active={buySortCol === 'pos'}
+                    dir={buySortDir}
+                    onClick={() => toggleSortCol('pos', buySortCol, setBuySortCol, setBuySortDir)}
+                    align="left"
+                    title="เรียงตามตำแหน่ง (GK → DF → MF → FW)"
+                  />
+                </div>
+                <div className="hidden md:flex mland:flex items-center justify-center">
+                  <SortableColHeader
+                    label="อายุ"
+                    active={buySortCol === 'age'}
+                    dir={buySortDir}
+                    onClick={() => toggleSortCol('age', buySortCol, setBuySortCol, setBuySortDir)}
+                  />
+                </div>
+                <div className="flex items-center justify-center">
+                  <SortableColHeader
+                    label="OVR"
+                    active={buySortCol === 'ov'}
+                    dir={buySortDir}
+                    onClick={() => toggleSortCol('ov', buySortCol, setBuySortCol, setBuySortDir)}
+                  />
+                </div>
+                <div className="flex items-center justify-center">
+                  <SortableColHeader
+                    label="สถานะ/ฟิต"
+                    active={buySortCol === 'fit'}
+                    dir={buySortDir}
+                    onClick={() => toggleSortCol('fit', buySortCol, setBuySortCol, setBuySortDir)}
+                  />
+                </div>
+                <div className="hidden lg:flex items-center justify-end">
+                  <SortableColHeader
+                    label="ค่าตัว / ค่าเหนื่อย"
+                    active={buySortCol === 'price'}
+                    dir={buySortDir}
+                    onClick={() => toggleSortCol('price', buySortCol, setBuySortCol, setBuySortDir)}
+                    align="right"
+                  />
+                </div>
                 <div className="text-right">เจรจา</div>
               </div>
             )}
 
-            {/* Player Rows */}
-            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/55">
+            {/* Player Roster Rows */}
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]">
               {marketSource === 'mk' ? (
                 marketList.length > 0 ? (
                   marketList.map(({ q, i }) => {
@@ -2258,95 +2313,109 @@ export const MarketView = React.memo<{
                     const askWage = q.askWg || wagOf(q);
                     const shortlisted = isPlayerShortlisted(state, q.n);
                     const canLoanQuick = !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
+                    const bio = getPlayerBio(q);
+                    const footMeta = getFootColorMeta(bio.foot);
+                    const f = getStaminaMeta(q.fit).f;
+                    const unavailable = q.inj > 0 || (q.sus || 0) > 0;
                     return (
                       <div
                         key={`${q.n}-${i}`}
-                        className={`flex flex-wrap md:grid md:grid-cols-[minmax(0,1fr)_96px_44px_30px_166px] mland:grid mland:grid-cols-[minmax(0,1fr)_78px_38px_26px_138px] items-center gap-2 md:gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/55 transition-colors ${
-                          blockedByWindow ? 'opacity-65' : ''
-                        }`}
+                        className={`grid grid-cols-[minmax(0,1fr)_52px_56px_114px] sm:grid-cols-[minmax(0,1.4fr)_54px_58px_124px] md:grid-cols-[minmax(0,1.5fr)_34px_58px_64px_148px] lg:grid-cols-[minmax(0,1.65fr)_36px_64px_74px_92px_190px] mland:grid-cols-[minmax(0,1.45fr)_28px_48px_56px_128px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 transition-colors ${
+                          unavailable ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09]' : 'hover:bg-[var(--surface-2)]/45'
+                        } ${blockedByWindow ? 'opacity-65' : ''}`}
                       >
                         <button
                           type="button"
                           onClick={() => onInspectPlayer(q, null)}
                           title="กดเพื่อดูการ์ดและค่าพลังนักเตะ"
-                          className="flex-1 min-w-[200px] md:min-w-0 flex items-center gap-2.5 mland:gap-1.5 text-left cursor-pointer group"
+                          className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 min-w-0 text-left cursor-pointer group"
                         >
-                          <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
-                            <PlayerFace player={q} size={40} />
+                          <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
+                            <PlayerFace player={q} size={36} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
-                              <PositionBadge role={q.ro} size="xs" />
+                            <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
+                              <PositionBadge role={q.ro} size="2xs" />
                               <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
                               {q.free ? (
-                                <span className="text-[9.5px] mland:text-[8px] px-1.5 py-[1px] rounded-md bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">ฟรีเอเยนต์</span>
+                                <span className="text-[9px] mland:text-[7.5px] px-1 py-[0.5px] rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">ฟรี</span>
                               ) : q.age <= 19 ? (
-                                <span className="text-[9.5px] mland:text-[8px] px-1.5 py-[1px] rounded-md bg-[var(--lamp-soft)] border border-[var(--lamp)]/35 text-[#9a6700] dark:text-[var(--lamp)] font-bold shrink-0">ดาวรุ่ง</span>
+                                <span className="text-[9px] mland:text-[7.5px] px-1 py-[0.5px] rounded bg-[var(--lamp-soft)] border border-[var(--lamp)]/35 text-[#9a6700] dark:text-[var(--lamp)] font-bold shrink-0">ดาวรุ่ง</span>
                               ) : null}
                             </div>
-                            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                              <span>{q.age} ปี</span>
-                              <span className="opacity-35">·</span>
+                            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
+                              <span className="md:hidden mland:hidden shrink-0">{q.age} ปี ·</span>
                               <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
-                              <span className="opacity-35" aria-hidden="true">·</span>
-                              <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
-                              <span className="md:hidden mland:hidden font-semibold text-[var(--ink)]/80">
-                                · {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)} (~{fmtMoneyNum(askWage)}/นัด)
+                              <span
+                                className="hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1.5 py-[0.5px] rounded-md border bg-[var(--surface-2)]/75 border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold tabular leading-tight shrink-0 whitespace-nowrap"
+                                title={`สูง ${bio.heightCm} ซม. · หนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
+                              >
+                                <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
+                                <FootPairIcon foot={bio.foot} size="xs" />
+                              </span>
+                              <span className="lg:hidden font-semibold text-[var(--ink)]/85 truncate">
+                                · {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)} ({fmtMoneyNum(askWage)}/น)
                               </span>
                             </div>
                           </div>
                         </button>
 
-                        <div className="hidden md:block mland:block text-right tabular min-w-0">
-                          <div className={`text-xs mland:text-[10px] font-extrabold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                        <div className="hidden md:block mland:block text-center text-xs mland:text-[10px] tabular font-semibold">
+                          {q.age}
+                        </div>
+
+                        <div className="flex items-center justify-center gap-0.5">
+                          <OvrBadge ov={q.ov} size="sm" />
+                          <span className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
+                        </div>
+
+                        <div className="flex items-center justify-center min-w-0">
+                          <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
+                        </div>
+
+                        <div className="hidden lg:block text-right text-[10.5px] tabular whitespace-nowrap">
+                          <div className={`font-bold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                             {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)}
                           </div>
-                          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-tight mt-0.5">
-                            ~{fmtMoneyNum(askWage)}/นัด
+                          <div className="text-[var(--mut)] leading-tight">
+                            {fmtMoneyNum(askWage)}/นัด
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-center shrink-0">
-                          <OvrBadge ov={q.ov} size="sm" />
-                        </div>
-
-                        <div className="flex items-center justify-center shrink-0">
+                        <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
                           <button
                             type="button"
                             onClick={() => handleToggleShortlist(q, { source: 'mk' })}
                             title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
                             aria-label={shortlisted ? `นำ ${q.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${q.n} เข้ารายชื่อที่สนใจ`}
-                            className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
+                            className={`w-6 h-6 mland:w-5 mland:h-5 rounded-md border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
                               shortlisted
-                                ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300 shadow-[0_1px_6px_rgba(245,158,11,0.2)] hover:bg-amber-400/30'
-                                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60 hover:bg-amber-500/10'
+                                ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300'
+                                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60'
                             }`}
                           >
-                            <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 ${shortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
+                            <Star className={`w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0 ${shortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
                           </button>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-1.5 mland:gap-1 ml-auto md:ml-0 shrink-0">
                           {!q.free && (
                             <button
                               type="button"
                               disabled={!canLoanQuick}
                               onClick={() => openNegotiation('mk', i, q, undefined, 'loan')}
                               title={tx.loansCount >= tx.maxLoans ? `โควตายืมเต็ม ${tx.maxLoans} คน` : 'เจรจายืมตัว 1 ฤดูกาล'}
-                              className="btn btn-sm btn-secondary shrink-0 px-2"
+                              className="btn btn-xs btn-secondary shrink-0 px-1.5"
                             >
-                              🤝 ยืม
+                              🤝
                             </button>
                           )}
                           <button
                             type="button"
                             disabled={!!q.locked || blockedByWindow}
                             onClick={() => openNegotiation('mk', i, q, undefined, q.free ? 'free' : 'cash')}
-                            className={`btn btn-sm min-w-[82px] mland:min-w-[68px] shrink-0 ${
+                            className={`btn btn-xs min-w-[54px] sm:min-w-[68px] mland:min-w-[52px] shrink-0 ${
                               blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                             }`}
                           >
-                            {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : `ซื้อ ${fmtMoneyNum(q.price || 0)}`}
+                            {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : `ซื้อ ${fmtMoneyNum(q.price || 0)}`}
                           </button>
                         </div>
                       </div>
@@ -2376,58 +2445,73 @@ export const MarketView = React.memo<{
                     const blockedByWindow = !tx.tw.open;
                     const shortlisted = isPlayerShortlisted(state, q.n, team.id);
                     const canLoanClub = !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans && team.sq.length > 16;
+                    const bio = getPlayerBio(q);
+                    const footMeta = getFootColorMeta(bio.foot);
+                    const f = getStaminaMeta(q.fit).f;
+                    const unavailable = q.inj > 0 || (q.sus || 0) > 0;
                     return (
                       <div
                         key={`${team.id}-${q.n}-${idx}`}
-                        className={`flex flex-wrap md:grid md:grid-cols-[minmax(0,1fr)_96px_44px_30px_166px] mland:grid mland:grid-cols-[minmax(0,1fr)_78px_38px_26px_138px] items-center gap-2 md:gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/55 transition-colors ${
-                          blockedByWindow ? 'opacity-65' : ''
-                        }`}
+                        className={`grid grid-cols-[minmax(0,1fr)_52px_56px_114px] sm:grid-cols-[minmax(0,1.4fr)_54px_58px_124px] md:grid-cols-[minmax(0,1.5fr)_34px_58px_64px_148px] lg:grid-cols-[minmax(0,1.65fr)_36px_64px_74px_92px_190px] mland:grid-cols-[minmax(0,1.45fr)_28px_48px_56px_128px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 transition-colors ${
+                          unavailable ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09]' : 'hover:bg-[var(--surface-2)]/45'
+                        } ${blockedByWindow ? 'opacity-65' : ''}`}
                       >
                         <button
                           type="button"
                           onClick={() => onInspectPlayer(q, team)}
                           title="กดเพื่อดูการ์ดและค่าพลังนักเตะ"
-                          className="flex-1 min-w-[200px] md:min-w-0 flex items-center gap-2.5 mland:gap-1.5 text-left cursor-pointer group"
+                          className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 min-w-0 text-left cursor-pointer group"
                         >
-                          <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
-                            <PlayerFace player={q} team={team} state={state} size={40} />
+                          <span className="hidden sm:inline-flex shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                            <ClubCrest name={team.name} size={16} team={team} club={state.club} />
+                          </span>
+                          <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
+                            <PlayerFace player={q} team={team} state={state} size={36} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
-                              <PositionBadge role={q.ro} size="xs" />
+                            <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
+                              <PositionBadge role={q.ro} size="2xs" />
                               <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
-                              <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-[var(--surface-2)] border border-[var(--line)]/80 text-[10px] mland:text-[8.5px] font-semibold text-[var(--ink)]/85 truncate shrink">
-                                <ClubCrest name={team.name} size={11} team={team} club={state.club} />
-                                <span className="truncate">{team.name}</span>
+                              <span className="hidden sm:inline-flex items-center gap-1 px-1 py-[0.5px] rounded bg-[var(--surface-2)] border border-[var(--line)]/80 text-[9.5px] mland:text-[8px] font-semibold text-[var(--ink)]/85 truncate shrink">
+                                {team.name}
                               </span>
                             </div>
-                            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                              <span>{TN[team.tier]} · {q.age} ปี</span>
-                              <span className="opacity-35">·</span>
+                            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
+                              <span className="truncate">{TN[team.tier]}<span className="md:hidden mland:hidden"> · {q.age} ปี</span></span>
                               <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
-                              <span className="opacity-35" aria-hidden="true">·</span>
-                              <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
-                              <span className="md:hidden mland:hidden font-semibold text-[var(--ink)]/80">
-                                · ~{fmtMoneyNum(price)} (~{fmtMoneyNum(wagOf(q))}/นัด)
+                              <span
+                                className="hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1.5 py-[0.5px] rounded-md border bg-[var(--surface-2)]/75 border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold tabular leading-tight shrink-0 whitespace-nowrap"
+                                title={`สูง ${bio.heightCm} ซม. · หนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
+                              >
+                                <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
+                                <FootPairIcon foot={bio.foot} size="xs" />
+                              </span>
+                              <span className="lg:hidden font-semibold text-[var(--ink)]/85 truncate">
+                                · ~{fmtMoneyNum(price)}
                               </span>
                             </div>
                           </div>
                         </button>
 
-                        <div className="hidden md:block mland:block text-right tabular min-w-0">
-                          <div className="text-xs mland:text-[10px] font-extrabold text-[var(--ink)] leading-tight">
-                            ~{fmtMoneyNum(price)}
-                          </div>
-                          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-tight mt-0.5">
-                            ~{fmtMoneyNum(wagOf(q))}/นัด
-                          </div>
+                        <div className="hidden md:block mland:block text-center text-xs mland:text-[10px] tabular font-semibold">
+                          {q.age}
                         </div>
 
-                        <div className="flex items-center justify-center shrink-0">
+                        <div className="flex items-center justify-center gap-0.5">
                           <OvrBadge ov={q.ov} size="sm" />
+                          <span className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
                         </div>
 
-                        <div className="flex items-center justify-center shrink-0">
+                        <div className="flex items-center justify-center min-w-0">
+                          <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
+                        </div>
+
+                        <div className="hidden lg:block text-right text-[10.5px] tabular whitespace-nowrap">
+                          <div className="font-bold text-[var(--ink)] leading-tight">~{fmtMoneyNum(price)}</div>
+                          <div className="text-[var(--mut)] leading-tight">~{fmtMoneyNum(wagOf(q))}/นัด</div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
                           <button
                             type="button"
                             onClick={() =>
@@ -2439,35 +2523,32 @@ export const MarketView = React.memo<{
                             }
                             title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
                             aria-label={shortlisted ? `นำ ${q.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${q.n} เข้ารายชื่อที่สนใจ`}
-                            className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
+                            className={`w-6 h-6 mland:w-5 mland:h-5 rounded-md border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
                               shortlisted
-                                ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300 shadow-[0_1px_6px_rgba(245,158,11,0.2)] hover:bg-amber-400/30'
-                                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60 hover:bg-amber-500/10'
+                                ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300'
+                                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60'
                             }`}
                           >
-                            <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 ${shortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
+                            <Star className={`w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0 ${shortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
                           </button>
-                        </div>
-
-                        <div className="flex items-center justify-end gap-1.5 mland:gap-1 ml-auto md:ml-0 shrink-0">
                           <button
                             type="button"
                             disabled={!canLoanClub}
                             onClick={() => openNegotiation('club', idx, q, team, 'loan')}
                             title={tx.loansCount >= tx.maxLoans ? `โควตายืมเต็ม ${tx.maxLoans} คน` : 'เจรจาขอยืมตัวจากสโมสรนี้'}
-                            className="btn btn-sm btn-secondary shrink-0 px-2"
+                            className="btn btn-xs btn-secondary shrink-0 px-1.5"
                           >
-                            🤝 ยืม
+                            🤝
                           </button>
                           <button
                             type="button"
                             disabled={!!q.locked || blockedByWindow}
                             onClick={() => openNegotiation('club', idx, q, team, 'cash')}
-                            className={`btn btn-sm min-w-[82px] mland:min-w-[68px] shrink-0 ${
+                            className={`btn btn-xs min-w-[54px] sm:min-w-[68px] mland:min-w-[52px] shrink-0 ${
                               blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                             }`}
                           >
-                            {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิด' : `ซื้อ ~${fmtMoneyNum(price)}`}
+                            {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิด' : `ซื้อ ${fmtMoneyNum(price)}`}
                           </button>
                         </div>
                       </div>
@@ -2604,112 +2685,125 @@ export const MarketView = React.memo<{
                   const cs = cand.careerStats;
                   const coreA = q.customA || cand.profile.a;
                   const createdShortlisted = isPlayerShortlisted(state, q.n);
+                  const bio = getPlayerBio(q);
+                  const footMeta = getFootColorMeta(bio.foot);
+                  const f = getStaminaMeta(q.fit).f;
                   return (
                     <div
                       key={cand.key}
-                      className="flex flex-wrap md:grid md:grid-cols-[minmax(0,1fr)_44px_30px_190px] mland:grid mland:grid-cols-[minmax(0,1fr)_38px_26px_156px] items-center gap-2 md:gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/55 transition-colors"
+                      className="grid grid-cols-[minmax(0,1fr)_52px_56px_114px] sm:grid-cols-[minmax(0,1.4fr)_54px_58px_124px] md:grid-cols-[minmax(0,1.5fr)_34px_58px_64px_148px] lg:grid-cols-[minmax(0,1.65fr)_36px_64px_74px_92px_190px] mland:grid-cols-[minmax(0,1.45fr)_28px_48px_56px_128px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 hover:bg-[var(--surface-2)]/45 transition-colors"
                     >
                       <button
                         type="button"
                         onClick={() => onInspectPlayer(q, null)}
                         title="กดเพื่อดูการ์ดและค่าพลังนักเตะ"
-                        className="flex-1 min-w-[200px] md:min-w-0 flex items-center gap-2.5 mland:gap-1.5 text-left cursor-pointer group"
+                        className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 min-w-0 text-left cursor-pointer group"
                       >
-                        <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
-                          <PlayerFace player={q} team={me} state={state} size={40} />
+                        <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
+                          <PlayerFace player={q} team={me} state={state} size={36} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
-                            <PositionBadge role={q.ro} size="xs" />
+                          <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
+                            <PositionBadge role={q.ro} size="2xs" />
                             <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
-                            <span className="text-[9.5px] mland:text-[8px] px-1.5 py-[1px] rounded-md bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">🌱 เด็กปั้น</span>
+                            <span className="text-[9px] mland:text-[7.5px] px-1 py-[0.5px] rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">🌱 เด็กปั้น</span>
                           </div>
-                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
                             <span className="truncate">
                               {cand.sourceLabel}
                               {cand.sourceType === 'career_save' && cand.clubName ? ` · ${cand.clubName}` : ''}
-                              {cand.archName ? ` · ${cand.archName}` : ''} · {q.age} ปี
+                              <span className="md:hidden mland:hidden"> · {q.age} ปี</span>
                             </span>
-                            <span className="opacity-35">·</span>
                             <PotentialBadge pot={cand.pot} variant="inline" size="xs" className="shrink-0" />
-                            <span className="opacity-35" aria-hidden="true">·</span>
-                            <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
+                            <span
+                              className="hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1.5 py-[0.5px] rounded-md border bg-[var(--surface-2)]/75 border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold tabular leading-tight shrink-0 whitespace-nowrap"
+                              title={`สูง ${bio.heightCm} ซม. · หนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
+                            >
+                              <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
+                              <FootPairIcon foot={bio.foot} size="xs" />
+                            </span>
                           </div>
-                          <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular truncate leading-tight mt-0.5 flex flex-wrap items-center gap-x-1.5">
+                          <div className="hidden sm:flex text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate leading-tight mt-0.5 flex-wrap items-center gap-x-1">
                             <span>
-                              ยิง <b className="text-[var(--ink)]">{coreA.sh}</b> · จ่าย <b className="text-[var(--ink)]">{coreA.ps}</b> · เลี้ยง <b className="text-[var(--ink)]">{coreA.dr}</b> · แย่ง <b className="text-[var(--ink)]">{coreA.tk}</b> · กาย <b className="text-[var(--ink)]">{coreA.ph}</b>
+                              ยิง <b className="text-[var(--ink)]">{coreA.sh}</b> · จ่าย <b className="text-[var(--ink)]">{coreA.ps}</b> · เลี้ยง <b className="text-[var(--ink)]">{coreA.dr}</b> · แย่ง <b className="text-[var(--ink)]">{coreA.tk}</b>
                             </span>
                             {cs.apps > 0 && (
                               <span className="inline-flex items-center gap-1 text-[var(--g)] font-semibold">
-                                <span>·</span>
-                                <span>{cs.apps} นัด</span>
+                                <span>· {cs.apps}น</span>
                                 <span className="inline-flex items-center gap-0.5">
-                                  · <StatIconBadge kind="goal" size="xs" /> {cs.goals}
+                                  <StatIconBadge kind="goal" size="xs" /> {cs.goals}
                                 </span>
                                 {q.pos === 'GK' ? (
                                   <span className="inline-flex items-center gap-0.5">
-                                    · <StatIconBadge kind="cleansheet" size="xs" /> {cs.cleanSheets}
+                                    <StatIconBadge kind="cleansheet" size="xs" /> {cs.cleanSheets}
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-0.5">
-                                    · <StatIconBadge kind="assist" size="xs" /> {cs.assists}
+                                    <StatIconBadge kind="assist" size="xs" /> {cs.assists}
                                   </span>
                                 )}
-                                {cs.avgRating > 0 && <span className={`font-bold ${getRatingPalette(cs.avgRating).textCls}`}>· ⭐ {cs.avgRating.toFixed(2)}</span>}
-                                {cs.motm > 0 && <span>· 👑 {cs.motm}</span>}
-                                {cs.ntCaps > 0 && <span>· 🇹🇭 {cs.ntCaps}</span>}
+                                {cs.avgRating > 0 && <span className={`font-bold ${getRatingPalette(cs.avgRating).textCls}`}>⭐{cs.avgRating.toFixed(1)}</span>}
                               </span>
                             )}
                           </div>
                         </div>
                       </button>
 
-                      <div className="flex items-center justify-center shrink-0">
+                      <div className="hidden md:block mland:block text-center text-xs mland:text-[10px] tabular font-semibold">
+                        {q.age}
+                      </div>
+
+                      <div className="flex items-center justify-center gap-0.5">
                         <OvrBadge ov={q.ov} size="sm" />
+                        <span className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{cand.pot || q.ov}</span>
                       </div>
 
-                      <div className="flex items-center justify-center shrink-0">
-                        {!alreadyInSquad && (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleShortlist(q, { source: 'created', clubName: cand.clubName || cand.sourceLabel })}
-                            title={createdShortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
-                            aria-label={createdShortlisted ? `นำ ${q.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${q.n} เข้ารายชื่อที่สนใจ`}
-                            className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
-                              createdShortlisted
-                                ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300 shadow-[0_1px_6px_rgba(245,158,11,0.2)] hover:bg-amber-400/30'
-                                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60 hover:bg-amber-500/10'
-                            }`}
-                          >
-                            <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 ${createdShortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
-                          </button>
-                        )}
+                      <div className="flex items-center justify-center min-w-0">
+                        <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
                       </div>
 
-                      <div className="flex items-center justify-end gap-1.5 mland:gap-1 ml-auto md:ml-0 shrink-0">
+                      <div className="hidden lg:block text-right text-[10.5px] tabular whitespace-nowrap">
+                        <div className="font-bold text-[var(--g)] leading-tight">ปั้นฟรี / {fmtMoneyNum(cand.price)}</div>
+                        <div className="text-[var(--mut)] leading-tight">{fmtMoneyNum(wagOf(q))}/นัด</div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
                         {alreadyInSquad ? (
-                          <span className="text-[11px] mland:text-[9.5px] text-[var(--g)] font-bold whitespace-nowrap px-2">
+                          <span className="text-[10.5px] mland:text-[9px] text-[var(--g)] font-bold whitespace-nowrap px-1.5">
                             ✓ อยู่ในทีม
                           </span>
                         ) : (
                           <>
                             <button
                               type="button"
+                              onClick={() => handleToggleShortlist(q, { source: 'created', clubName: cand.clubName || cand.sourceLabel })}
+                              title={createdShortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
+                              aria-label={createdShortlisted ? `นำ ${q.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${q.n} เข้ารายชื่อที่สนใจ`}
+                              className={`w-6 h-6 mland:w-5 mland:h-5 rounded-md border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
+                                createdShortlisted
+                                  ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300'
+                                  : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60'
+                              }`}
+                            >
+                              <Star className={`w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0 ${createdShortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
+                            </button>
+                            <button
+                              type="button"
                               disabled={squadFull}
                               onClick={() => signCreatedPlayer(false)}
-                              className="btn btn-sm btn-primary"
+                              className="btn btn-xs btn-primary shrink-0 px-1.5"
                               title="ดึงเข้าทีมฟรีในฐานะเด็กปั้นสโมสร"
                             >
-                              🌱 ปั้นฟรี
+                              🌱 ฟรี
                             </button>
                             <button
                               type="button"
                               disabled={squadFull || state.money < cand.price || (tx.ffpLocked && cand.price > 0)}
                               onClick={() => signCreatedPlayer(true)}
-                              className="btn btn-sm btn-gold"
+                              className="btn btn-xs btn-gold shrink-0 px-1.5"
                               title="ซื้อตัวเข้าทีมพร้อมสัญลักษณ์เด็กปั้น"
                             >
-                              ซื้อ {fmtMoneyNum(cand.price)}
+                              {fmtMoneyNum(cand.price)}
                             </button>
                             {cand.sourceType === 'custom_pool' && cand.templateId && (
                               <button
@@ -2721,9 +2815,9 @@ export const MarketView = React.memo<{
                                   onToast(`ลบ ${q.n} ออกจากทำเนียบนักเตะสร้างเองแล้ว`);
                                 }}
                                 aria-label={`ลบ ${q.n}`}
-                                className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50 hover:bg-[var(--red-soft)]/50 inline-flex items-center justify-center cursor-pointer shrink-0 transition-all"
+                                className="w-6 h-6 mland:w-5 mland:h-5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50 inline-flex items-center justify-center cursor-pointer shrink-0 transition-all"
                               >
-                                <Trash2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                                <Trash2 className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
                               </button>
                             )}
                           </>
@@ -2774,14 +2868,6 @@ export const MarketView = React.memo<{
                   </button>
                 ))}
               </div>
-              <QuickSortSelect
-                value={shortlistSort}
-                onChange={setShortlistSort}
-                options={MARKET_BUY_SORT_OPTIONS}
-                defaultValue="default"
-                ariaLabel="เรียงด่วนรายชื่อที่สนใจ"
-                size="sm"
-              />
               {shortlistResolved.length > 0 && (
                 <button
                   type="button"
@@ -2801,21 +2887,64 @@ export const MarketView = React.memo<{
           </div>
 
           {filteredShortlist.length > 0 && (
-            <div className="hidden md:grid mland:grid md:grid-cols-[minmax(0,1fr)_104px_44px_198px] mland:grid-cols-[minmax(0,1fr)_82px_38px_166px] items-center gap-2.5 mland:gap-1.5 px-3.5 py-1.5 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)]/75 text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)] shrink-0">
-              <div>นักเตะ · สถานะ · กายภาพ (กดเพื่อดูการ์ด)</div>
-              <div className="text-right">ประเมิน / ค่าเหนื่อย</div>
-              <div className="text-center">OVR</div>
-              <div className="text-right">ดำเนินการ</div>
+            <div className="grid grid-cols-[minmax(0,1fr)_52px_56px_118px] sm:grid-cols-[minmax(0,1.45fr)_34px_58px_64px_150px] lg:grid-cols-[minmax(0,1.65fr)_36px_64px_74px_96px_190px] mland:grid-cols-[minmax(0,1.5fr)_28px_50px_58px_72px_142px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3.5 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] shrink-0">
+              <div className="flex items-center justify-start min-w-0">
+                <SortableColHeader
+                  label="นักเตะ"
+                  active={shortlistSortCol === 'pos'}
+                  dir={shortlistSortDir}
+                  onClick={() => toggleSortCol('pos', shortlistSortCol, setShortlistSortCol, setShortlistSortDir)}
+                  align="left"
+                />
+              </div>
+              <div className="hidden sm:flex mland:flex items-center justify-center">
+                <SortableColHeader
+                  label="อายุ"
+                  active={shortlistSortCol === 'age'}
+                  dir={shortlistSortDir}
+                  onClick={() => toggleSortCol('age', shortlistSortCol, setShortlistSortCol, setShortlistSortDir)}
+                />
+              </div>
+              <div className="flex items-center justify-center">
+                <SortableColHeader
+                  label="OVR"
+                  active={shortlistSortCol === 'ov'}
+                  dir={shortlistSortDir}
+                  onClick={() => toggleSortCol('ov', shortlistSortCol, setShortlistSortCol, setShortlistSortDir)}
+                />
+              </div>
+              <div className="flex items-center justify-center">
+                <SortableColHeader
+                  label="สถานะ/ฟิต"
+                  active={shortlistSortCol === 'fit'}
+                  dir={shortlistSortDir}
+                  onClick={() => toggleSortCol('fit', shortlistSortCol, setShortlistSortCol, setShortlistSortDir)}
+                />
+              </div>
+              <div className="hidden lg:flex mland:flex items-center justify-end">
+                <SortableColHeader
+                  label="ประเมิน / ค่าเหนื่อย"
+                  active={shortlistSortCol === 'price'}
+                  dir={shortlistSortDir}
+                  onClick={() => toggleSortCol('price', shortlistSortCol, setShortlistSortCol, setShortlistSortDir)}
+                  align="right"
+                />
+              </div>
+              <div className="text-right">จัดการ</div>
             </div>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/55">
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]">
             {filteredShortlist.length > 0 ? (
               filteredShortlist.map(({ entry, resolved }) => {
                 const { status, player: q, team: curTeam, idx, estPrice } = resolved;
                 const canDeal = status === 'mk' || status === 'scout' || status === 'club';
                 const blockedByWindow = !tx.tw.open && !q.free;
                 const canLoanHere = canDeal && !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
+                const bio = getPlayerBio(q);
+                const footMeta = getFootColorMeta(bio.foot);
+                const f = getStaminaMeta(q.fit).f;
+                const unavailable = q.inj > 0 || (q.sus || 0) > 0;
                 const sourceLabel =
                   status === 'in_squad'
                     ? '✓ ย้ายเข้าทีมคุณแล้ว'
@@ -2834,20 +2963,22 @@ export const MarketView = React.memo<{
                 return (
                   <div
                     key={`${entry.n}-${entry.clubTeamId ?? entry.source}`}
-                    className="flex flex-wrap md:grid md:grid-cols-[minmax(0,1fr)_104px_44px_198px] mland:grid mland:grid-cols-[minmax(0,1fr)_82px_38px_166px] items-center gap-2 md:gap-2.5 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/55 transition-colors"
+                    className={`grid grid-cols-[minmax(0,1fr)_52px_56px_118px] sm:grid-cols-[minmax(0,1.45fr)_34px_58px_64px_150px] lg:grid-cols-[minmax(0,1.65fr)_36px_64px_74px_96px_190px] mland:grid-cols-[minmax(0,1.5fr)_28px_50px_58px_72px_142px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3.5 mland:px-2 py-1.5 mland:py-1 transition-colors ${
+                      unavailable ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09]' : 'hover:bg-[var(--surface-2)]/45'
+                    }`}
                   >
                     <button
                       type="button"
                       onClick={() => onInspectPlayer(q, curTeam || null)}
                       title="กดเพื่อดูการ์ดและค่าพลังนักเตะ"
-                      className="flex-1 min-w-[180px] md:min-w-0 flex items-center gap-2.5 mland:gap-1.5 text-left cursor-pointer group"
+                      className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 min-w-0 text-left cursor-pointer group"
                     >
-                      <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
-                        <PlayerFace player={q} team={curTeam} state={state} size={40} />
+                      <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
+                        <PlayerFace player={q} team={curTeam} state={state} size={36} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
-                          <PositionBadge role={q.ro} size="xs" />
+                        <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
+                          <PositionBadge role={q.ro} size="2xs" />
                           <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
                           <span
                             className={`text-[10px] mland:text-[8.5px] font-bold truncate ${
@@ -2863,35 +2994,48 @@ export const MarketView = React.memo<{
                             · {sourceLabel}
                           </span>
                         </div>
-                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                          <span>{q.age} ปี</span>
-                          <span className="opacity-35">·</span>
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
+                          <span className="sm:hidden mland:hidden shrink-0">{q.age} ปี ·</span>
                           <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
-                          <span className="opacity-35" aria-hidden="true">·</span>
-                          <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
-                          <span className="md:hidden mland:hidden font-semibold text-[var(--ink)]/80">
-                            · {q.free ? 'ไร้ค่าตัว' : `~${fmtMoneyNum(estPrice)}`} (~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด)
+                          <span
+                            className="hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1.5 py-[0.5px] rounded-md border bg-[var(--surface-2)]/75 border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold tabular leading-tight shrink-0 whitespace-nowrap"
+                            title={`สูง ${bio.heightCm} ซม. · หนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
+                          >
+                            <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
+                            <FootPairIcon foot={bio.foot} size="xs" />
+                          </span>
+                          <span className="lg:hidden mland:hidden font-semibold text-[var(--ink)]/85 truncate">
+                            · {q.free ? 'ไร้ค่าตัว' : `~${fmtMoneyNum(estPrice)}`}
                           </span>
                         </div>
                       </div>
                     </button>
 
-                    <div className="hidden md:block mland:block text-right tabular min-w-0">
-                      <div className={`text-xs mland:text-[10px] font-extrabold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                    <div className="hidden sm:block mland:block text-center text-xs mland:text-[10px] tabular font-semibold">
+                      {q.age}
+                    </div>
+
+                    <div className="flex items-center justify-center gap-0.5">
+                      <OvrBadge ov={q.ov} size="sm" />
+                      <span className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
+                    </div>
+
+                    <div className="flex items-center justify-center min-w-0">
+                      <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
+                    </div>
+
+                    <div className="hidden lg:block mland:block text-right text-[10.5px] mland:text-[9px] tabular whitespace-nowrap">
+                      <div className={`font-bold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                         {q.free ? 'ไร้ค่าตัว' : `~${fmtMoneyNum(estPrice)}`}
                       </div>
-                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-tight mt-0.5">
+                      <div className="text-[var(--mut)] leading-tight">
                         ~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-center shrink-0">
-                      <OvrBadge ov={q.ov} size="sm" />
-                    </div>
-
-                    <div className="flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto md:ml-0">
+                    <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
                       {status === 'in_squad' ? (
-                        <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] px-2">✓ อยู่ในทีม</span>
+                        <span className="text-[10.5px] mland:text-[9px] font-bold text-[var(--g)] px-1.5">✓ อยู่ในทีม</span>
                       ) : canDeal ? (
                         <>
                           {!q.free && (
@@ -2899,18 +3043,18 @@ export const MarketView = React.memo<{
                               type="button"
                               disabled={!canLoanHere}
                               onClick={() => openNegotiation(status, idx, q, curTeam, 'loan')}
-                              className="btn btn-sm btn-secondary shrink-0 px-2"
+                              className="btn btn-xs btn-secondary shrink-0 px-1.5"
                             >
-                              🤝 ยืม
+                              🤝
                             </button>
                           )}
                           <button
                             type="button"
                             disabled={!!q.locked || blockedByWindow}
                             onClick={() => openNegotiation(status, idx, q, curTeam, q.free ? 'free' : 'cash')}
-                            className={`btn btn-sm shrink-0 ${blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'}`}
+                            className={`btn btn-xs shrink-0 ${blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'}`}
                           >
-                            {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : `ซื้อ ${fmtMoneyNum(estPrice)}`}
+                            {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : `ซื้อ ${fmtMoneyNum(estPrice)}`}
                           </button>
                         </>
                       ) : status === 'created' ? (
@@ -2920,12 +3064,12 @@ export const MarketView = React.memo<{
                             setActiveTab('buy');
                             setMarketSource('created');
                           }}
-                          className="btn btn-sm btn-secondary"
+                          className="btn btn-xs btn-secondary"
                         >
-                          ไปหน้าสร้างเอง
+                          สร้างเอง
                         </button>
                       ) : (
-                        <span className="text-[10.5px] text-[var(--mut)] px-1.5">ไม่พบในตลาด</span>
+                        <span className="text-[10px] text-[var(--mut)] px-1">ไม่พบ</span>
                       )}
                       <button
                         type="button"
@@ -2936,9 +3080,9 @@ export const MarketView = React.memo<{
                         }}
                         title="นำออกจากรายชื่อที่สนใจ"
                         aria-label={`ลบ ${entry.n} ออกจากที่สนใจ`}
-                        className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50 hover:bg-[var(--red-soft)]/50 inline-flex items-center justify-center cursor-pointer shrink-0 transition-all active:scale-95"
+                        className="w-6 h-6 mland:w-5 mland:h-5 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50 inline-flex items-center justify-center cursor-pointer shrink-0 transition-all active:scale-95"
                       >
-                        <Trash2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                        <Trash2 className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
                       </button>
                     </div>
                   </div>
@@ -3245,14 +3389,6 @@ export const MarketView = React.memo<{
                       </button>
                     ))}
                   </div>
-                  <QuickSortSelect
-                    value={sellSort}
-                    onChange={setSellSort}
-                    options={MARKET_SELL_SORT_OPTIONS}
-                    defaultValue="default"
-                    ariaLabel="เรียงด่วนนักเตะสำหรับขายหรือปล่อยยืม"
-                    size="xs"
-                  />
                 </div>
               )}
 
@@ -3300,7 +3436,64 @@ export const MarketView = React.memo<{
               )}
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+            {sellSubView !== 'loaned_out' && sellSquadList.length > 0 && (
+              <div className="grid grid-cols-[24px_minmax(0,1fr)_48px_54px_102px] sm:grid-cols-[24px_minmax(0,1.4fr)_30px_54px_60px_118px] mland:grid-cols-[22px_minmax(0,1.4fr)_28px_46px_54px_96px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)] shrink-0">
+                <div className="flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    checked={
+                      sellSquadList.some((q) => !q.me && !q.loan) &&
+                      sellSquadList.filter((q) => !q.me && !q.loan).every((q) => activeSelectedSell.includes(q.n))
+                    }
+                    onChange={() => {
+                      const selectableNames = sellSquadList.filter((q) => !q.me && !q.loan).map((q) => q.n);
+                      const allSelected = selectableNames.length > 0 && selectableNames.every((n) => activeSelectedSell.includes(n));
+                      setSelectedSellNames((prev) =>
+                        allSelected ? prev.filter((n) => !selectableNames.includes(n)) : Array.from(new Set([...prev, ...selectableNames]))
+                      );
+                    }}
+                    aria-label="เลือกนักเตะทั้งหมด"
+                    className="w-3.5 h-3.5 accent-[var(--g)] cursor-pointer rounded"
+                  />
+                </div>
+                <div className="flex items-center justify-start min-w-0">
+                  <SortableColHeader
+                    label="นักเตะ"
+                    active={sellSortCol === 'pos'}
+                    dir={sellSortDir}
+                    onClick={() => toggleSortCol('pos', sellSortCol, setSellSortCol, setSellSortDir)}
+                    align="left"
+                  />
+                </div>
+                <div className="hidden sm:flex mland:flex items-center justify-center">
+                  <SortableColHeader
+                    label="อายุ"
+                    active={sellSortCol === 'age'}
+                    dir={sellSortDir}
+                    onClick={() => toggleSortCol('age', sellSortCol, setSellSortCol, setSellSortDir)}
+                  />
+                </div>
+                <div className="flex items-center justify-center">
+                  <SortableColHeader
+                    label="OVR"
+                    active={sellSortCol === 'ov'}
+                    dir={sellSortDir}
+                    onClick={() => toggleSortCol('ov', sellSortCol, setSellSortCol, setSellSortDir)}
+                  />
+                </div>
+                <div className="flex items-center justify-center">
+                  <SortableColHeader
+                    label="สถานะ/ฟิต"
+                    active={sellSortCol === 'fit'}
+                    dir={sellSortDir}
+                    onClick={() => toggleSortCol('fit', sellSortCol, setSellSortCol, setSellSortDir)}
+                  />
+                </div>
+                <div className="text-right">จัดการ</div>
+              </div>
+            )}
+
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]">
               {sellSubView === 'loaned_out' ? (
                 loanedOutList.length > 0 ? (
                   loanedOutList.map(({ q, hostTeam }) => (
@@ -3370,65 +3563,90 @@ export const MarketView = React.memo<{
                   const bidCount = incomingOffers.filter((o) => o.n === q.n).length;
                   const selectable = !q.me && !q.loan;
                   const isChecked = selectable && activeSelectedSell.includes(q.n);
+                  const f = getStaminaMeta(q.fit).f;
+                  const unavailable = q.inj > 0 || (q.sus || 0) > 0;
                   return (
                     <div
                       key={q.n}
-                      className={`flex items-center gap-2.5 mland:gap-1.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 transition-colors hover:bg-[var(--surface-2)]/45 ${
-                        isChecked ? 'bg-[var(--g-soft)]/55' : q.listed ? 'bg-[var(--lamp-soft)]/15' : q.loanListed ? 'bg-sky-500/8' : ''
+                      className={`grid grid-cols-[24px_minmax(0,1fr)_48px_54px_102px] sm:grid-cols-[24px_minmax(0,1.4fr)_30px_54px_60px_118px] mland:grid-cols-[22px_minmax(0,1.4fr)_28px_46px_54px_96px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 transition-colors ${
+                        isChecked
+                          ? 'bg-[var(--g-soft)]/55'
+                          : unavailable
+                            ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09]'
+                            : q.listed
+                              ? 'bg-[var(--lamp-soft)]/20 hover:bg-[var(--surface-2)]/45'
+                              : q.loanListed
+                                ? 'bg-sky-500/8 hover:bg-[var(--surface-2)]/45'
+                                : 'hover:bg-[var(--surface-2)]/45'
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        disabled={!selectable}
-                        onChange={() =>
-                          setSelectedSellNames((prev) =>
-                            prev.includes(q.n) ? prev.filter((name) => name !== q.n) : [...prev, q.n]
-                          )
-                        }
-                        aria-label={`เลือก ${q.n} เพื่อขายหรือปล่อยยืม`}
-                        className="w-3.5 h-3.5 accent-[var(--g)] cursor-pointer rounded shrink-0 disabled:opacity-30"
-                      />
-                      <PlayerFace player={q} team={me} state={state} size={36} />
-                      <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer group">
-                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1.5">
-                          <PositionBadge role={q.ro} size="xs" />
-                          <span className="truncate group-hover:underline">{q.n}</span>
-                          {q.listed ? (
-                            <span className="text-[#8a5b00] dark:text-[var(--lamp)] text-[10.5px] mland:text-[9px] font-bold shrink-0 tabular">
-                              · ตั้งขาย {fmtMoneyNum(q.askPrice || marketVal)}
-                            </span>
-                          ) : null}
-                          {q.loanListed ? (
-                            <span className="text-sky-600 dark:text-sky-300 text-[10.5px] mland:text-[9px] font-bold shrink-0">
-                              · บัญชีปล่อยยืม
-                            </span>
-                          ) : null}
-                          {bidCount > 0 ? (
-                            <span className="text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold shrink-0 tabular">
-                              · {bidCount} ข้อเสนอ
-                            </span>
-                          ) : null}
-                          {q.loan ? (
-                            <span className="text-[10.5px] mland:text-[9px] text-blue-600 dark:text-blue-400 font-bold shrink-0">· ยืมตัวเข้า</span>
-                          ) : null}
+                      <div className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          disabled={!selectable}
+                          onChange={() =>
+                            setSelectedSellNames((prev) =>
+                              prev.includes(q.n) ? prev.filter((name) => name !== q.n) : [...prev, q.n]
+                            )
+                          }
+                          aria-label={`เลือก ${q.n} เพื่อขายหรือปล่อยยืม`}
+                          className="w-3.5 h-3.5 accent-[var(--g)] cursor-pointer rounded shrink-0 disabled:opacity-30"
+                        />
+                      </div>
+                      <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex items-center gap-1.5 mland:gap-1 min-w-0 text-left cursor-pointer group">
+                        <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 p-0.5">
+                          <PlayerFace player={q} team={me} state={state} size={32} />
                         </div>
-                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1.5">
-                          <span className="truncate">อายุ {q.age} ปี · ประเมิน {fmtMoneyNum(marketVal)} · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด</span>
-                          <PlayerStatusBadge sus={q.sus} inj={q.inj} variant="pill" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
+                            <PositionBadge role={q.ro} size="2xs" />
+                            <span className="truncate group-hover:underline">{q.n}</span>
+                            {q.listed ? (
+                              <span className="text-[#8a5b00] dark:text-[var(--lamp)] text-[9.5px] mland:text-[8px] font-bold shrink-0 tabular">
+                                · ขาย {fmtMoneyNum(q.askPrice || marketVal)}
+                              </span>
+                            ) : null}
+                            {q.loanListed ? (
+                              <span className="text-sky-600 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-bold shrink-0">
+                                · ยืม
+                              </span>
+                            ) : null}
+                            {bidCount > 0 ? (
+                              <span className="px-1 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0 tabular">
+                                {bidCount} บิด
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate mt-0.5">
+                            <span className="sm:hidden mland:hidden">{q.age} ปี · </span>
+                            ประเมิน {fmtMoneyNum(marketVal)} · {fmtMoneyNum(wg)}/น
+                          </div>
                         </div>
                       </button>
-                      <OvrBadge ov={q.ov} size="sm" />
+
+                      <div className="hidden sm:block mland:block text-center text-xs mland:text-[10px] tabular font-semibold">
+                        {q.age}
+                      </div>
+
+                      <div className="flex items-center justify-center">
+                        <OvrBadge ov={q.ov} size="sm" />
+                      </div>
+
+                      <div className="flex items-center justify-center min-w-0">
+                        <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
+                      </div>
+
                       {q.loan ? (
-                        <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] font-semibold whitespace-nowrap shrink-0 min-w-[54px] text-right">
+                        <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold whitespace-nowrap text-right">
                           ยืมตัวเข้า
                         </span>
                       ) : q.me ? (
-                        <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] font-semibold whitespace-nowrap shrink-0 min-w-[54px] text-right">
+                        <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold whitespace-nowrap text-right">
                           ตัวหลัก
                         </span>
                       ) : (
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
                           {(q.listed || q.loanListed) ? (
                             <button
                               type="button"
@@ -3444,7 +3662,7 @@ export const MarketView = React.memo<{
                                 });
                                 onToast(`ถอด ${q.n} ออกจากบัญชีขาย/ปล่อยยืมแล้ว`);
                               }}
-                              className="btn btn-xs btn-secondary hover:text-[var(--red)]"
+                              className="btn btn-xs btn-secondary hover:text-[var(--red)] px-1.5"
                             >
                               ถอด
                             </button>
@@ -3456,9 +3674,9 @@ export const MarketView = React.memo<{
                               setLoanModalNames([q.n]);
                             }}
                             title="ขึ้นบัญชีหรือเสนอปล่อยยืมตัว"
-                            className="btn btn-xs btn-secondary"
+                            className="btn btn-xs btn-secondary px-1.5"
                           >
-                            🤝 ยืม
+                            🤝
                           </button>
                           <button
                             type="button"
@@ -3466,7 +3684,7 @@ export const MarketView = React.memo<{
                               SFX.tap();
                               setSellModalNames([q.n]);
                             }}
-                            className="btn btn-xs btn-gold"
+                            className="btn btn-xs btn-gold px-1.5"
                           >
                             💰 ขาย
                           </button>
@@ -3617,119 +3835,170 @@ export const MarketView = React.memo<{
                 {state.scout?.results ? `📋 รายงาน: ${state.scout.label}` : '📋 รายงานผลการส่อง'}
               </h3>
               {state.scout?.results && (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <QuickSortSelect
-                    value={scoutSort}
-                    onChange={setScoutSort}
-                    options={MARKET_BUY_SORT_OPTIONS}
-                    defaultValue="default"
-                    ariaLabel="เรียงด่วนรายงานแมวมอง"
-                    size="xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => onUpdateState((d) => { d.scout = null; })}
-                    className="btn btn-xs btn-ghost"
-                  >
-                    ✕ ปิดรายงาน
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => onUpdateState((d) => { d.scout = null; })}
+                  className="btn btn-xs btn-ghost shrink-0"
+                >
+                  ✕ ปิดรายงาน
+                </button>
               )}
             </div>
 
             {state.scout?.results && state.scout.results.length > 0 && (
-              <div className="hidden lg:grid lg:grid-cols-[minmax(0,1fr)_82px_42px_30px_142px] items-center gap-2 px-3.5 py-1.5 bg-[var(--surface-2)]/70 border-b border-[var(--line)]/75 text-[10px] font-extrabold uppercase tracking-wide text-[var(--mut)] shrink-0">
-                <div>นักเตะ · ศักยภาพ · กายภาพ</div>
-                <div className="text-right">ค่าตัว / ค่าเหนื่อย</div>
-                <div className="text-center">OVR</div>
-                <div className="text-center">สนใจ</div>
+              <div className="grid grid-cols-[minmax(0,1fr)_50px_54px_108px] md:grid-cols-[minmax(0,1.4fr)_30px_54px_60px_132px] lg:grid-cols-[minmax(0,1.5fr)_34px_56px_64px_78px_142px] mland:grid-cols-[minmax(0,1.4fr)_28px_46px_54px_118px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] shrink-0">
+                <div className="flex items-center justify-start min-w-0">
+                  <SortableColHeader
+                    label="นักเตะ"
+                    active={scoutSortCol === 'pos'}
+                    dir={scoutSortDir}
+                    onClick={() => toggleSortCol('pos', scoutSortCol, setScoutSortCol, setScoutSortDir)}
+                    align="left"
+                  />
+                </div>
+                <div className="hidden md:flex mland:flex items-center justify-center">
+                  <SortableColHeader
+                    label="อายุ"
+                    active={scoutSortCol === 'age'}
+                    dir={scoutSortDir}
+                    onClick={() => toggleSortCol('age', scoutSortCol, setScoutSortCol, setScoutSortDir)}
+                  />
+                </div>
+                <div className="flex items-center justify-center">
+                  <SortableColHeader
+                    label="OVR"
+                    active={scoutSortCol === 'ov'}
+                    dir={scoutSortDir}
+                    onClick={() => toggleSortCol('ov', scoutSortCol, setScoutSortCol, setScoutSortDir)}
+                  />
+                </div>
+                <div className="flex items-center justify-center">
+                  <SortableColHeader
+                    label="ฟิต"
+                    active={scoutSortCol === 'fit'}
+                    dir={scoutSortDir}
+                    onClick={() => toggleSortCol('fit', scoutSortCol, setScoutSortCol, setScoutSortDir)}
+                  />
+                </div>
+                <div className="hidden lg:flex items-center justify-end">
+                  <SortableColHeader
+                    label="ค่าตัว"
+                    active={scoutSortCol === 'price'}
+                    dir={scoutSortDir}
+                    onClick={() => toggleSortCol('price', scoutSortCol, setScoutSortCol, setScoutSortDir)}
+                    align="right"
+                  />
+                </div>
                 <div className="text-right">เจรจา</div>
               </div>
             )}
 
-            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]">
               {state.scout?.results ? (
                 sortedScoutResults.map(({ q, i }) => {
                   const blockedByWindow = !tx.tw.open && !q.free;
                   const shortlisted = isPlayerShortlisted(state, q.n);
                   const canLoanScout = !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
+                  const bio = getPlayerBio(q);
+                  const footMeta = getFootColorMeta(bio.foot);
+                  const f = getStaminaMeta(q.fit).f;
+                  const unavailable = q.inj > 0 || (q.sus || 0) > 0;
                   return (
-                    <div key={`${q.n}-${i}`} className="flex flex-wrap lg:grid lg:grid-cols-[minmax(0,1fr)_82px_42px_30px_142px] items-center gap-2 mland:gap-1.5 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/55 transition-colors">
+                    <div
+                      key={`${q.n}-${i}`}
+                      className={`grid grid-cols-[minmax(0,1fr)_50px_54px_108px] md:grid-cols-[minmax(0,1.4fr)_30px_54px_60px_132px] lg:grid-cols-[minmax(0,1.5fr)_34px_56px_64px_78px_142px] mland:grid-cols-[minmax(0,1.4fr)_28px_46px_54px_118px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 transition-colors ${
+                        unavailable ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09]' : 'hover:bg-[var(--surface-2)]/45'
+                      }`}
+                    >
                       <button
                         type="button"
                         onClick={() => onInspectPlayer(q, null)}
                         title="กดเพื่อดูการ์ดและค่าพลังนักเตะ"
-                        className="flex-1 min-w-[180px] lg:min-w-0 flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 text-left cursor-pointer group"
+                        className="flex items-center gap-1.5 mland:gap-1 min-w-0 text-left cursor-pointer group"
                       >
-                        <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
-                          <PlayerFace player={q} size={40} />
+                        <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/75 group-hover:border-[var(--g)]/60 p-0.5 transition-colors">
+                          <PlayerFace player={q} size={32} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate leading-tight flex items-center gap-1.5">
-                            <PositionBadge role={q.ro} size="xs" />
+                          <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
+                            <PositionBadge role={q.ro} size="2xs" />
                             <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
                             {q.free && (
-                              <span className="text-[9.5px] mland:text-[8px] px-1.5 py-[1px] rounded-md bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">ฟรีเอเยนต์</span>
+                              <span className="text-[9px] mland:text-[7.5px] px-1 py-[0.5px] rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">ฟรี</span>
                             )}
                           </div>
-                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate leading-snug mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                            <span>{q.age} ปี</span>
-                            <span className="opacity-35">·</span>
+                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1">
+                            <span className="md:hidden mland:hidden shrink-0">{q.age} ปี ·</span>
                             <PotentialBadge pot={q.pot} variant="inline" size="xs" />
-                            <span className="opacity-35" aria-hidden="true">·</span>
-                            <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
-                            <span className="lg:hidden font-semibold text-[var(--ink)]/80">
-                              · {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)} (~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด)
+                            <span
+                              className="hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1 py-[0.5px] rounded bg-[var(--surface-2)]/75 border border-[var(--line)] text-[9px] mland:text-[7.5px] font-bold shrink-0 whitespace-nowrap"
+                              title={`สูง ${bio.heightCm} ซม. · หนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
+                            >
+                              <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
+                              <FootPairIcon foot={bio.foot} size="xs" />
+                            </span>
+                            <span className="lg:hidden font-semibold text-[var(--ink)]/85 truncate">
+                              · {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)}
                             </span>
                           </div>
                         </div>
                       </button>
-                      <div className="hidden lg:block text-right tabular min-w-0">
-                        <div className={`text-xs font-extrabold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+
+                      <div className="hidden md:block mland:block text-center text-xs mland:text-[10px] tabular font-semibold">
+                        {q.age}
+                      </div>
+
+                      <div className="flex items-center justify-center gap-0.5">
+                        <OvrBadge ov={q.ov} size="sm" />
+                        <span className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
+                      </div>
+
+                      <div className="flex items-center justify-center min-w-0">
+                        <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
+                      </div>
+
+                      <div className="hidden lg:block text-right text-[10.5px] tabular whitespace-nowrap">
+                        <div className={`font-bold leading-tight ${q.free ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                           {q.free ? 'ไร้ค่าตัว' : fmtMoneyNum(q.price || 0)}
                         </div>
-                        <div className="text-[10.5px] text-[var(--mut)] leading-tight mt-0.5">
+                        <div className="text-[var(--mut)] leading-tight">
                           ~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด
                         </div>
                       </div>
-                      <div className="flex items-center justify-center shrink-0">
-                        <OvrBadge ov={q.ov} size="sm" />
-                      </div>
-                      <div className="flex items-center justify-center shrink-0">
+
+                      <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleToggleShortlist(q, { source: 'scout' })}
                           title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
                           aria-label={shortlisted ? `นำ ${q.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${q.n} เข้ารายชื่อที่สนใจ`}
-                          className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
+                          className={`w-6 h-6 mland:w-5 mland:h-5 rounded-md border inline-flex items-center justify-center shrink-0 cursor-pointer transition-all active:scale-95 ${
                             shortlisted
-                              ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300 shadow-[0_1px_6px_rgba(245,158,11,0.2)] hover:bg-amber-400/30'
-                              : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60 hover:bg-amber-500/10'
+                              ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300'
+                              : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60'
                           }`}
                         >
-                          <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 ${shortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
+                          <Star className={`w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0 ${shortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
                         </button>
-                      </div>
-                      <div className="flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto lg:ml-0">
                         {!q.free && (
                           <button
                             type="button"
                             disabled={!canLoanScout}
                             onClick={() => openNegotiation('scout', i, q, undefined, 'loan')}
-                            className="btn btn-sm btn-secondary shrink-0 px-2"
+                            className="btn btn-xs btn-secondary shrink-0 px-1.5"
                           >
-                            🤝 ยืม
+                            🤝
                           </button>
                         )}
                         <button
                           type="button"
                           disabled={!!q.locked || blockedByWindow}
                           onClick={() => openNegotiation('scout', i, q, undefined, q.free ? 'free' : 'cash')}
-                          className={`btn btn-sm min-w-[74px] shrink-0 ${
+                          className={`btn btn-xs min-w-[50px] sm:min-w-[60px] shrink-0 ${
                             blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                           }`}
                         >
-                          {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : 'เจรจา'}
+                          {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิด' : q.free ? 'เซ็นฟรี' : 'เจรจา'}
                         </button>
                       </div>
                     </div>
