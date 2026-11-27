@@ -5,11 +5,12 @@ export type StatIconKind = 'goal' | 'assist' | 'yellow' | 'red' | 'yellowRed' | 
 interface StatIconBadgeProps {
   kind: StatIconKind;
   count?: number;
-  size?: 'xs' | 'sm' | 'md' | 'lg';
+  size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg';
   title?: string;
 }
 
-const SIZE_PX: Record<'xs' | 'sm' | 'md' | 'lg', number> = {
+const SIZE_PX: Record<'2xs' | 'xs' | 'sm' | 'md' | 'lg', number> = {
+  '2xs': 10,
   xs: 13,
   sm: 16,
   md: 20,

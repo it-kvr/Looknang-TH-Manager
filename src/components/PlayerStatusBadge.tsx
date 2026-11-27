@@ -35,9 +35,9 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
         <span
           title={`ติดโทษแบน ${susN} นัด`}
           aria-label={`ติดโทษแบน ${susN} นัด`}
-          className={`inline-flex items-center gap-1 mland:gap-0.5 px-1.5 py-[2px] mland:px-1 mland:py-[1px] rounded-md border bg-rose-500/14 border-rose-500/40 text-rose-700 dark:text-rose-300 text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
+          className={`inline-flex items-center gap-1 mland:gap-0.5 h-[18px] mland:h-[15px] px-1.5 mland:px-1 rounded-md border bg-rose-500/14 border-rose-500/40 text-rose-700 dark:text-rose-300 text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 ${className}`}
         >
-          <StatIconBadge kind="red" count={1} size="xs" />
+          <StatIconBadge kind="red" count={1} size="2xs" />
           <span>แบน {susN} นัด</span>
         </span>
       );
@@ -48,9 +48,9 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
         <span
           title={`บาดเจ็บพัก ${injN} นัด`}
           aria-label={`บาดเจ็บพัก ${injN} นัด`}
-          className={`inline-flex items-center gap-1 mland:gap-0.5 px-1.5 py-[2px] mland:px-1 mland:py-[1px] rounded-md border bg-red-500/12 border-red-500/38 text-red-700 dark:text-red-300 text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
+          className={`inline-flex items-center gap-1 mland:gap-0.5 h-[18px] mland:h-[15px] px-1.5 mland:px-1 rounded-md border bg-red-500/12 border-red-500/38 text-red-700 dark:text-red-300 text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 ${className}`}
         >
-          <StatIconBadge kind="injury" size="xs" />
+          <StatIconBadge kind="injury" size="2xs" />
           <span>เจ็บ {injN} นัด</span>
         </span>
       );
@@ -61,13 +61,13 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
       return (
         <span
           title={nearBan ? `สะสมใบเหลือง ${ycN}/3 (อีก 1 ใบโดนแบน!)` : `สะสมใบเหลือง ${ycN}/3`}
-          className={`inline-flex items-center gap-1 mland:gap-0.5 px-1.5 py-[2px] mland:px-1 mland:py-[1px] rounded-md border text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${
+          className={`inline-flex items-center gap-1 mland:gap-0.5 h-[18px] mland:h-[15px] px-1.5 mland:px-1 rounded-md border text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 ${
             nearBan
               ? 'bg-amber-500/18 border-amber-500/50 text-amber-800 dark:text-amber-200'
               : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
           } ${className}`}
         >
-          <StatIconBadge kind="yellow" count={1} size="xs" />
+          <StatIconBadge kind="yellow" count={1} size="2xs" />
           <span>เหลือง {ycN}/3</span>
         </span>
       );
@@ -76,16 +76,16 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
     return null;
   }
 
-  // variant === 'cell': neat fixed-height slot for compact squad lists (PreMatch, Tactics, LiveTactics, Inspector)
+  // variant === 'cell': neat fixed-height slot matching compact StaminaBar height in squad lists
   if (susN > 0) {
     return (
       <div
         title={`ติดโทษแบน ${susN} นัด`}
         aria-label={`ติดโทษแบน ${susN} นัด`}
-        className={`w-full h-[22px] mland:h-[18px] px-1 mland:px-0.5 rounded-md border bg-rose-500/14 border-rose-500/42 text-rose-700 dark:text-rose-300 inline-flex items-center justify-center gap-[3px] mland:gap-[2px] text-[9.5px] mland:text-[8px] font-bold tracking-tight leading-none tabular whitespace-nowrap select-none shadow-2xs [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
+        className={`w-full h-[20px] mland:h-[16px] px-1.5 mland:px-1 rounded-md border bg-rose-500/14 border-rose-500/42 text-rose-700 dark:text-rose-300 inline-flex items-center justify-center gap-1 mland:gap-0.5 text-[9px] mland:text-[7.5px] font-extrabold tracking-tight leading-none tabular whitespace-nowrap overflow-hidden select-none shadow-2xs ${className}`}
       >
-        <StatIconBadge kind="red" count={1} size="xs" />
-        <span>แบน {susN} นัด</span>
+        <StatIconBadge kind="red" count={1} size="2xs" />
+        <span className="truncate">แบน {susN} นัด</span>
       </div>
     );
   }
@@ -95,10 +95,10 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
       <div
         title={`บาดเจ็บพัก ${injN} นัด`}
         aria-label={`บาดเจ็บพัก ${injN} นัด`}
-        className={`w-full h-[22px] mland:h-[18px] px-1 mland:px-0.5 rounded-md border bg-red-500/12 border-red-500/40 text-red-700 dark:text-red-300 inline-flex items-center justify-center gap-[3px] mland:gap-[2px] text-[9.5px] mland:text-[8px] font-bold tracking-tight leading-none tabular whitespace-nowrap select-none shadow-2xs [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
+        className={`w-full h-[20px] mland:h-[16px] px-1.5 mland:px-1 rounded-md border bg-red-500/12 border-red-500/40 text-red-700 dark:text-red-300 inline-flex items-center justify-center gap-1 mland:gap-0.5 text-[9px] mland:text-[7.5px] font-extrabold tracking-tight leading-none tabular whitespace-nowrap overflow-hidden select-none shadow-2xs ${className}`}
       >
-        <StatIconBadge kind="injury" size="xs" />
-        <span>เจ็บ {injN} นัด</span>
+        <StatIconBadge kind="injury" size="2xs" />
+        <span className="truncate">เจ็บ {injN} นัด</span>
       </div>
     );
   }

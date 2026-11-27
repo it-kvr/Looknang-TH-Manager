@@ -11810,6 +11810,7 @@ export const MatchModal: React.FC<{
                                 size="sm"
                               />
                             )}
+                            {tlPlayer && <PositionBadge role={tlPlayer.ro} size="2xs" />}
                             {tlNo != null && (
                               <span className="text-[9.5px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
                                 #{tlNo}
@@ -11873,6 +11874,7 @@ export const MatchModal: React.FC<{
                                 size="sm"
                               />
                             )}
+                            {tlPlayer && <PositionBadge role={tlPlayer.ro} size="2xs" />}
                             {tlNo != null && (
                               <span className="text-[9.5px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
                                 #{tlNo}
@@ -12010,6 +12012,7 @@ export const MatchModal: React.FC<{
             size="xs"
             dark
           />
+          <PositionBadge role={htPlayer.ro} size="2xs" />
           <span className="text-[10.5px] sm:text-[11px] mland:text-[9px] font-black tabular text-[#fde047]">#{h.entry.no}</span>
           <span className="font-extrabold">{h.entry.shortName}</span>
         </span>
@@ -12467,8 +12470,8 @@ export const MatchModal: React.FC<{
                   pushLog(
                     minute,
                     next
-                      ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
-                      : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
+                      ? '🤖 เปิดระบบ AI (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
+                      : '🤖 ปิดระบบ AI (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
                     'sys'
                   );
                   return next;
@@ -12803,6 +12806,7 @@ export const MatchModal: React.FC<{
                       const htPickedInfo = htPickedPlayer
                         ? (() => {
                             const t = homeOrig.sq.find((q) => q.n === htPickedPlayer) ? homeOrig : awayOrig;
+                            const isHome = t.id === homeId;
                             const p = t.sq.find((q) => q.n === htPickedPlayer);
                             const no = p ? getShirtNo(t, p) : 0;
                             const rt = liveFormMap[htPickedPlayer] ?? 6.5;
@@ -12812,7 +12816,9 @@ export const MatchModal: React.FC<{
                             const pCards = matchCards.filter((c) => c.t === t.id && c.who === htPickedPlayer);
                             const hasRed = sentOff.includes(htPickedPlayer) || pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
                             const subIn = subLog.find((s) => s.t === t.id && s.inPlayer === htPickedPlayer);
-                            return { name: htPickedPlayer, team: t, role: p?.ro || 'CM', no, rt, fitVal, gl, as, cards: pCards, hasRed, subIn };
+                            const kitColor = p?.pos === 'GK' ? (isHome ? homeGkKit : awayGkKit) : (isHome ? homeKit : awayKit);
+                            const trimColor = p?.pos === 'GK' ? undefined : (isHome ? homeTrim : awayTrim);
+                            return { name: htPickedPlayer, team: t, player: p, role: p?.ro || 'CM', no, rt, fitVal, gl, as, cards: pCards, hasRed, subIn, kitColor, trimColor };
                           })()
                         : null;
 
@@ -12870,11 +12876,31 @@ export const MatchModal: React.FC<{
                                 </div>
 
                                 {htPickedInfo && (
-                                  <div className="absolute bottom-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
+                                  <div className="absolute bottom-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[320px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                                     <div className="min-w-0 space-y-0.5">
-                                      <div className="font-bold truncate flex items-center gap-1.5">
-                                        <span className="text-[#facc15] tabular">#{htPickedInfo.no}</span>
+                                      <div className="font-bold truncate flex items-center gap-1">
+                                        <span className="shrink-0 inline-flex">
+                                          <ClubCrest
+                                            name={htPickedInfo.team.name}
+                                            size={14}
+                                            team={htPickedInfo.team}
+                                            club={state.club}
+                                            isMyClub={htPickedInfo.team.id === state.me && state.mode === 'm'}
+                                          />
+                                        </span>
+                                        {htPickedInfo.player && (
+                                          <MatchPlayerThumb
+                                            player={htPickedInfo.player}
+                                            team={htPickedInfo.team}
+                                            state={state}
+                                            kitColor={htPickedInfo.kitColor}
+                                            trimColor={htPickedInfo.trimColor}
+                                            size="xs"
+                                            dark
+                                          />
+                                        )}
                                         <PositionBadge role={htPickedInfo.role} size="2xs" />
+                                        <span className="text-[#facc15] font-extrabold tabular shrink-0">#{htPickedInfo.no}</span>
                                         <span className="truncate">{htPickedInfo.name}</span>
                                       </div>
                                       <div className="text-[10px] text-white/80 flex flex-wrap items-center gap-1.5 tabular">
@@ -13057,11 +13083,39 @@ export const MatchModal: React.FC<{
                   </div>
                   <div className="text-[11px] text-[var(--mut)] flex items-center justify-between gap-2">
                     <span className="truncate">{shootoutUi.lastMsg}</span>
-                    {!shootoutUi.finished && (
-                      <span className="shrink-0 font-semibold text-[var(--ink)]">
-                        คนยิง: {shootoutUi.kickerName.split(' ')[0]}
-                      </span>
-                    )}
+                    {!shootoutUi.finished && (() => {
+                      const kHome = homeOrig.sq.find((q) => q.n === shootoutUi.kickerName);
+                      const kTeam = kHome ? homeOrig : awayOrig;
+                      const kPl = kHome || awayOrig.sq.find((q) => q.n === shootoutUi.kickerName) || null;
+                      const kIsHome = kTeam.id === homeId;
+                      const kKit = kPl?.pos === 'GK' ? (kIsHome ? homeGkKit : awayGkKit) : (kIsHome ? homeKit : awayKit);
+                      const kTrim = kPl?.pos === 'GK' ? undefined : (kIsHome ? homeTrim : awayTrim);
+                      return (
+                        <span className="shrink-0 font-semibold text-[var(--ink)] inline-flex items-center gap-1 min-w-0">
+                          <span className="text-[var(--mut)]">คนยิง:</span>
+                          <span className="shrink-0 inline-flex">
+                            <ClubCrest name={kTeam.name} size={13} team={kTeam} club={state.club} isMyClub={kTeam.id === state.me && state.mode === 'm'} />
+                          </span>
+                          {kPl && (
+                            <MatchPlayerThumb
+                              player={kPl}
+                              team={kTeam}
+                              state={state}
+                              kitColor={kKit}
+                              trimColor={kTrim}
+                              size="xs"
+                            />
+                          )}
+                          {kPl && <PositionBadge role={kPl.ro} size="2xs" />}
+                          {kPl && (
+                            <span className="text-[10px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
+                              #{getShirtNo(kTeam, kPl)}
+                            </span>
+                          )}
+                          <span className="truncate font-bold">{shootoutUi.kickerName.split(' ')[0]}</span>
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
@@ -13299,12 +13353,37 @@ export const MatchModal: React.FC<{
               {injuryAlert && !done && (
                 <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-rose-950/95 border border-rose-400/55 shadow-sm flex flex-col gap-1.5 mland:gap-1 text-white shrink-0">
                   <div className="flex items-start justify-between gap-1.5">
-                    <span className="text-[11px] sm:text-xs mland:text-[9.5px] font-bold text-rose-200 flex items-center gap-1.5 min-w-0 leading-snug">
-                      <span className="animate-pulse shrink-0 inline-flex"><StatIconBadge kind="injury" size="sm" /></span>
-                      <span className="line-clamp-2">
-                        ด่วน น.{injuryAlert.minute}&apos;: #{injuryAlert.no} {injuryAlert.role} {injuryAlert.name} บาดเจ็บ (พัก {injuryAlert.games} นัด)
-                      </span>
-                    </span>
+                    {(() => {
+                      const injPl = meTeamOrig.sq.find((q) => q.n === injuryAlert.name) || null;
+                      const injKit = injPl?.pos === 'GK' ? (meIsHome ? homeGkKit : awayGkKit) : (meIsHome ? homeKit : awayKit);
+                      const injTrim = injPl?.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
+                      return (
+                        <span className="text-[11px] sm:text-xs mland:text-[9.5px] font-bold text-rose-200 flex flex-wrap items-center gap-1 min-w-0 leading-snug">
+                          <span className="animate-pulse shrink-0 inline-flex"><StatIconBadge kind="injury" size="sm" /></span>
+                          <span className="shrink-0">ด่วน น.{injuryAlert.minute}&apos;:</span>
+                          <span className="inline-flex items-center gap-1 min-w-0">
+                            <span className="shrink-0 inline-flex">
+                              <ClubCrest name={meTeamOrig.name} size={13} team={meTeamOrig} club={state.club} isMyClub={meTeamOrig.id === state.me && state.mode === 'm'} />
+                            </span>
+                            {injPl && (
+                              <MatchPlayerThumb
+                                player={injPl}
+                                team={meTeamOrig}
+                                state={state}
+                                kitColor={injKit}
+                                trimColor={injTrim}
+                                size="xs"
+                                dark
+                              />
+                            )}
+                            <PositionBadge role={injPl?.ro || injuryAlert.role} size="2xs" />
+                            <span className="text-[#fde047] font-extrabold tabular shrink-0">#{injuryAlert.no}</span>
+                            <span className="font-extrabold text-white truncate">{injuryAlert.name}</span>
+                          </span>
+                          <span className="shrink-0">บาดเจ็บ (พัก {injuryAlert.games} นัด)</span>
+                        </span>
+                      );
+                    })()}
                     <button
                       type="button"
                       onClick={() => setInjuryAlert(null)}
@@ -13365,8 +13444,8 @@ export const MatchModal: React.FC<{
                     onClick={() => openTacticsStudio()}
                     title={
                       matchPhaseUi === 'halftime'
-                        ? `พักครึ่ง · ปรับแผนและเปลี่ยนตัวได้ (เหลือ ${5 - subsUsed.length} คน · ออโต้${autoSubEnabled ? 'เปิด' : 'ปิด'})`
-                        : `ปรับแผนและเปลี่ยนตัว (เหลือ ${5 - subsUsed.length} คน · ออโต้${autoSubEnabled ? 'เปิด' : 'ปิด'})`
+                        ? `พักครึ่ง · ปรับแผนและเปลี่ยนตัวได้ (เหลือ ${5 - subsUsed.length} คน · AI ${autoSubEnabled ? 'เปิด' : 'ปิด'})`
+                        : `ปรับแผนและเปลี่ยนตัว (เหลือ ${5 - subsUsed.length} คน · AI ${autoSubEnabled ? 'เปิด' : 'ปิด'})`
                     }
                     className={`seg-btn w-full min-w-0 overflow-hidden whitespace-nowrap px-1 mland:px-0.5 gap-1 mland:gap-0.5 ${
                       mlandMatchTab === 'tactics'
@@ -13387,14 +13466,14 @@ export const MatchModal: React.FC<{
                       {5 - subsUsed.length}
                     </span>
                     <span
-                      aria-label={autoSubEnabled ? 'เปลี่ยนตัวอัตโนมัติเปิดอยู่' : 'เปลี่ยนตัวอัตโนมัติปิดอยู่'}
-                      className={`inline-flex items-center justify-center w-4 h-[15px] mland:w-3.5 mland:h-[13px] rounded text-[9px] mland:text-[8px] leading-none shrink-0 ${
+                      aria-label={autoSubEnabled ? 'ระบบ AI เปิดอยู่' : 'ระบบ AI ปิดอยู่'}
+                      className={`inline-flex items-center justify-center h-[15px] mland:h-[13px] px-1 rounded text-[8.5px] mland:text-[7.5px] font-black tracking-wide leading-none shrink-0 ${
                         autoSubEnabled
-                          ? 'bg-emerald-500/20 border border-emerald-500/45'
-                          : 'bg-black/8 dark:bg-white/10 opacity-45 grayscale border border-[var(--line)]/50'
+                          ? 'bg-emerald-500 text-white shadow-2xs'
+                          : 'bg-black/10 dark:bg-white/10 text-[var(--mut)] border border-[var(--line)]/60'
                       }`}
                     >
-                      🤖
+                      AI
                     </span>
                   </button>
                 ) : (
@@ -13492,13 +13571,38 @@ export const MatchModal: React.FC<{
                               {myTeamLive.form} · {AR_T[myTeamLive.tac]}
                             </span>
                           </div>
-                          <div className="grid grid-cols-2 gap-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                            <div className="truncate flex items-center gap-1 min-w-0">
-                              <CaptainBadge team={myTeamLive} state={state} size="xs" />
-                              <span>กัปตัน:</span>
-                              <b className="text-[var(--ink)] truncate">{curCap || '-'}</b>
-                            </div>
-                            <div className="truncate text-right">
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                            {(() => {
+                              const capPl = myTeamLive.sq.find((q) => q.n === curCap) || meTeamOrig.sq.find((q) => q.n === curCap) || null;
+                              const capKit = capPl?.pos === 'GK' ? (meIsHome ? homeGkKit : awayGkKit) : (meIsHome ? homeKit : awayKit);
+                              const capTrim = capPl?.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
+                              return (
+                                <div className="truncate flex items-center gap-1 min-w-0">
+                                  <CaptainBadge team={myTeamLive} state={state} size="xs" />
+                                  <span className="shrink-0 inline-flex">
+                                    <ClubCrest name={meTeamOrig.name} size={13} team={meTeamOrig} club={state.club} isMyClub={false} />
+                                  </span>
+                                  {capPl && (
+                                    <MatchPlayerThumb
+                                      player={capPl}
+                                      team={meTeamOrig}
+                                      state={state}
+                                      kitColor={capKit}
+                                      trimColor={capTrim}
+                                      size="xs"
+                                    />
+                                  )}
+                                  {capPl && <PositionBadge role={capPl.ro} size="2xs" />}
+                                  {capPl && (
+                                    <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
+                                      #{getShirtNo(meTeamOrig, capPl)}
+                                    </span>
+                                  )}
+                                  <b className="text-[var(--ink)] truncate">{curCap || '-'}</b>
+                                </div>
+                              );
+                            })()}
+                            <div className="truncate text-right shrink-0">
                               คู่แข่ง: <b className="text-[var(--ink)]">{oppTeamLive.form} · {AR_T[oppTeamLive.tac]}</b>
                             </div>
                           </div>

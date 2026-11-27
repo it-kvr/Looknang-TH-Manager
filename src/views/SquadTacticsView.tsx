@@ -5,7 +5,7 @@ import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio, autoAssignTeamRoles, scoreCaptainCandidate, scoreSetPieceCandidate, teamKits, pickGK } from '../engine/playerCore';
 import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
-import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
+import { PlayerFace, ClubCrest, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from '../modals/MatchSharedComponents';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { LockerRoomPanel } from '../components/LockerRoomPanel';
@@ -640,7 +640,7 @@ export const SquadTacticsView: React.FC<{
             onInspectPlayer(q, me);
           }
         }}
-        className={`w-full grid grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_30px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_26px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
+        className={`w-full grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_30px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_26px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
           isTarget
             ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
             : isSource
@@ -652,6 +652,16 @@ export const SquadTacticsView: React.FC<{
                   : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
         } ${unavailable ? 'opacity-82' : ''} ${dragUi ? 'cursor-grabbing' : 'cursor-pointer'}`}
       >
+        <div
+          data-drag-grip={isMgr ? '1' : undefined}
+          style={isMgr ? { touchAction: 'none' } : undefined}
+          className={`flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px] ${
+            isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+          }`}
+        >
+          <ClubCrest name={me.name} size={15} team={me} club={state.club} isMyClub={isMgr} />
+        </div>
+
         <div
           data-drag-grip={isMgr ? '1' : undefined}
           onContextMenu={(e) => e.preventDefault()}
@@ -1765,8 +1775,8 @@ export const SquadTacticsView: React.FC<{
                   <div
                     className={
                       isMgr
-                        ? 'grid grid-cols-[24px_26px_minmax(0,1.5fr)_38px_46px_108px] sm:grid-cols-[26px_30px_minmax(0,1.6fr)_44px_32px_54px_56px_78px_132px] lg:grid-cols-[28px_32px_minmax(0,1.65fr)_48px_36px_60px_64px_62px_86px_146px] mland:grid-cols-[24px_26px_minmax(0,1.5fr)_40px_28px_48px_50px_70px_116px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
-                        : 'grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                        ? 'grid grid-cols-[24px_minmax(0,1.65fr)_38px_68px_104px] sm:grid-cols-[26px_minmax(0,1.75fr)_32px_46px_74px_78px_130px] lg:grid-cols-[28px_minmax(0,1.8fr)_36px_50px_76px_62px_86px_144px] mland:grid-cols-[24px_minmax(0,1.65fr)_28px_42px_66px_70px_114px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                        : 'grid grid-cols-[minmax(0,1.8fr)_36px_54px_76px_72px_94px] mland:grid-cols-[minmax(0,1.8fr)_30px_48px_66px_60px_80px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
                     }
                   >
                     {isMgr && (
@@ -1781,12 +1791,10 @@ export const SquadTacticsView: React.FC<{
                         />
                       </div>
                     )}
-                    <div className="text-left">#</div>
                     <div>นักเตะ</div>
-                    <div>ตำแหน่ง</div>
                     <div className={`text-center ${isMgr ? 'hidden sm:block mland:block' : ''}`}>อายุ</div>
                     <div className="text-center">OVR</div>
-                    <div className={`text-center ${isMgr ? 'hidden sm:block mland:block' : ''}`}>ฟิต</div>
+                    <div className="text-center">สถานะ/ฟิต</div>
                     <div className={`text-center ${isMgr ? 'hidden lg:block mland:hidden' : ''}`}>ผลงาน</div>
                     <div className={`text-right ${isMgr ? 'hidden sm:block mland:block' : ''}`}>ค่าเหนื่อย / ค่าตัว</div>
                     {isMgr && <div className="text-right">จัดการ</div>}
@@ -1806,22 +1814,25 @@ export const SquadTacticsView: React.FC<{
                       const expiringSoon = !q.loan && con.yr <= 1;
                       const bio = getPlayerBio(q);
                       const footMeta = getFootColorMeta(bio.foot);
+                      const unavailable = q.inj > 0 || (q.sus || 0) > 0;
 
                       return (
                         <div
                           key={q.n}
-                          className={`px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 items-center gap-1 sm:gap-1.5 mland:gap-1 transition-colors hover:bg-[var(--surface-2)]/45 ${
+                          className={`px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 items-center gap-1 sm:gap-1.5 mland:gap-1 transition-colors ${
                             isMgr
-                              ? 'grid grid-cols-[24px_26px_minmax(0,1.5fr)_38px_46px_108px] sm:grid-cols-[26px_30px_minmax(0,1.6fr)_44px_32px_54px_56px_78px_132px] lg:grid-cols-[28px_32px_minmax(0,1.65fr)_48px_36px_60px_64px_62px_86px_146px] mland:grid-cols-[24px_26px_minmax(0,1.5fr)_40px_28px_48px_50px_70px_116px]'
-                              : 'grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px]'
+                              ? 'grid grid-cols-[24px_minmax(0,1.65fr)_38px_68px_104px] sm:grid-cols-[26px_minmax(0,1.75fr)_32px_46px_74px_78px_130px] lg:grid-cols-[28px_minmax(0,1.8fr)_36px_50px_76px_62px_86px_144px] mland:grid-cols-[24px_minmax(0,1.65fr)_28px_42px_66px_70px_114px]'
+                              : 'grid grid-cols-[minmax(0,1.8fr)_36px_54px_76px_72px_94px] mland:grid-cols-[minmax(0,1.8fr)_30px_48px_66px_60px_80px]'
                           } ${
                             isSelected
                               ? 'bg-[var(--g-soft)]/55'
-                              : isMe
-                                ? 'bg-[var(--lamp-soft)]/50'
-                                : q.listed
-                                  ? 'bg-[var(--lamp-soft)]/20'
-                                  : ''
+                              : unavailable
+                                ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09]'
+                                : isMe
+                                  ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                                  : q.listed
+                                    ? 'bg-[var(--lamp-soft)]/20 hover:bg-[var(--surface-2)]/45'
+                                    : 'hover:bg-[var(--surface-2)]/45'
                           }`}
                         >
                           {isMgr && (
@@ -1837,14 +1848,24 @@ export const SquadTacticsView: React.FC<{
                             </div>
                           )}
 
-                          <div className="flex items-center justify-start text-xs mland:text-[10px] font-bold text-[var(--mut)] tabular">
-                            #{no}
-                          </div>
-
-                          <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
-                            <PlayerFace player={q} team={me} state={state} size={26} />
-                            <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                          <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex items-center gap-1.5 mland:gap-1 min-w-0 text-left cursor-pointer">
+                            <span className="shrink-0 inline-flex [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                              <ClubCrest name={me.name} size={16} team={me} club={state.club} isMyClub={isMgr} />
+                            </span>
+                            <MatchPlayerThumb
+                              player={q}
+                              team={me}
+                              state={state}
+                              kitColor={q.pos === 'GK' ? meGkKit : meKit}
+                              trimColor={q.pos === 'GK' ? undefined : meTrim}
+                              size="sm"
+                            />
+                            <div className="flex-1 min-w-0">
                               <div className="font-bold text-xs mland:text-[10px] truncate flex items-center gap-1">
+                                <PositionBadge role={q.ro} size="2xs" />
+                                <span className="text-[10.5px] mland:text-[9px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
+                                  #{no}
+                                </span>
                                 <span className="truncate">{q.n}</span>
                                 {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
                                 {isMe && (
@@ -1859,7 +1880,7 @@ export const SquadTacticsView: React.FC<{
                                 {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
                                 {(q.hg || q.customCreated) ? (
                                   <span className="px-1 rounded bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0" title="เด็กปั้นสโมสร">
-                                    🌱 เด็กปั้น
+                                    🌱
                                   </span>
                                 ) : null}
                                 {q.loan ? <span className="text-[10px] mland:text-[8.5px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
@@ -1871,13 +1892,10 @@ export const SquadTacticsView: React.FC<{
                                 {offerCount > 0 ? <span className="px-1 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} บิด</span> : null}
                               </div>
                               <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
-                                {(q.sus || 0) > 0 || q.inj > 0 || (q.yc || 0) > 0 ? (
-                                  <PlayerStatusBadge sus={q.sus} inj={q.inj} yc={q.yc} variant="pill" showYellow />
-                                ) : isStarter ? (
-                                  'ตัวจริง'
-                                ) : (
-                                  'สำรอง'
+                                {(q.yc || 0) > 0 && (
+                                  <PlayerStatusBadge yc={q.yc} variant="pill" showYellow />
                                 )}
+                                <span className="shrink-0">{isStarter ? 'ตัวจริง' : 'สำรอง'}</span>
                                 {!q.loan && (
                                   <span className={expiringSoon ? 'text-[var(--red)] font-bold' : ''}>
                                     · {con.yr <= 0 ? 'หมดสัญญา!' : `สัญญา ${con.yr} ปี`}
@@ -1890,16 +1908,9 @@ export const SquadTacticsView: React.FC<{
                                   <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
                                   <FootPairIcon foot={bio.foot} size="xs" />
                                 </span>
-                                {isMgr && q.inj === 0 && (q.sus || 0) === 0 && (
-                                  <StaminaBar value={f} variant="inline" barWidthClass="w-8" className="sm:hidden mland:hidden" />
-                                )}
                               </div>
-                            </button>
-                          </div>
-
-                          <div className="flex items-center">
-                            <PositionBadge role={q.ro} size="sm" />
-                          </div>
+                            </div>
+                          </button>
 
                           <div className={`text-center text-xs mland:text-[10px] tabular font-semibold ${isMgr ? 'hidden sm:block mland:block' : ''}`}>
                             {q.age}
@@ -1910,12 +1921,9 @@ export const SquadTacticsView: React.FC<{
                             <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
                           </div>
 
-                          <StaminaBar
-                            value={f}
-                            variant="compact"
-                            showStatusLabel
-                            className={`${isMgr ? 'hidden sm:flex mland:flex' : 'flex'} ${q.inj > 0 || (q.sus || 0) > 0 ? 'opacity-65' : ''}`}
-                          />
+                          <div className="flex items-center justify-center min-w-0">
+                            <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
+                          </div>
 
                           <div className={`text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] items-center justify-center gap-1 ${isMgr ? 'hidden lg:flex mland:hidden' : 'flex'}`}>
                             {q.sg || q.sa || q.cs || q.sp || q.ap ? (

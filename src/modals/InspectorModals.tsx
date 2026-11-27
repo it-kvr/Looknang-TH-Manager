@@ -760,7 +760,7 @@ export const TeamInspectorModal: React.FC<{
                           key={q.n}
                           type="button"
                           onClick={() => onInspectPlayer(q, team)}
-                          className={`w-full text-left grid grid-cols-[22px_34px_26px_minmax(0,1fr)_52px_70px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_60px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
+                          className={`w-full text-left grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_52px_74px_28px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_42px_64px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
                             unavailable
                               ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09] opacity-85'
                               : isMe
@@ -768,6 +768,16 @@ export const TeamInspectorModal: React.FC<{
                                 : 'hover:bg-[var(--surface-2)]/65'
                           }`}
                         >
+                          <div className="flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px]">
+                            <ClubCrest
+                              name={team.name}
+                              size={15}
+                              team={team}
+                              club={state.club}
+                              isMyClub={team.id === state.me && state.mode === 'm'}
+                            />
+                          </div>
+
                           <div className="flex items-center justify-start">
                             <MatchPlayerThumb
                               player={q}

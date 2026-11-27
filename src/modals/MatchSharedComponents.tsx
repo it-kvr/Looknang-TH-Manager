@@ -281,6 +281,9 @@ export const SubEventCard: React.FC<{
         <div className="flex items-center gap-1 min-w-0 px-1.5 py-0.5 rounded-md bg-emerald-500/9">
           <StatIconBadge kind="subIn" size="xs" title="เปลี่ยนตัวลงสนาม" />
           <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[var(--g)] shrink-0">เข้า</span>
+          <span className="shrink-0 inline-flex">
+            <ClubCrest name={team.name} size={13} team={team} club={state.club} isMyClub={isTMe} />
+          </span>
           {inPl && (
             <MatchPlayerThumb
               player={inPl}
@@ -292,12 +295,12 @@ export const SubEventCard: React.FC<{
               ringClassName="ring-[var(--g)]/55"
             />
           )}
+          {inPl?.ro && <PositionBadge role={inPl.ro} size="2xs" />}
           {inNo != null && (
             <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
               #{inNo}
             </span>
           )}
-          {inPl?.ro && <PositionBadge role={inPl.ro} size="2xs" />}
           <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate min-w-0 flex-1">
             {inName}
           </span>
@@ -311,6 +314,9 @@ export const SubEventCard: React.FC<{
         <div className="flex items-center gap-1 min-w-0 px-1.5 py-0.5 rounded-md bg-rose-500/9">
           <StatIconBadge kind="subOut" size="xs" title="ถูกเปลี่ยนตัวออก" />
           <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[var(--red)] shrink-0">ออก</span>
+          <span className="shrink-0 inline-flex">
+            <ClubCrest name={team.name} size={13} team={team} club={state.club} isMyClub={isTMe} />
+          </span>
           {outPl && (
             <MatchPlayerThumb
               player={outPl}
@@ -322,12 +328,12 @@ export const SubEventCard: React.FC<{
               ringClassName="ring-[var(--red)]/50"
             />
           )}
+          {outPl?.ro && <PositionBadge role={outPl.ro} size="2xs" />}
           {outNo != null && (
             <span className="text-[9.5px] mland:text-[8px] font-bold tabular text-[var(--mut)] shrink-0">
               #{outNo}
             </span>
           )}
-          {outPl?.ro && <PositionBadge role={outPl.ro} size="2xs" />}
           <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)]/90 truncate min-w-0 flex-1">
             {outName}
           </span>
@@ -435,8 +441,6 @@ export const MatchLogRow = React.memo<{
     }
   }
 
-  const shownCrestTeamIds = new Set<number>();
-
   const renderTextSeg = (seg: string, keyPrefix: string) => {
     const tokens = seg.split(/(✚|🔼|🔽|🟨➡🟥|🟨🟥|🟨|🟥|⚽|👟)/);
     if (tokens.length === 1) return seg;
@@ -469,15 +473,11 @@ export const MatchLogRow = React.memo<{
         const htGkKit = htIsHome ? homeGkKit : awayGkKit;
         const htTrim = htIsHome ? homeTrim : awayTrim;
         const htIsMe = htTeam.id === state.me && state.mode === 'm';
-        const showHitCrest = !shownCrestTeamIds.has(htTeam.id);
-        if (showHitCrest) shownCrestTeamIds.add(htTeam.id);
         nodes.push(
           <span key={`p-${hIdx}`} className="inline-flex items-center gap-1 align-middle mx-0.5 text-[var(--ink)]">
-            {showHitCrest && (
-              <span className="shrink-0 inline-flex">
-                <ClubCrest name={htTeam.name} size={12} team={htTeam} club={state.club} isMyClub={htIsMe} />
-              </span>
-            )}
+            <span className="shrink-0 inline-flex">
+              <ClubCrest name={htTeam.name} size={13} team={htTeam} club={state.club} isMyClub={htIsMe} />
+            </span>
             <MatchPlayerThumb
               player={htPlayer}
               team={htTeam}
@@ -486,6 +486,7 @@ export const MatchLogRow = React.memo<{
               trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
               size="xs"
             />
+            <PositionBadge role={htPlayer.ro} size="2xs" />
             <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">
               #{h.entry.no}
             </span>
@@ -582,6 +583,7 @@ export const MatchLogRow = React.memo<{
             trimColor={vPlayer.player.pos === 'GK' ? undefined : vTrim}
             size="xs"
           />
+          <PositionBadge role={vPlayer.player.ro} size="2xs" />
           <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">
             #{vPlayer.no}
           </span>
@@ -953,6 +955,7 @@ export const MatchTimelinePanel: React.FC<{
                               size="sm"
                             />
                           )}
+                          {tlPlayer?.ro && <PositionBadge role={tlPlayer.ro} size="2xs" />}
                           {tlNo != null && (
                             <span className="text-[9.5px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
                               #{tlNo}
@@ -1014,6 +1017,7 @@ export const MatchTimelinePanel: React.FC<{
                               size="sm"
                             />
                           )}
+                          {tlPlayer?.ro && <PositionBadge role={tlPlayer.ro} size="2xs" />}
                           {tlNo != null && (
                             <span className="text-[9.5px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
                               #{tlNo}
@@ -1116,17 +1120,16 @@ export const MatchBroadcastHeader: React.FC<{
 
   return (
     <div className="relative z-20 shrink-0 px-2.5 py-2 sm:px-3.5 sm:py-2 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
-      <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2.5 gap-y-1.5">
-        <div className="order-1 inline-flex flex-col items-start justify-center xl:flex-row xl:items-center gap-0.5 xl:gap-1.5 px-2 mland:px-1.5 py-1 xl:py-0 min-h-8 sm:min-h-9 mland:min-h-7 xl:h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 shrink-0 max-w-[calc(100%-205px)] sm:max-w-[195px] md:max-w-[235px] lg:max-w-[285px] xl:max-w-none">
-          <span
-            className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight whitespace-normal xl:whitespace-nowrap"
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mland:grid mland:grid-cols-[182px_minmax(0,1fr)_182px] sm:grid sm:grid-cols-[212px_minmax(0,1fr)_212px] md:grid-cols-[238px_minmax(0,1fr)_238px] lg:grid-cols-[276px_minmax(0,1fr)_276px] xl:grid-cols-[315px_minmax(0,1fr)_315px] mland:gap-x-2 sm:gap-x-2.5">
+        <div className="relative order-1 w-[calc(100%-175px)] max-w-[235px] sm:w-full sm:max-w-none mland:w-full mland:max-w-none h-10 sm:h-11 md:h-12 mland:h-[38px] px-2 mland:px-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs flex flex-col justify-center gap-0.5 min-w-0">
+          <div
+            className="w-full min-w-0 truncate text-[10.5px] sm:text-[11px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight"
             title={compTitle}
           >
             <span className="md:hidden">{compShortTitle}</span>
             <span className="hidden md:inline">{compTitle}</span>
-          </span>
-          <span className="hidden xl:inline w-px h-3.5 bg-[var(--line)] shrink-0" />
-          <div className="inline-flex items-center gap-1.5 flex-wrap xl:flex-nowrap">
+          </div>
+          <div className="w-full min-w-0 flex items-center gap-1.5 mland:gap-1 leading-none">
             <div className="relative shrink-0">
               <button
                 type="button"
@@ -1221,13 +1224,13 @@ export const MatchBroadcastHeader: React.FC<{
             </div>
             <span className="w-px h-3 bg-[var(--line)] shrink-0" />
             <span
-              className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold text-[var(--ink)] tabular shrink-0"
+              className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold text-[var(--ink)] tabular min-w-0 truncate"
               title={`ผู้ชมเข้าสนามนัดนี้ ${matchAttendance.att.toLocaleString()} / ความจุสนาม ${matchAttendance.cap.toLocaleString()} ที่นั่ง (${matchAttendance.pct}%)`}
             >
               <span className="leading-none shrink-0">🏟</span>
-              <span>{matchAttendance.att.toLocaleString()}</span>
-              <span className="hidden md:inline mland:hidden text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
-              <span className="text-[var(--g)] font-extrabold">({matchAttendance.pct}%)</span>
+              <span className="truncate">{matchAttendance.att.toLocaleString()}</span>
+              <span className="hidden xl:inline text-[var(--mut)] font-normal shrink-0">/ {matchAttendance.cap.toLocaleString()}</span>
+              <span className="text-[var(--g)] font-extrabold shrink-0">({matchAttendance.pct}%)</span>
             </span>
             <span className="w-px h-3 bg-[var(--line)] shrink-0" />
             <span
@@ -1242,15 +1245,12 @@ export const MatchBroadcastHeader: React.FC<{
               <span className={streamPlanId === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
                 {liveViewers.toLocaleString()}
               </span>
-              <span className="hidden xl:inline text-[var(--mut)] font-medium truncate max-w-[110px]">
-                {broadcastChannel.short}
-              </span>
             </span>
           </div>
         </div>
 
         {/* Center Scoreboard */}
-        <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-2.5 sm:gap-3.5 md:gap-4 mland:gap-2">
+        <div className="order-3 w-full sm:order-2 sm:w-auto mland:order-2 mland:w-auto min-w-0 flex items-center justify-center gap-2.5 sm:gap-3.5 md:gap-4 mland:gap-2">
           <div className="flex items-center justify-end gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
             <button
               type="button"
@@ -1402,7 +1402,7 @@ export const MatchBroadcastHeader: React.FC<{
           </div>
         </div>
 
-        <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
+        <div className="order-2 sm:order-3 mland:order-3 w-auto sm:w-full mland:w-full flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
           {rightControls}
         </div>
       </div>
@@ -1521,8 +1521,6 @@ export const FullTimeMatchStage: React.FC<{
   rightTab,
   onChangeRightTab,
   onOpenVarReplay,
-  highlightClips,
-  onOpenHighlights,
   onInspectPlayer
 }) => {
   const [ftPitchMode, setFtPitchMode] = useState<'all' | 'H' | 'A'>(() =>
@@ -1817,7 +1815,7 @@ export const FullTimeMatchStage: React.FC<{
     });
 
     const gridColsCls =
-      'grid-cols-[22px_34px_26px_minmax(0,1fr)_62px_36px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_54px_30px]';
+      'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_62px_36px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_54px_30px]';
 
     const renderPlayerRow = (item: FtPlayerRow) => {
       const isPicked = ftPickedPlayer === item.name;
@@ -1855,7 +1853,18 @@ export const FullTimeMatchStage: React.FC<{
                     : 'hover:bg-[var(--surface-2)]/65'
           }`}
         >
-          {/* 1. รูป */}
+          {/* 1. โลโก้ */}
+          <div className="flex items-center justify-center">
+            <ClubCrest
+              name={item.team.name}
+              size={14}
+              team={item.team}
+              club={state.club}
+              isMyClub={item.team.id === state.me && state.mode === 'm'}
+            />
+          </div>
+
+          {/* 2. รูป */}
           <div className="flex items-center justify-start">
             {item.pl ? (
               <MatchPlayerThumb
@@ -1873,17 +1882,17 @@ export const FullTimeMatchStage: React.FC<{
             )}
           </div>
 
-          {/* 2. ตำแหน่ง */}
+          {/* 3. ตำแหน่ง */}
           <div className="flex items-center justify-start">
             {item.role ? <PositionBadge role={item.role} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
           </div>
 
-          {/* 3. เบอร์ */}
+          {/* 4. เบอร์ */}
           <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
             {item.no != null ? `#${item.no}` : '—'}
           </div>
 
-          {/* 4. ชื่อ */}
+          {/* 5. ชื่อ */}
           <div className="flex items-center justify-start gap-1 min-w-0">
             <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
               {item.name}
@@ -2112,24 +2121,6 @@ export const FullTimeMatchStage: React.FC<{
                 </button>
               </div>
 
-              {highlightClips && highlightClips.length > 0 && onOpenHighlights && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    onOpenHighlights();
-                  }}
-                  title="ชมไฮไลท์การแข่งขัน"
-                  className="absolute top-2 right-2 z-20 inline-flex items-center gap-1.5 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-amber-500/95 hover:bg-amber-400 text-slate-950 border border-amber-200/70 shadow-lg text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer transition-all"
-                >
-                  <span>🎬</span>
-                  <span>ไฮไลท์</span>
-                  <span className="px-1.5 py-[1px] rounded-md bg-slate-950/20 text-[10px] mland:text-[8.5px] font-black tabular">
-                    {highlightClips.length}
-                  </span>
-                </button>
-              )}
-
               {pickedInfo && (() => {
                 const pkPl = pickedInfo.pl;
                 const pkIsHome = pickedInfo.team.id === homeId;
@@ -2137,6 +2128,15 @@ export const FullTimeMatchStage: React.FC<{
                   <div className="absolute bottom-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[330px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className="font-bold truncate flex items-center gap-1.5">
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest
+                            name={pickedInfo.team.name}
+                            size={14}
+                            team={pickedInfo.team}
+                            club={state.club}
+                            isMyClub={pickedInfo.team.id === state.me && state.mode === 'm'}
+                          />
+                        </span>
                         {pkPl && (
                           <MatchPlayerThumb
                             player={pkPl}
@@ -2150,8 +2150,8 @@ export const FullTimeMatchStage: React.FC<{
                             isMotm={pickedInfo.isMotm}
                           />
                         )}
-                        <span className="text-[#facc15] tabular">#{pickedInfo.no}</span>
                         <PositionBadge role={pickedInfo.role} size="2xs" />
+                        <span className="text-[#facc15] tabular shrink-0">#{pickedInfo.no}</span>
                         <span className="truncate">{pickedInfo.name}</span>
                       </div>
                       <div className="text-[10px] text-white/75 flex flex-wrap items-center gap-1.5 tabular mt-0.5">
@@ -2296,6 +2296,9 @@ export const FullTimeMatchStage: React.FC<{
                         className="w-1 self-stretch rounded-full shrink-0"
                         style={{ backgroundColor: isSubMotm ? '#facc15' : subTeamKit }}
                       />
+                      <span className="shrink-0 inline-flex">
+                        <ClubCrest name={subTeam.name} size={14} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
+                      </span>
                       {subPl && (
                         <MatchPlayerThumb
                           player={subPl}
@@ -2311,17 +2314,12 @@ export const FullTimeMatchStage: React.FC<{
                       )}
                       <div className="min-w-0 flex flex-col justify-center gap-1 mland:gap-0.5">
                         <div className="flex items-center gap-1 leading-none">
-                          {ftPitchMode === 'all' && (
-                            <span className="shrink-0 inline-flex">
-                              <ClubCrest name={subTeam.name} size={11} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
-                            </span>
-                          )}
                           {subPl?.ro && <PositionBadge role={subPl.ro} size="2xs" />}
+                          <span className="text-[9.5px] mland:text-[8px] font-extrabold shrink-0 text-[#fde047] tabular">
+                            #{subNo}
+                          </span>
                           <span className="font-extrabold text-[11px] mland:text-[9px] max-w-[90px] truncate">
                             {sb.inPlayer.split(' ')[0]}
-                          </span>
-                          <span className="text-[9px] mland:text-[7.5px] font-semibold shrink-0 text-white/55">
-                            #{subNo}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-[9px] mland:text-[7.5px] leading-none">
@@ -2471,45 +2469,11 @@ export const FullTimeMatchStage: React.FC<{
 
               const renderSideColumn = (team: Team, sideGoals: typeof sortedGoals, isHomeSide: boolean) => {
                 const sideKit = isHomeSide ? homeKit : awayKit;
-                const sideGoalCount = isHomeSide ? gh : ga;
                 return (
-                  <div className="min-w-0 flex flex-col">
-                    <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/65 flex items-center justify-between gap-1.5 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span
-                          className="w-1 h-3 rounded-full shrink-0"
-                          style={{ backgroundColor: sideKit }}
-                        />
-                        <span className="shrink-0 inline-flex">
-                          <ClubCrest
-                            name={team.name}
-                            size={13}
-                            team={team}
-                            club={state.club}
-                            isMyClub={team.id === state.me && state.mode === 'm'}
-                          />
-                        </span>
-                        <span className="font-extrabold text-[10.5px] mland:text-[9px] text-[var(--ink)] truncate">
-                          {team.name}
-                        </span>
-                        {team.id === state.me && <MyTeamBadge size="2xs" />}
-                      </div>
-                      <span
-                        className={`text-[10.5px] mland:text-[9px] font-black tabular shrink-0 ${
-                          sideGoalCount > 0
-                            ? isHomeSide
-                              ? 'text-[var(--g)]'
-                              : 'text-amber-600 dark:text-amber-400'
-                            : 'text-[var(--mut)]'
-                        }`}
-                      >
-                        {sideGoalCount}
-                      </span>
-                    </div>
-
+                  <div className="min-w-0 flex flex-col border-t-2" style={{ borderTopColor: sideKit }}>
                     {sideGoals.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center px-2 py-2.5 mland:py-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)] text-center">
-                        ไม่มีประตู
+                        {team.name} — ไม่มีประตู
                       </div>
                     ) : (
                       <div className="divide-y divide-[var(--line)]/45">
@@ -2548,8 +2512,19 @@ export const FullTimeMatchStage: React.FC<{
                                 isPicked ? 'bg-[var(--g-soft)]/75' : 'hover:bg-[var(--surface-2)]/65'
                               }`}
                             >
-                              <div className="grid grid-cols-[22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 min-w-0">
-                                {/* 1. รูป */}
+                              <div className="grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 min-w-0">
+                                {/* 1. โลโก้ */}
+                                <div className="flex items-center justify-center">
+                                  <ClubCrest
+                                    name={culpritTeam.name}
+                                    size={14}
+                                    team={culpritTeam}
+                                    club={state.club}
+                                    isMyClub={culpritTeam.id === state.me && state.mode === 'm'}
+                                  />
+                                </div>
+
+                                {/* 2. รูป */}
                                 <div className="flex items-center justify-start">
                                   {scorerPl ? (
                                     <MatchPlayerThumb
@@ -2571,17 +2546,17 @@ export const FullTimeMatchStage: React.FC<{
                                   )}
                                 </div>
 
-                                {/* 2. ตำแหน่ง */}
+                                {/* 3. ตำแหน่ง */}
                                 <div className="flex items-center justify-start">
                                   {scorerRole ? <PositionBadge role={scorerRole} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
                                 </div>
 
-                                {/* 3. เบอร์ */}
+                                {/* 4. เบอร์ */}
                                 <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
                                   {scorerNo != null ? `#${scorerNo}` : '—'}
                                 </div>
 
-                                {/* 4. ชื่อ + สัญลักษณ์ */}
+                                {/* 5. ชื่อ + สัญลักษณ์ */}
                                 <div className="flex items-center justify-start gap-1 min-w-0">
                                   <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
                                     {ev.who}
@@ -2614,7 +2589,7 @@ export const FullTimeMatchStage: React.FC<{
                                   )}
                                 </div>
 
-                                {/* 5. นาทีที่ทำประตู */}
+                                {/* 6. นาทีที่ทำประตู */}
                                 <div className="flex items-center justify-end gap-1 shrink-0">
                                   <StatIconBadge
                                     kind="goal"
@@ -2638,11 +2613,37 @@ export const FullTimeMatchStage: React.FC<{
                               {!ev.og && ev.as && (
                                 <div
                                   title={`ผู้จ่ายบอล: ${ev.as}`}
-                                  className="grid grid-cols-[22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-tight min-w-0"
+                                  className="grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-tight min-w-0 opacity-90"
                                 >
-                                  <span className="flex items-center justify-center leading-none shrink-0">
-                                    <StatIconBadge kind="assist" size="xs" title="ผู้จ่ายบอล" />
-                                  </span>
+                                  <div className="flex items-center justify-center">
+                                    <ClubCrest
+                                      name={scoringTeam.name}
+                                      size={12}
+                                      team={scoringTeam}
+                                      club={state.club}
+                                      isMyClub={scoringTeam.id === state.me && state.mode === 'm'}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-start">
+                                    {assisterPl ? (
+                                      <MatchPlayerThumb
+                                        player={assisterPl}
+                                        team={scoringTeam}
+                                        state={state}
+                                        kitColor={
+                                          scoringTeam.id === homeId
+                                            ? (assisterPl.pos === 'GK' ? homeGkKit : homeKit)
+                                            : (assisterPl.pos === 'GK' ? awayGkKit : awayKit)
+                                        }
+                                        trimColor={assisterPl.pos === 'GK' ? undefined : (scoringTeam.id === homeId ? homeTrim : awayTrim)}
+                                        size="xs"
+                                      />
+                                    ) : (
+                                      <span className="flex items-center justify-center leading-none shrink-0">
+                                        <StatIconBadge kind="assist" size="xs" title="ผู้จ่ายบอล" />
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="flex items-center justify-start">
                                     {assisterRole ? <PositionBadge role={assisterRole} size="2xs" /> : <span className="text-[9px] text-[var(--mut)]">—</span>}
                                   </div>
@@ -2662,7 +2663,9 @@ export const FullTimeMatchStage: React.FC<{
                                       </span>
                                     )}
                                   </div>
-                                  <span />
+                                  <span className="inline-flex items-center justify-end pr-0.5 shrink-0">
+                                    <StatIconBadge kind="assist" size="xs" title="ผู้จ่ายบอล" />
+                                  </span>
                                 </div>
                               )}
                             </button>
@@ -2677,15 +2680,27 @@ export const FullTimeMatchStage: React.FC<{
               return (
                 <div className="rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
                   <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] shrink-0">
                       <StatIconBadge kind="goal" size="xs" />
                       <span>สรุปผู้ทำประตู</span>
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-[10.5px] mland:text-[9px] font-extrabold tabular text-[var(--ink)]">
-                      <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-                      <span>{gh} - {ga}</span>
-                      <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-                    </span>
+                    <div className="inline-flex items-center gap-1.5 text-[10.5px] mland:text-[9px] font-extrabold tabular text-[var(--ink)] min-w-0">
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                        </span>
+                        <span className="hidden sm:inline truncate max-w-[95px]">{homeOrig.name}</span>
+                        <span className={gh > 0 ? 'text-[var(--g)] font-black' : 'text-[var(--mut)]'}>{gh}</span>
+                      </span>
+                      <span className="text-[var(--mut)]">-</span>
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <span className={ga > 0 ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-[var(--mut)]'}>{ga}</span>
+                        <span className="hidden sm:inline truncate max-w-[95px]">{awayOrig.name}</span>
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+                        </span>
+                      </span>
+                    </div>
                   </div>
                   {sortedGoals.length === 0 ? (
                     <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] text-center">
@@ -2726,37 +2741,11 @@ export const FullTimeMatchStage: React.FC<{
 
               const renderCardColumn = (team: Team, sideCards: MatchCardEvent[], isHomeSide: boolean) => {
                 const sideKit = isHomeSide ? homeKit : awayKit;
-                const yCount = isHomeSide ? hYTotal : aYTotal;
-                const rCount = isHomeSide ? hRTotal : aRTotal;
                 return (
-                  <div className="min-w-0 flex flex-col">
-                    <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/65 flex items-center justify-between gap-1.5 min-w-0">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-1 h-3 rounded-full shrink-0" style={{ backgroundColor: sideKit }} />
-                        <span className="shrink-0 inline-flex">
-                          <ClubCrest
-                            name={team.name}
-                            size={13}
-                            team={team}
-                            club={state.club}
-                            isMyClub={team.id === state.me && state.mode === 'm'}
-                          />
-                        </span>
-                        <span className="font-extrabold text-[10.5px] mland:text-[9px] text-[var(--ink)] truncate">
-                          {team.name}
-                        </span>
-                        {team.id === state.me && <MyTeamBadge size="2xs" />}
-                      </div>
-                      <span className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0">
-                        {yCount > 0 && <StatIconBadge kind="yellow" count={yCount} size="xs" />}
-                        {rCount > 0 && <StatIconBadge kind="red" count={rCount} size="xs" />}
-                        {yCount === 0 && rCount === 0 && <span className="text-[var(--mut)]">0</span>}
-                      </span>
-                    </div>
-
+                  <div className="min-w-0 flex flex-col border-t-2" style={{ borderTopColor: sideKit }}>
                     {sideCards.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center px-2 py-2.5 mland:py-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)] text-center">
-                        ไม่มีใบคาดโทษ
+                        {team.name} — ไม่มีใบคาดโทษ
                       </div>
                     ) : (
                       <div className="divide-y divide-[var(--line)]/45">
@@ -2796,7 +2785,17 @@ export const FullTimeMatchStage: React.FC<{
                                 isPicked ? 'bg-[var(--g-soft)]/75' : 'hover:bg-[var(--surface-2)]/65'
                               }`}
                             >
-                              <div className="grid grid-cols-[22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 min-w-0">
+                              <div className="grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 min-w-0">
+                                <div className="flex items-center justify-center">
+                                  <ClubCrest
+                                    name={team.name}
+                                    size={14}
+                                    team={team}
+                                    club={state.club}
+                                    isMyClub={team.id === state.me && state.mode === 'm'}
+                                  />
+                                </div>
+
                                 <div className="flex items-center justify-start">
                                   {pl ? (
                                     <MatchPlayerThumb
@@ -2855,7 +2854,7 @@ export const FullTimeMatchStage: React.FC<{
                                 </div>
                               </div>
 
-                              <div className="pl-[82px] mland:pl-[73px] text-[9.5px] mland:text-[8px] leading-tight truncate flex items-center gap-1">
+                              <div className="pl-[114px] mland:pl-[95px] text-[9.5px] mland:text-[8px] leading-tight truncate flex items-center gap-1">
                                 <span
                                   className={`font-bold ${
                                     isRedCard
@@ -2879,29 +2878,39 @@ export const FullTimeMatchStage: React.FC<{
               return (
                 <div className="rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
                   <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] shrink-0">
                       <span className="inline-flex items-center -space-x-1">
                         <StatIconBadge kind="yellow" size="xs" />
                         <StatIconBadge kind="red" size="xs" />
                       </span>
                       <span>สรุปใบเหลือง / ใบแดง</span>
-                      <span className="hidden sm:inline text-[9.5px] font-semibold text-[var(--mut)]">(เรียงตามเวลา 0&apos; → 90&apos;)</span>
+                      <span className="hidden sm:inline text-[9.5px] font-semibold text-[var(--mut)]">(0&apos;→90&apos;)</span>
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-[10px] mland:text-[8.5px] font-extrabold tabular text-[var(--ink)]">
-                      <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-                      <span className="inline-flex items-center gap-1">
-                        {hYTotal > 0 && <StatIconBadge kind="yellow" count={hYTotal} size="xs" />}
-                        {hRTotal > 0 && <StatIconBadge kind="red" count={hRTotal} size="xs" />}
-                        {hYTotal === 0 && hRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
+                    <div className="inline-flex items-center gap-1.5 text-[10px] mland:text-[8.5px] font-extrabold tabular text-[var(--ink)] min-w-0">
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                        </span>
+                        <span className="hidden sm:inline truncate max-w-[90px]">{homeOrig.name}</span>
+                        <span className="inline-flex items-center gap-0.5 shrink-0">
+                          {hYTotal > 0 && <StatIconBadge kind="yellow" count={hYTotal} size="xs" />}
+                          {hRTotal > 0 && <StatIconBadge kind="red" count={hRTotal} size="xs" />}
+                          {hYTotal === 0 && hRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
+                        </span>
                       </span>
                       <span className="text-[var(--mut)]">-</span>
-                      <span className="inline-flex items-center gap-1">
-                        {aYTotal > 0 && <StatIconBadge kind="yellow" count={aYTotal} size="xs" />}
-                        {aRTotal > 0 && <StatIconBadge kind="red" count={aRTotal} size="xs" />}
-                        {aYTotal === 0 && aRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
+                      <span className="inline-flex items-center gap-1 min-w-0">
+                        <span className="inline-flex items-center gap-0.5 shrink-0">
+                          {aYTotal > 0 && <StatIconBadge kind="yellow" count={aYTotal} size="xs" />}
+                          {aRTotal > 0 && <StatIconBadge kind="red" count={aRTotal} size="xs" />}
+                          {aYTotal === 0 && aRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
+                        </span>
+                        <span className="hidden sm:inline truncate max-w-[90px]">{awayOrig.name}</span>
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+                        </span>
                       </span>
-                      <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-                    </span>
+                    </div>
                   </div>
                   {sortedCards.length === 0 ? (
                     <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] text-center">

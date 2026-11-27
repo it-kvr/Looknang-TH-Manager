@@ -11,8 +11,11 @@ import {
   Tv,
   X
 } from 'lucide-react';
-import type { GameState, MatchHighlightClip, Team } from '../types/game';
+import type { GameState, MatchHighlightClip, SubRole, Team } from '../types/game';
 import { ClubCrest } from '../components/SvgVisuals';
+import { PositionBadge } from '../components/PositionBadge';
+import { MatchPlayerThumb } from './MatchSharedComponents';
+import { getShirtNo } from '../engine/playerCore';
 import { getHighlightKindBadge } from '../engine/matchHighlights';
 import { drawHighlightClipToCanvas, type HighlightCameraMode } from './MatchPitchCanvas';
 import { SFX } from '../utils/audioTheme';
@@ -57,8 +60,7 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
 
   const [activeId, setActiveId] = useState<string>(() => {
     if (initialClipId && orderedClips.some((c) => c.id === initialClipId)) return initialClipId;
-    const topDrama = orderedClips.slice().sort((a, b) => b.dramaScore - a.dramaScore)[0];
-    return topDrama?.id || orderedClips[0]?.id || '';
+    return orderedClips[0]?.id || '';
   });
 
   const activeIdx = Math.max(
@@ -225,6 +227,52 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
 
   const badgeMeta = getHighlightKindBadge(activeClip.kind);
 
+  const renderClipActor = (clip: MatchHighlightClip) => {
+    const actorTeam =
+      clip.kind === 'goal_og'
+        ? (clip.side === 'H' ? awayOrig : homeOrig)
+        : (clip.side === 'H' ? homeOrig : awayOrig);
+    const pl = actorTeam.sq.find((q) => q.n === clip.actorName) || null;
+    const clipActor = clip.actors.find((a) => a.id === clip.actorName);
+    const no = pl ? getShirtNo(actorTeam, pl) : clipActor?.no ?? null;
+    const role = (pl?.ro || clipActor?.ro || null) as SubRole | null;
+    const isHomeActor = actorTeam.id === homeOrig.id;
+    const isGk = pl ? pl.pos === 'GK' : Boolean(clipActor?.gk);
+    const kitColor = isGk ? (isHomeActor ? homeGkKit : awayGkKit) : (isHomeActor ? homeKit : awayKit);
+    const trimColor = isGk ? undefined : (isHomeActor ? homeTrim : awayTrim);
+    return (
+      <span className="inline-flex items-center gap-1 min-w-0">
+        <span className="shrink-0 inline-flex">
+          <ClubCrest
+            name={actorTeam.name}
+            size={13}
+            team={actorTeam}
+            club={state.club}
+            isMyClub={actorTeam.id === state.me && state.mode === 'm'}
+          />
+        </span>
+        {pl && (
+          <MatchPlayerThumb
+            player={pl}
+            team={actorTeam}
+            state={state}
+            kitColor={kitColor}
+            trimColor={trimColor}
+            size="xs"
+            dark
+          />
+        )}
+        {role && <PositionBadge role={role} size="2xs" />}
+        {no != null && (
+          <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#fde047] shrink-0">
+            #{no}
+          </span>
+        )}
+        <span className="font-bold text-white truncate">{clip.actorName}</span>
+      </span>
+    );
+  };
+
   const seekToRatio = (ratio: number) => {
     const r = Math.min(1, Math.max(0, ratio));
     const isSlow = Boolean(slowMoFocus && playing && Math.abs(r - activeClip.peakT) <= 0.12);
@@ -341,13 +389,15 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
 
               {/* Brief Director Title Slate on Clip Start */}
               {showStartSlate && (
-                <div className="pointer-events-none absolute top-11 left-4 right-4 sm:left-auto sm:max-w-sm px-3 py-2 rounded-xl bg-slate-950/90 border border-amber-400/55 shadow-xl">
+                <div className="pointer-events-none absolute top-11 left-4 right-4 sm:left-auto sm:max-w-sm px-3 py-2 rounded-xl bg-slate-950/90 border border-amber-400/55 shadow-xl space-y-0.5">
                   <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-300">
                     <span>{badgeMeta.icon}</span>
                     <span>ช็อตที่ {activeIdx + 1} · นาที {activeClip.minute}&apos;</span>
                   </div>
-                  <div className="text-xs font-extrabold text-white truncate mt-0.5">{activeClip.title}</div>
-                  <div className="text-[10px] text-emerald-300/90 font-semibold truncate">{activeClip.crewTag}</div>
+                  <div className="text-xs font-extrabold text-white truncate">{activeClip.title}</div>
+                  <div className="text-[10px] text-white/90 flex items-center gap-1.5 min-w-0">
+                    {renderClipActor(activeClip)}
+                  </div>
                 </div>
               )}
             </div>
@@ -541,13 +591,12 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
               {orderedClips.map((clip, idx) => {
                 const isActive = clip.id === activeClip.id;
                 const b = getHighlightKindBadge(clip.kind);
-                const team = clip.side === 'H' ? homeOrig : awayOrig;
                 return (
                   <button
                     key={clip.id}
                     type="button"
                     onClick={() => handleSelectClip(clip.id)}
-                    className={`shrink-0 w-[225px] lg:w-full mland:w-full text-left p-2 mland:p-1.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${
+                    className={`shrink-0 w-[235px] lg:w-full mland:w-full text-left p-2 mland:p-1.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1 ${
                       isActive
                         ? 'bg-amber-400/15 border-amber-400 shadow-[0_0_0_1px_rgba(251,191,36,0.35)]'
                         : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/25'
@@ -567,13 +616,12 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                       {idx + 1}. {clip.title}
                     </div>
 
-                    <div className="flex items-center justify-between gap-1 text-[9.5px] mland:text-[8px] text-white/65">
-                      <span className="inline-flex items-center gap-1 truncate">
-                        <ClubCrest name={team.name} size={11} team={team} club={state.club} isMyClub={team.id === state.me && state.mode === 'm'} />
-                        <span className="truncate">{clip.actorName.split(' ')[0]}</span>
-                      </span>
+                    <div className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px] text-white/85 min-w-0">
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        {renderClipActor(clip)}
+                      </div>
                       {clip.crewTag.startsWith('⭐') && (
-                        <span className="text-amber-300 font-extrabold shrink-0">⭐ อันดับ 1</span>
+                        <span className="text-amber-300 font-extrabold text-[9px] mland:text-[7.5px] shrink-0">⭐ #1</span>
                       )}
                     </div>
                   </button>

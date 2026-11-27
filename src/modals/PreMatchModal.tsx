@@ -513,8 +513,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const isCrossGroupSwap = Boolean(swapPickName && swapPickName !== pl.n && pickedIsStarter !== isStarter);
     const showSwapCol = canEditRow && !compact;
     const gridColsCls = showSwapCol
-      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_26px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_23px_auto]'
-      : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_24px]';
+      ? 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_26px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_23px_auto]'
+      : 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_28px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_24px]';
 
     return (
       <div
@@ -538,6 +538,16 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
         } ${unavailable ? 'opacity-82' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
       >
+        <div className="flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px]">
+          <ClubCrest
+            name={team.name}
+            size={15}
+            team={team}
+            club={state.club}
+            isMyClub={team.id === state.me && state.mode === 'm'}
+          />
+        </div>
+
         <div className="flex items-center justify-start">
           <MatchPlayerThumb
             player={pl}

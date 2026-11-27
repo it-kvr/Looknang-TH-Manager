@@ -1003,7 +1003,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           </button>
           <button
             type="button"
-            className="seg-btn seg-btn-active w-full whitespace-nowrap px-1.5 mland:px-1"
+            className="seg-btn seg-btn-active w-full whitespace-nowrap px-1.5 mland:px-1 gap-1 mland:gap-0.5"
           >
             <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-white/20 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
               {5 - subsUsed.length}
@@ -1011,14 +1011,14 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             <span>📋 แผน</span>
             {autoSubEnabled !== undefined && (
               <span
-                title={autoSubEnabled ? 'ระบบออโต้เปิดอยู่' : 'ระบบออโต้ปิดอยู่'}
-                className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-black leading-none shrink-0 ${
+                title={autoSubEnabled ? 'ระบบ AI เปิดอยู่' : 'ระบบ AI ปิดอยู่'}
+                className={`px-1.5 py-[2px] rounded text-[8.5px] mland:text-[7.5px] font-black tracking-wide leading-none shrink-0 ${
                   autoSubEnabled
                     ? 'bg-white text-[var(--g)] shadow-2xs'
-                    : 'bg-black/25 text-white/80'
+                    : 'bg-black/25 text-white/60'
                 }`}
               >
-                {autoSubEnabled ? '🤖เปิด' : '🤖ปิด'}
+                AI
               </span>
             )}
           </button>
@@ -1094,40 +1094,39 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             );
           })()}
 
-          {/* Substitutes Bench (Post-Match Lineup Style + Clickable Fitness Recommendation Button) */}
+          {/* Substitutes Bench (Compact Header + Smart Sub + Bench List) */}
           <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
-            {/* Top Bar: Title + Auto-Sub Toggle */}
-            <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-1.5 text-[11px] mland:text-[9.5px]">
+            {/* Merged Single Header: Title + Used Quota + AI Toggle */}
+            <div className="px-2.5 py-1 mland:px-2 mland:py-[3px] bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-1.5 text-[10.5px] mland:text-[9px]">
               <span className="font-extrabold text-[var(--ink)] flex items-center gap-1.5 min-w-0 truncate">
-                <span>👥 รายชื่อตัวสำรอง</span>
-                <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular">
-                  ({benchList.length} คน)
+                <span>👥 ตัวสำรอง ({benchList.length})</span>
+                <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] tabular">
+                  · เปลี่ยนแล้ว {mySubsList.length}/5
                 </span>
               </span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {onToggleAutoSub && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      onToggleAutoSub();
-                    }}
-                    title="ออโต้ปรับตำแหน่งระหว่างเกม & เปลี่ยนตัวอัตโนมัติ (สลับตำแหน่งให้ตรงบทบาทและส่งตัวฟิต/ดาวรุ่งลง)"
-                    className={`px-2 py-0.5 mland:px-1.5 rounded-lg text-[10px] mland:text-[8.5px] font-extrabold border cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
-                      autoSubEnabled
-                        ? 'bg-emerald-500/18 border-emerald-500 text-emerald-700 dark:text-emerald-300'
-                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                    }`}
-                  >
-                    {autoSubEnabled ? '🤖 ออโต้: เปิด' : '🤖 ออโต้: ปิด'}
-                  </button>
-                )}
-              </div>
+              {onToggleAutoSub && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onToggleAutoSub();
+                  }}
+                  title="ระบบ AI ปรับตำแหน่งระหว่างเกม & เปลี่ยนตัวอัตโนมัติ"
+                  className={`inline-flex items-center gap-1 px-1.5 py-[2px] rounded-md text-[9.5px] mland:text-[8px] font-extrabold border cursor-pointer transition-colors whitespace-nowrap shrink-0 leading-tight ${
+                    autoSubEnabled
+                      ? 'bg-emerald-500 border-emerald-500 text-white shadow-2xs'
+                      : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  <span className="font-black tracking-wide">AI</span>
+                  <span>{autoSubEnabled ? 'เปิด' : 'ปิด'}</span>
+                </button>
+              )}
             </div>
 
             {/* Interactive Fitness / Substitution Recommendation Button (Single-Row Compact) */}
             {subsUsed.length < 5 && smartAutoSub ? (
-              <div className="px-2 py-1.5 mland:px-1.5 mland:py-1 bg-[var(--surface-2)]/40 border-b border-[var(--line)] flex items-center gap-1.5">
+              <div className="px-2 py-1 mland:px-1.5 mland:py-[3px] bg-[var(--surface-2)]/40 border-b border-[var(--line)] flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -1135,25 +1134,25 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                     if (rep) setSubPickOut(null);
                   }}
                   title={`${smartAutoSub.isExplicitPick ? 'เปลี่ยนตัวที่เลือก' : smartAutoSub.isInjured ? 'แนะนำเปลี่ยนตัวบาดเจ็บ' : 'แนะนำเปลี่ยนตัวตามความฟิต'}: ส่ง ${smartAutoSub.inPlayer.n} (${smartAutoSub.inPlayer.ro} · ${smartAutoSub.inPlayer.ov}) ลงแทน ${smartAutoSub.outName} (${smartAutoSub.outFit}%)`}
-                  className="flex-1 min-w-0 px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--g)] hover:brightness-110 active:scale-[0.99] text-white shadow-xs transition-all cursor-pointer flex items-center justify-between gap-1.5 text-[10px] mland:text-[8.5px] overflow-hidden whitespace-nowrap"
+                  className="flex-1 min-w-0 px-2 py-1 mland:px-1.5 mland:py-[3px] rounded-lg bg-[var(--g)] hover:brightness-110 active:scale-[0.99] text-white shadow-xs transition-all cursor-pointer flex items-center justify-between gap-1.5 text-[10px] mland:text-[8.5px] overflow-hidden whitespace-nowrap"
                 >
                   <div className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap text-left">
-                    <span className="shrink-0 px-1.5 py-[1px] rounded-md bg-black/20 font-black text-[9.5px] mland:text-[8px]">
+                    <span className="shrink-0 px-1.5 py-[1px] rounded bg-black/20 font-black text-[9px] mland:text-[7.5px]">
                       {smartAutoSub.isExplicitPick ? '⚡ เลือก' : smartAutoSub.isInjured ? '🩺 เจ็บ' : '⚡ ฟิต'}
                     </span>
-                    <span className="min-w-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-black/25 font-bold overflow-hidden">
+                    <span className="min-w-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-black/25 font-bold overflow-hidden">
                       <StatIconBadge kind="subOut" size="xs" />
                       <span className="truncate">{smartAutoSub.outShort}</span>
                       <span className="opacity-85 tabular shrink-0">{smartAutoSub.outFit}%</span>
                     </span>
                     <span className="opacity-80 font-bold shrink-0">→</span>
-                    <span className="min-w-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-white/20 font-extrabold overflow-hidden">
+                    <span className="min-w-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-white/20 font-extrabold overflow-hidden">
                       <StatIconBadge kind="subIn" size="xs" />
                       <span className="truncate">{smartAutoSub.inPlayer.n.split(' ')[0]}</span>
                       <span className="opacity-90 tabular shrink-0">{smartAutoSub.inPlayer.ov}</span>
                     </span>
                   </div>
-                  <span className="px-2 py-0.5 mland:px-1.5 rounded-md bg-white text-[var(--g)] font-black text-[9.5px] mland:text-[8px] shrink-0 whitespace-nowrap shadow-2xs">
+                  <span className="px-1.5 py-[1px] rounded bg-white text-[var(--g)] font-black text-[9px] mland:text-[7.5px] shrink-0 whitespace-nowrap shadow-2xs">
                     เปลี่ยน
                   </span>
                 </button>
@@ -1163,25 +1162,17 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                     onClick={() => setSubPickOut(null)}
                     title="ยกเลิกการเลือกตัวผู้เล่น"
                     aria-label="ยกเลิกการเลือก"
-                    className="px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0 leading-none"
+                    className="px-1.5 py-1 mland:py-[3px] rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0 leading-none"
                   >
                     ✕
                   </button>
                 )}
               </div>
             ) : (
-              <div className="px-2.5 py-1 mland:px-2 bg-[var(--surface-2)]/35 border-b border-[var(--line)] text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">
+              <div className="px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)]/35 border-b border-[var(--line)] text-[9.5px] mland:text-[8px] text-[var(--mut)] font-semibold">
                 {subsUsed.length >= 5 ? 'ใช้โควต้าเปลี่ยนตัวครบ 5 คนแล้ว' : 'ไม่มีตัวสำรองที่พร้อมลงสนาม'}
               </div>
             )}
-
-            {/* Post-Match Style Sticky Section Header */}
-            <div className="px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
-              <span>ตัวสำรอง</span>
-              <span className="tabular text-[var(--mut)]">
-                เปลี่ยนแล้ว {mySubsList.length}/5 · คงเหลือ {benchList.length}
-              </span>
-            </div>
 
             {benchList.length === 0 ? (
               <div className="py-3 text-center text-[11px] text-[var(--mut)]">ไม่มีตัวสำรองที่พร้อมลงสนาม</div>
@@ -1199,8 +1190,8 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   const meTrimColor = pl.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
                   const isMePlayer = Boolean(pl.me || (state.mode === 'p' && state.p?.name === pl.n));
                   const rowCols = canQuickSub
-                    ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_30px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_26px_auto]'
-                    : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_34px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_28px]';
+                    ? 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_28px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_24px_auto]'
+                    : 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_30px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_26px]';
 
                   return (
                     <div
@@ -1218,7 +1209,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         }
                       }}
                       style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-                      className={`w-full grid ${rowCols} items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
+                      className={`w-full grid ${rowCols} items-center gap-1 mland:gap-0.5 px-2 py-[3px] mland:px-1.5 mland:py-[2px] text-left select-none transition-colors ${
                         isBenchDropTarget
                           ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
                           : isDraggingThis
@@ -1232,7 +1223,22 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                                   : 'hover:bg-[var(--surface-2)]/65'
                       } ${subsUsed.length < 5 ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer opacity-75'}`}
                     >
-                      {/* 1. รูป */}
+                      {/* 1. โลโก้ */}
+                      <div
+                        data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
+                        style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
+                        className="flex items-center justify-center shrink-0 [&>svg]:w-[15px] [&>svg]:h-[15px] mland:[&>svg]:w-[13px] mland:[&>svg]:h-[13px]"
+                      >
+                        <ClubCrest
+                          name={meTeamOrig.name}
+                          size={15}
+                          team={meTeamOrig}
+                          club={state.club}
+                          isMyClub={meTeamOrig.id === state.me && state.mode === 'm'}
+                        />
+                      </div>
+
+                      {/* 2. รูป */}
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={
@@ -1253,7 +1259,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         />
                       </div>
 
-                      {/* 2. ตำแหน่ง */}
+                      {/* 3. ตำแหน่ง */}
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
@@ -1262,7 +1268,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         <PositionBadge role={pl.ro} size="2xs" />
                       </div>
 
-                      {/* 3. เบอร์ */}
+                      {/* 4. เบอร์ */}
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
@@ -1271,7 +1277,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         #{no}
                       </div>
 
-                      {/* 4. ชื่อ */}
+                      {/* 5. ชื่อ */}
                       <div className="flex items-center justify-start gap-1 min-w-0">
                         <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">{pl.n}</span>
                         {meTeamOrig.cap === pl.n && (
@@ -1290,18 +1296,18 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                           <span title="เด็กปั้นสโมสร" className="text-[10px] mland:text-[8.5px] shrink-0">🌱</span>
                         )}
                         {compatPen === 0 && (
-                          <span className="px-1 py-0.2 rounded bg-[var(--g-soft)] text-[var(--g)] text-[8px] font-extrabold shrink-0 whitespace-nowrap">
-                            ตรงตำแหน่ง
+                          <span className="px-1 py-[1px] rounded bg-[var(--g-soft)] text-[var(--g)] text-[8px] font-extrabold shrink-0 whitespace-nowrap" title="ตรงตำแหน่ง">
+                            ✓ตรง
                           </span>
                         )}
                       </div>
 
-                      {/* 5. ความฟิต / สถานะ */}
+                      {/* 6. ความฟิต / สถานะ */}
                       <div className="flex items-center justify-start min-w-0">
                         <PlayerStatusBadge sus={pl.sus} inj={pl.inj} fit={f} restThreshold={subAlertFitTh} variant="cell" />
                       </div>
 
-                      {/* 6. พลัง */}
+                      {/* 7. พลัง */}
                       <div className="flex items-center justify-start">
                         <OvrBadge ov={pl.ov} size="2xs" />
                       </div>
@@ -1369,80 +1375,79 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             )}
           </div>
 
-          {/* Live Tactical Controls */}
-          <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 mland:space-y-1">
-            <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] flex items-center justify-between">
+          {/* Compact Live Tactical Controls */}
+          <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-1.5 mland:space-y-1">
+            <div className="text-[10.5px] mland:text-[9px] font-extrabold text-[var(--ink)] flex items-center justify-between">
               <span>📋 คำสั่งแท็กติกสด</span>
-              <span className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)]">มีผลทันทีในสนาม</span>
+              <span className="text-[9px] mland:text-[7.5px] font-semibold text-[var(--mut)]">มีผลทันทีในสนาม</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 text-[10.5px] mland:text-[9px]">
-              <div>
-                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">🎯 สไตล์คุมทีม (Mentality)</div>
-                <div className="flex flex-wrap gap-1">
-                  {([
-                    { m: 'X' as Mentality, icon: '🔥' },
-                    { m: 'A' as Mentality, icon: '⚔️' },
-                    { m: 'B' as Mentality, icon: '⚖️' },
-                    { m: 'D' as Mentality, icon: '🛡️' },
-                    { m: 'Z' as Mentality, icon: '🧱' }
-                  ]).map(({ m, icon }) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => onSetTac(m)}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer border inline-flex items-center gap-1 ${
-                        liveTac === m
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
-                      }`}
-                    >
-                      <span>{icon}</span>
-                      <span>{AR_T[m]}</span>
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">
+                <span>🎯 สไตล์คุมทีม</span>
+                <span className="text-[var(--ink)]">{AR_T[liveTac]}</span>
               </div>
-              <div>
-                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">⚽ สไตล์จ่ายบอลของทีม</div>
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    { lbl: 'บอลสั้น', icon: '🎯' },
-                    { lbl: 'ผสม', icon: '🔀' },
-                    { lbl: 'บอลยาว', icon: '↗️' },
-                    { lbl: 'เกมสวน', icon: '💨' }
-                  ].map(({ lbl, icon }, idx) => (
-                    <button
-                      key={lbl}
-                      type="button"
-                      onClick={() => onSetPass(idx)}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer border inline-flex items-center gap-1 ${
-                        livePass === idx
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
-                      }`}
-                    >
-                      <span>{icon}</span>
-                      <span>{lbl}</span>
-                    </button>
-                  ))}
-                </div>
+              <div className="seg-bar grid grid-cols-5 w-full">
+                {([
+                  { m: 'X' as Mentality, short: 'บุกแหลก', icon: '🔥' },
+                  { m: 'A' as Mentality, short: 'เปิดบุก', icon: '⚔️' },
+                  { m: 'B' as Mentality, short: 'สมดุล', icon: '⚖️' },
+                  { m: 'D' as Mentality, short: 'ตั้งรับ', icon: '🛡️' },
+                  { m: 'Z' as Mentality, short: 'อุด', icon: '🧱' }
+                ]).map(({ m, short, icon }) => (
+                  <button
+                    key={m}
+                    type="button"
+                    title={AR_T[m]}
+                    onClick={() => onSetTac(m)}
+                    className={`seg-btn w-full min-w-0 px-0.5 py-1 mland:py-0.5 text-[9.5px] mland:text-[8px] gap-0.5 whitespace-nowrap overflow-hidden ${
+                      liveTac === m ? 'seg-btn-active' : ''
+                    }`}
+                  >
+                    <span className="shrink-0">{icon}</span>
+                    <span className="truncate">{short}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5 text-[10px] mland:text-[8.5px]">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">
+                <span>⚽ สไตล์จ่ายบอล</span>
+              </div>
+              <div className="seg-bar grid grid-cols-4 w-full">
+                {[
+                  { lbl: 'บอลสั้น', icon: '🎯' },
+                  { lbl: 'ผสม', icon: '🔀' },
+                  { lbl: 'บอลยาว', icon: '↗️' },
+                  { lbl: 'เกมสวน', icon: '💨' }
+                ].map(({ lbl, icon }, idx) => (
+                  <button
+                    key={lbl}
+                    type="button"
+                    onClick={() => onSetPass(idx)}
+                    className={`seg-btn w-full min-w-0 px-0.5 py-1 mland:py-0.5 text-[9.5px] mland:text-[8px] gap-0.5 whitespace-nowrap overflow-hidden ${
+                      livePass === idx ? 'seg-btn-active' : ''
+                    }`}
+                  >
+                    <span className="shrink-0">{icon}</span>
+                    <span className="truncate">{lbl}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">🏃 เพรสซิ่ง</div>
-                <div className="flex gap-1">
+                <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] mb-0.5">🏃 เพรสซิ่ง</div>
+                <div className="seg-bar grid grid-cols-3 w-full">
                   {['ต่ำ', 'กลาง', 'สูง'].map((lbl, k) => (
                     <button
                       key={lbl}
                       type="button"
                       onClick={() => onSetPress(k)}
-                      className={`flex-1 py-0.5 rounded-md font-bold cursor-pointer border ${
-                        livePress === k
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
+                      className={`seg-btn w-full min-w-0 px-0.5 py-0.5 text-[9.5px] mland:text-[8px] whitespace-nowrap ${
+                        livePress === k ? 'seg-btn-active' : ''
                       }`}
                     >
                       {lbl}
@@ -1451,17 +1456,15 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 </div>
               </div>
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">⏱️ จังหวะเกม</div>
-                <div className="flex gap-1">
+                <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] mb-0.5">⏱️ จังหวะเกม</div>
+                <div className="seg-bar grid grid-cols-3 w-full">
                   {['ช้า', 'กลาง', 'เร็ว'].map((lbl, k) => (
                     <button
                       key={lbl}
                       type="button"
                       onClick={() => onSetTempo(k)}
-                      className={`flex-1 py-0.5 rounded-md font-bold cursor-pointer border ${
-                        liveTempo === k
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
+                      className={`seg-btn w-full min-w-0 px-0.5 py-0.5 text-[9.5px] mland:text-[8px] whitespace-nowrap ${
+                        liveTempo === k ? 'seg-btn-active' : ''
                       }`}
                     >
                       {lbl}
@@ -1470,17 +1473,15 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 </div>
               </div>
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">🚧 แนวรับ</div>
-                <div className="flex gap-1">
+                <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] mb-0.5">🚧 แนวรับ</div>
+                <div className="seg-bar grid grid-cols-3 w-full">
                   {['ลึก', 'กลาง', 'สูง'].map((lbl, k) => (
                     <button
                       key={lbl}
                       type="button"
                       onClick={() => onSetLine(k)}
-                      className={`flex-1 py-0.5 rounded-md font-bold cursor-pointer border ${
-                        liveLine === k
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
+                      className={`seg-btn w-full min-w-0 px-0.5 py-0.5 text-[9.5px] mland:text-[8px] whitespace-nowrap ${
+                        liveLine === k ? 'seg-btn-active' : ''
                       }`}
                     >
                       {lbl}
@@ -1489,17 +1490,15 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 </div>
               </div>
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">↔️ ความกว้าง</div>
-                <div className="flex gap-1">
+                <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] mb-0.5">↔️ ความกว้าง</div>
+                <div className="seg-bar grid grid-cols-3 w-full">
                   {['แคบ', 'กลาง', 'กว้าง'].map((lbl, k) => (
                     <button
                       key={lbl}
                       type="button"
                       onClick={() => onSetWid(k)}
-                      className={`flex-1 py-0.5 rounded-md font-bold cursor-pointer border ${
-                        liveWid === k
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
+                      className={`seg-btn w-full min-w-0 px-0.5 py-0.5 text-[9.5px] mland:text-[8px] whitespace-nowrap ${
+                        liveWid === k ? 'seg-btn-active' : ''
                       }`}
                     >
                       {lbl}
