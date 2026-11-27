@@ -2102,6 +2102,8 @@ export const SOUVENIR_CATALOG: readonly SouvenirCatalogDef[] = [
   { id: 'ball', name: 'ลูกฟุตบอลมินิที่ระลึก', icon: '⚽', unitPriceBaht: 390, demandWeight: 0.7 }
 ];
 
+export type MegastorePriceStrategyId = 'promo' | 'standard' | 'premium';
+
 export interface MegastoreStockTierDef {
   idx: number;
   label: string;
@@ -2111,45 +2113,124 @@ export interface MegastoreStockTierDef {
   souvenirPriceMult: number;
   volumeMult: number;
   costRate: number;
+  capitalNote: string;
+}
+
+export interface MegastorePriceStrategyDef {
+  id: MegastorePriceStrategyId;
+  label: string;
+  short: string;
+  priceMult: number;
+  revenueMult: number;
+  costOffset: number;
+  unitBoost: number;
+  desc: string;
 }
 
 export const MEGASTORE_STOCK_TIERS: readonly MegastoreStockTierDef[] = [
   {
     idx: 0,
-    label: 'เกรดแฟนบอล (ประหยัด)',
-    desc: 'ต้นทุนต่ำ ราคาย่อมเยา ขายออกง่ายสำหรับทีมเริ่มสร้างฐานแฟน',
+    label: 'เกรดแฟนบอล (ประหยัดทุน)',
+    desc: 'ผ้าใส่เชียร์ราคาย่อมเยา ใช้ทุนสต็อกต่อนัดต่ำสุด ปลอดภัยสำหรับทีมงบน้อย',
     blankJerseyBaht: 490,
     printedJerseyBaht: 690,
     souvenirPriceMult: 0.9,
-    volumeMult: 0.94,
-    costRate: 0.42
+    volumeMult: 0.92,
+    costRate: 0.33,
+    capitalNote: 'ทุนสต็อกต่ำ'
   },
   {
     idx: 1,
     label: 'เกรดสโมสร (มาตรฐาน)',
-    desc: 'คุณภาพผ้าแข่งมาตรฐาน สกรีนชื่อเบอร์คมชัด สมดุลกำไรและปริมาณขาย',
+    desc: 'ผ้าแข่งมาตรฐานสโมสร สกรีนชื่อ-เบอร์คมชัด สมดุลทั้งต้นทุนและรายได้',
     blankJerseyBaht: 590,
     printedJerseyBaht: 840,
     souvenirPriceMult: 1.0,
-    volumeMult: 1.04,
-    costRate: 0.37
+    volumeMult: 1.08,
+    costRate: 0.37,
+    capitalNote: 'ทุนสมดุล'
   },
   {
     idx: 2,
     label: 'เกรดนักเตะ (พรีเมียม)',
-    desc: 'ผ้าแข่งเกรดโปรพร้อมอาร์มลีก ราคาต่อตัวสูงสุด สร้างกำไรระยะยาวเมื่อมีทุนสต็อก',
-    blankJerseyBaht: 690,
-    printedJerseyBaht: 990,
+    desc: 'ผ้าแข่งเกรดโปรพร้อมอาร์มลีก ทำยอดขายสูงสุดแต่ต้องสำรองทุนผลิตต่อเกมมากขึ้น',
+    blankJerseyBaht: 790,
+    printedJerseyBaht: 1090,
     souvenirPriceMult: 1.15,
-    volumeMult: 1.15,
-    costRate: 0.33
+    volumeMult: 1.26,
+    costRate: 0.41,
+    capitalNote: 'ทุนสต็อกสูง'
   }
 ];
+
+export const MEGASTORE_PRICE_STRATEGIES: readonly MegastorePriceStrategyDef[] = [
+  {
+    id: 'promo',
+    label: 'ลดราคาเอาใจแฟน (-15%)',
+    short: 'ลดราคา -15%',
+    priceMult: 0.85,
+    revenueMult: 0.96,
+    costOffset: 0.04,
+    unitBoost: 1.22,
+    desc: 'ลดราคาหน้าร้าน 15% ช่วยขายออกเป็นตัวเยอะขึ้นและช่วยดึงแฟนคลับเพิ่มหลังเกมเหย้า'
+  },
+  {
+    id: 'standard',
+    label: 'ราคามาตรฐานหน้าร้าน',
+    short: 'ราคาปกติ',
+    priceMult: 1.0,
+    revenueMult: 1.0,
+    costOffset: 0,
+    unitBoost: 1.0,
+    desc: 'ขายตามราคาป้ายมาตรฐานสโมสร สมดุลทั้งจำนวนตัวที่ขายและกำไรต่อชิ้น'
+  },
+  {
+    id: 'premium',
+    label: 'ราคาพรีเมียม (+15%)',
+    short: 'พรีเมียม +15%',
+    priceMult: 1.15,
+    revenueMult: 1.07,
+    costOffset: -0.02,
+    unitBoost: 0.88,
+    desc: 'บวกราคาเพิ่ม 15% เพิ่มกำไรต่อตัวสูงสุด เหมาะกับทีมที่ฐานแฟนแน่นแล้ว'
+  }
+];
+
+const roundBaht10 = (v: number): number => Math.max(100, Math.round(v / 10) * 10);
+
+export function resolveMegastorePricing(
+  tierIdxInput?: number,
+  priceStrategyInput?: MegastorePriceStrategyId | string | null
+) {
+  const tierDef = MEGASTORE_STOCK_TIERS[clamp(tierIdxInput ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+  const priceDef =
+    MEGASTORE_PRICE_STRATEGIES.find((p) => p.id === priceStrategyInput) || MEGASTORE_PRICE_STRATEGIES[1];
+  const effectiveBlankBaht = roundBaht10(tierDef.blankJerseyBaht * priceDef.priceMult);
+  const rawPrinted = roundBaht10(tierDef.printedJerseyBaht * priceDef.priceMult);
+  const effectivePrintedBaht = Math.max(effectiveBlankBaht + 100, rawPrinted);
+  const printSurchargeBaht = effectivePrintedBaht - effectiveBlankBaht;
+  const souvenirPriceMult = +(tierDef.souvenirPriceMult * priceDef.priceMult).toFixed(2);
+  const effectiveCostRate = clamp(+(tierDef.costRate + priceDef.costOffset).toFixed(2), 0.25, 0.58);
+  const marginPct = Math.round((1 - effectiveCostRate) * 100);
+  const effectiveVolumeMult = +(tierDef.volumeMult * priceDef.revenueMult).toFixed(3);
+  return {
+    tierDef,
+    priceDef,
+    effectiveBlankBaht,
+    effectivePrintedBaht,
+    printSurchargeBaht,
+    souvenirPriceMult,
+    effectiveCostRate,
+    marginPct,
+    effectiveVolumeMult
+  };
+}
 
 function createEmptyMegastoreState(initialCapital = 35): ClubMegastoreState {
   return {
     capital: initialCapital,
     stockTier: 1,
+    priceStrategy: 'standard',
     capitalInvestedSeason: initialCapital,
     featuredPlayer: null,
     autoRestock: false,
@@ -2202,19 +2283,20 @@ function applyMerchSalesBatch(
   grossTargetK: number,
   options?: { isDeterministicSeed?: boolean; chargeCapital?: boolean; ownerState?: GameState }
 ): { grossRevK: number; prodCostK: number; netClubCashK: number } {
-  const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+  const pricing = resolveMegastorePricing(ms.stockTier, ms.priceStrategy);
+  const { priceDef, effectiveBlankBaht, effectivePrintedBaht, souvenirPriceMult, effectiveCostRate, effectiveVolumeMult } = pricing;
   const activeFeatured =
     ms.featuredPlayer && me.sq.some((q) => q.n === ms.featuredPlayer) ? ms.featuredPlayer : null;
   const featuredBoostMult = activeFeatured ? 1.04 : 1;
   const jitter = options?.isDeterministicSeed ? 1 : 0.94 + Math.random() * 0.14;
-  const targetK = Math.max(1.5, grossTargetK * tierDef.volumeMult * featuredBoostMult * jitter);
+  const targetK = Math.max(1.5, grossTargetK * effectiveVolumeMult * featuredBoostMult * jitter);
 
   const printedBudget = targetK * 0.48;
   const blankBudget = targetK * 0.23;
   const souvenirBudget = targetK * 0.29;
 
   // 1. Blank unprinted jerseys
-  const blankUnitPriceK = tierDef.blankJerseyBaht / 1000;
+  const blankUnitPriceK = effectiveBlankBaht / 1000;
   const blankUnits = Math.max(1, Math.round(blankBudget / blankUnitPriceK));
   const blankRev = +(blankUnits * blankUnitPriceK).toFixed(2);
   ms.blankJerseyUnits += blankUnits;
@@ -2223,7 +2305,7 @@ function applyMerchSalesBatch(
   ms.allTimeBlankRev = +(ms.allTimeBlankRev + blankRev).toFixed(2);
 
   // 2. Player printed jerseys (name + number)
-  const printedUnitPriceK = tierDef.printedJerseyBaht / 1000;
+  const printedUnitPriceK = effectivePrintedBaht / 1000;
   const totalPrintedUnits = Math.max(1, Math.round(printedBudget / printedUnitPriceK));
   const weightedSquad = getSquadJerseyPopularityWeights(me, activeFeatured);
   const weightSum = weightedSquad.reduce((s, x) => s + x.weight, 0) || 1;
@@ -2302,7 +2384,7 @@ function applyMerchSalesBatch(
   let souvRevTotal = 0;
   let souvUnitsAdded = 0;
   SOUVENIR_CATALOG.forEach((sku) => {
-    const unitPriceK = (sku.unitPriceBaht * tierDef.souvenirPriceMult) / 1000;
+    const unitPriceK = (sku.unitPriceBaht * souvenirPriceMult) / 1000;
     const shareBudget = souvenirBudget * (sku.demandWeight / totalSouvWeight);
     const uJitter = options?.isDeterministicSeed ? 1 : 0.84 + Math.random() * 0.34;
     const units = Math.max(1, Math.round((shareBudget / unitPriceK) * uJitter));
@@ -2316,10 +2398,13 @@ function applyMerchSalesBatch(
   ms.allTimeSouvenirRev = +(ms.allTimeSouvenirRev + souvRevTotal).toFixed(2);
 
   const grossRevK = +(blankRev + printedRevTotal + souvRevTotal).toFixed(2);
-  const rawCostK = +(grossRevK * tierDef.costRate).toFixed(2);
+  const rawCostK = +(grossRevK * effectiveCostRate).toFixed(2);
 
   let netClubCashK = Math.round(grossRevK);
   if (options?.chargeCapital !== false) {
+    if (priceDef.id === 'promo') {
+      adjustTeamFans(me, 80);
+    }
     if (ms.autoRestock && ms.capital < rawCostK && options?.ownerState) {
       const needed = +(rawCostK - ms.capital).toFixed(2);
       if (options.ownerState.money >= needed) {
@@ -2364,6 +2449,8 @@ export function ensureMegastoreState(s: GameState): ClubMegastoreState {
       fresh.seasonCost = +(totalPriorRev * 0.37).toFixed(2);
     }
     s.megastore = fresh;
+  } else if (!s.megastore.priceStrategy) {
+    s.megastore.priceStrategy = 'standard';
   }
   return s.megastore;
 }
@@ -2400,7 +2487,18 @@ export function getMegastoreProjection(s: GameState, me: Team) {
   const partnerBoost = getActivePartnerDeals(s).reduce((sum, d) => sum + (d.merchBoost || 0), 0);
   const stMerchBoost = getStadiumStyleSpec(s.club?.stadiumStyle).merchBoost;
   const extraMerchMult = tPlan.merchMult * (1 + mainSp.merchBoost + partnerBoost) * (1 + stMerchBoost);
-  const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+  const pricing = resolveMegastorePricing(ms.stockTier, ms.priceStrategy);
+  const {
+    tierDef,
+    priceDef,
+    effectiveBlankBaht,
+    effectivePrintedBaht,
+    printSurchargeBaht,
+    souvenirPriceMult,
+    effectiveCostRate,
+    marginPct,
+    effectiveVolumeMult
+  } = pricing;
   const activeFeaturedPlayer =
     ms.featuredPlayer && me.sq.some((q) => q.n === ms.featuredPlayer) ? ms.featuredPlayer : null;
   const featuredBoostMult = activeFeaturedPlayer ? 1.04 : 1;
@@ -2416,11 +2514,11 @@ export function getMegastoreProjection(s: GameState, me: Team) {
           merchCondMul *
           extraMerchMult *
           stockAvailMul *
-          tierDef.volumeMult *
+          effectiveVolumeMult *
           featuredBoostMult
         ).toFixed(2);
   const estMatchSales = Math.round(estGrossSales);
-  const estProdCost = +(estGrossSales * tierDef.costRate).toFixed(2);
+  const estProdCost = +(estGrossSales * effectiveCostRate).toFixed(2);
   const estNetProfit = +(estGrossSales - estProdCost).toFixed(2);
   const shortfall = Math.max(0, +(estProdCost - ms.capital).toFixed(2));
   const autoCoversShortfall = !!(ms.autoRestock && shortfall > 0 && s.money >= shortfall);
@@ -2451,6 +2549,13 @@ export function getMegastoreProjection(s: GameState, me: Team) {
     activeFeaturedPlayer,
     consignmentRisk: merchLv > 0 && shortfall > 0 && !autoCoversShortfall,
     tierDef,
+    priceDef,
+    effectiveBlankBaht,
+    effectivePrintedBaht,
+    printSurchargeBaht,
+    souvenirPriceMult,
+    effectiveCostRate,
+    marginPct,
     extraMerchMult,
     stockReady
   };
@@ -2467,13 +2572,13 @@ export function archiveSeasonMegastore(s: GameState): MegastoreSeasonArchive | n
     .sort((a, b) => b.units - a.units || b.revenue - a.revenue);
   const printedUnits = playerJerseys.reduce((sum, p) => sum + p.units, 0);
   const printedRev = +playerJerseys.reduce((sum, p) => sum + p.revenue, 0).toFixed(2);
-  const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+  const { souvenirPriceMult } = resolveMegastorePricing(ms.stockTier, ms.priceStrategy);
 
   const souvenirs: SouvenirSaleRecord[] = SOUVENIR_CATALOG.map((sku) => ({
     id: sku.id,
     name: sku.name,
     icon: sku.icon,
-    unitPriceBaht: Math.round(sku.unitPriceBaht * tierDef.souvenirPriceMult),
+    unitPriceBaht: Math.round(sku.unitPriceBaht * souvenirPriceMult),
     units: ms.souvenirs[sku.id] || 0,
     revenue: +(ms.souvenirRevs[sku.id] || 0).toFixed(2)
   }));

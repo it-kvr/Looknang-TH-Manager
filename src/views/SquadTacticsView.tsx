@@ -205,7 +205,7 @@ export const SquadTacticsView = React.memo<{
 
   const updateDragGhostPos = (rawX: number, rawY: number, isTouch = false) => {
     const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 216) : rawX - 95;
-    const yOffset = isTouch ? 64 : 52;
+    const yOffset = isTouch ? 86 : 52;
     const gy = typeof window !== 'undefined' ? clamp(rawY - yOffset, 8, window.innerHeight - 68) : rawY - yOffset;
     dragGhostPosRef.current = { x: gx, y: gy };
     if (dragGhostRef.current) {
@@ -334,11 +334,11 @@ export const SquadTacticsView = React.memo<{
     const geom = getSvgGeometry(cachedRect, cachedInvCtm);
     if (!geom) return null;
     const { svg, rect, invCtm } = geom;
-    const maxLiftPad = Math.max(12, liftPx + 14);
+    const maxLiftPad = Math.max(20, liftPx + 18);
     const rawInside =
-      clientX >= rect.left - 10 &&
-      clientX <= rect.right + 10 &&
-      clientY >= rect.top - 10 &&
+      clientX >= rect.left - 12 &&
+      clientX <= rect.right + 12 &&
+      clientY >= rect.top - 12 &&
       clientY <= rect.bottom + maxLiftPad;
     const effectiveY = liftPx > 0 ? clamp(clientY - liftPx, rect.top, rect.bottom) : clientY;
     const inside =
@@ -481,7 +481,7 @@ export const SquadTacticsView = React.memo<{
         vibrate(14);
         updateDragGhostPos(cur.x, cur.y, cur.isTouch);
         setDragUiIfChanged({ player: cur.player, fromSlot: cur.fromSlot });
-        const targetLift = cur.isTouch && cur.cachedRect ? clamp(cur.cachedRect.height * 0.085, 16, 26) : 0;
+        const targetLift = cur.isTouch && cur.cachedRect ? clamp(cur.cachedRect.height * 0.21, 46, 58) : 0;
         const hit = findDropAt(cur.x, cur.y, cur.player.n, targetLift, cur.cachedRect, cur.cachedInvCtm);
         setDropTargetIfChanged(hit);
       }, 155);
@@ -553,12 +553,16 @@ export const SquadTacticsView = React.memo<{
       setTouchAnchorPtIfChanged(null);
     };
 
+    const computePitchLiftRamp = (dist: number) => {
+      const t = clamp(dist / 18, 0, 1);
+      return 1 - (1 - t) * (1 - t);
+    };
+
     const computePitchLift = (d: NonNullable<typeof dragRef.current>, dist: number) => {
       if (!d.isTouch) return 0;
       const pitchH = d.cachedRect?.height || pitchSvgRef.current?.getBoundingClientRect().height || 260;
-      const targetLift = clamp(pitchH * 0.085, 16, 26);
-      const liftRamp = clamp(dist / 24, 0, 1);
-      return targetLift * liftRamp;
+      const targetLift = clamp(pitchH * 0.21, 46, 58);
+      return targetLift * computePitchLiftRamp(dist);
     };
 
     const processPointerFrame = (clientX: number, clientY: number, pointerId: number) => {
@@ -592,12 +596,12 @@ export const SquadTacticsView = React.memo<{
       d.y = clientY;
 
       const liftPx = computePitchLift(d, dist);
-      const liftRamp = d.isTouch ? clamp(dist / 24, 0, 1) : 1;
+      const liftRamp = d.isTouch ? computePitchLiftRamp(dist) : 1;
       const pitchPt = clientToPitchCoords(clientX, clientY, liftPx, d.cachedRect, d.cachedInvCtm);
 
       if (d.fromPitchIdx !== undefined && d.fromPitchIdx >= 1 && pitchPt?.inside) {
-        // Apply smoothly decaying grab offset so dragging starts right under finger with zero jump
-        const grabFade = 1 - liftRamp * 0.55;
+        // Fade initial grab offset out smoothly as player lifts clear above the thumb
+        const grabFade = d.isTouch ? 1 - liftRamp : 1;
         const adjPx = pitchPt.px + d.grabDxSvg * grabFade;
         const adjPy = pitchPt.py + d.grabDySvg * grabFade;
 

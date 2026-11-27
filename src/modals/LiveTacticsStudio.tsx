@@ -264,7 +264,7 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
 
   const updateDragGhostPos = (rawX: number, rawY: number, isTouch = false) => {
     const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 230) : rawX - 95;
-    const yOffset = isTouch ? 62 : 48;
+    const yOffset = isTouch ? 84 : 48;
     const gy = typeof window !== 'undefined' ? clamp(rawY - yOffset, 8, window.innerHeight - 66) : rawY - yOffset;
     dragGhostPosRef.current = { x: gx, y: gy };
     if (dragGhostRef.current) {
@@ -539,8 +539,9 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     const computePitchLift = (d: DragRuntime, dist: number) => {
       if (!d.isTouch) return 0;
       const pitchH = d.cachedPitchRect?.height || pitchRef.current?.getBoundingClientRect().height || 260;
-      const targetLift = clamp(pitchH * 0.08, 14, 24);
-      const liftRamp = clamp(dist / 22, 0, 1);
+      const targetLift = clamp(pitchH * 0.19, 44, 54);
+      const t = clamp(dist / 18, 0, 1);
+      const liftRamp = 1 - (1 - t) * (1 - t);
       return targetLift * liftRamp;
     };
 
@@ -740,7 +741,7 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
           player: cur.player,
           role: cur.role
         });
-        const targetLift = cur.isTouch && cur.cachedPitchRect ? clamp(cur.cachedPitchRect.height * 0.08, 14, 24) : 0;
+        const targetLift = cur.isTouch && cur.cachedPitchRect ? clamp(cur.cachedPitchRect.height * 0.19, 44, 54) : 0;
         const hit = actionsRef.current.findDropTarget(
           cur.x,
           cur.y,

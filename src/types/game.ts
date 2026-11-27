@@ -761,6 +761,7 @@ export interface MegastoreSeasonArchive {
 export interface ClubMegastoreState {
   capital: number;
   stockTier: number;
+  priceStrategy?: 'promo' | 'standard' | 'premium';
   capitalInvestedSeason: number;
   featuredPlayer?: string | null;
   autoRestock?: boolean;

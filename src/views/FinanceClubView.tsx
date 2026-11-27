@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, Palette, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight } from 'lucide-react';
+import { Pencil, Check, X, Dices, Palette, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight, ChevronDown } from 'lucide-react';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { AnimatedMoney } from '../components/AnimatedMoney';
@@ -70,13 +70,16 @@ import {
   syncPartnerDealsField,
   SOUVENIR_CATALOG,
   MEGASTORE_STOCK_TIERS,
+  MEGASTORE_PRICE_STRATEGIES,
+  resolveMegastorePricing,
   ensureMegastoreState,
   getMegastoreProjection,
   LIVE_STREAM_PLANS,
   resolveLiveStreamPlan,
   computeMatchStreamProjection,
   checkClubDemandsCompletion,
-  type ClubFinanceChartPoint
+  type ClubFinanceChartPoint,
+  type MegastorePriceStrategyId
 } from '../engine/simulation';
 import { pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
 import { renderCrestPattern, ClubCrest, KitJersey, KitPatternThumb, PlayerFace } from '../components/SvgVisuals';
@@ -198,6 +201,7 @@ export const FinanceClubView = React.memo<{
     minLv: number;
   } | null>(null);
   const [showStadiumPicker, setShowStadiumPicker] = useState(false);
+  const [showroomBackAway, setShowroomBackAway] = useState(false);
 
   useEffect(() => {
     if (
@@ -1881,6 +1885,7 @@ export const FinanceClubView = React.memo<{
           const renCost = getFacilityRenovateCost(merchBaseCost, merchLv, merchCond);
           const curTierDef = megastoreProj.tierDef;
           const activeTierIdx = clamp(megastoreSnap.stockTier ?? 1, 0, 2);
+          const activePriceId = megastoreProj.priceDef.id;
 
           const computeSouvenirRows = (period: 'season' | 'alltime'): {
             id: string;
@@ -1906,7 +1911,7 @@ export const FinanceClubView = React.memo<{
                 id: sku.id,
                 name: sku.name,
                 icon: sku.icon,
-                unitPriceBaht: Math.round(sku.unitPriceBaht * curTierDef.souvenirPriceMult),
+                unitPriceBaht: Math.round(sku.unitPriceBaht * megastoreProj.souvenirPriceMult),
                 units,
                 revenue: +rev.toFixed(2)
               };
@@ -1963,13 +1968,14 @@ export const FinanceClubView = React.memo<{
             : topSeller
               ? topSeller.pos === 'GK'
               : spotlightPl?.pos === 'GK';
+          const spotlightShortName = spotlightPl ? spotlightPl.n.split(' ')[0] : topSeller ? topSeller.name.split(' ')[0] : 'PLAYER';
           const spotlightLabel = featuredSquadPl
-            ? `#${spotlightNo} ${featuredSquadPl.n.split(' ')[0]} · พรีเซ็นเตอร์`
+            ? `#${spotlightNo} ${spotlightShortName} · พรีเซ็นเตอร์`
             : topSeller
-              ? `#${topSeller.no} ${topSeller.name.split(' ')[0]} · ขายดีสุด`
+              ? `#${topSeller.no} ${spotlightShortName} · ขายดีสุด`
               : spotlightPl
-                ? `#${spotlightNo} ${spotlightPl.n.split(' ')[0]} · ดาวเด่นทีม`
-                : 'สกรีนชื่อ & เบอร์';
+                ? `#${spotlightNo} ${spotlightShortName} · ดาวเด่นทีม`
+                : 'สกรีนชื่อ+เบอร์';
 
           const currentLiveArchive: MegastoreSeasonArchive = {
             season: state.season,
@@ -2043,7 +2049,18 @@ export const FinanceClubView = React.memo<{
             onUpdateState((d) => {
               ensureMegastoreState(d).stockTier = tierIdx;
             });
-            onToast(`เปลี่ยนเกรดสินค้าหน้าร้านเป็น "${nextTier.label}" แล้ว`);
+            onToast(`เปลี่ยนเกรดสต็อกเสื้อเป็น "${nextTier.label}" แล้ว`);
+          };
+
+          const selectPriceStrategy = (strategyId: MegastorePriceStrategyId) => {
+            if (activePriceId === strategyId) return;
+            const nextPlan = MEGASTORE_PRICE_STRATEGIES.find((p) => p.id === strategyId);
+            if (!nextPlan) return;
+            SFX.tap();
+            onUpdateState((d) => {
+              ensureMegastoreState(d).priceStrategy = strategyId;
+            });
+            onToast(`ปรับนโยบายราคาหน้าร้านเป็น "${nextPlan.label}" แล้ว`);
           };
 
           const toggleAutoRestock = () => {
@@ -2216,7 +2233,7 @@ export const FinanceClubView = React.memo<{
                         <div className="text-[10.5px] text-[var(--g)] font-bold">{fmtMoney(megastoreSnap.allTimeBlankRev)}</div>
                       </div>
                       <div className="px-1">
-                        <div className="text-[10px] text-[var(--mut)]">สกรีนนักเตะ</div>
+                        <div className="text-[10px] text-[var(--mut)]">สกรีนชื่อ+เบอร์</div>
                         <div className="font-bold text-xs mt-0.5">{megastoreSnap.allTimePrintedUnits.toLocaleString()} ตัว</div>
                         <div className="text-[10.5px] text-[var(--g)] font-bold">{fmtMoney(megastoreSnap.allTimePrintedRev)}</div>
                       </div>
@@ -2356,40 +2373,98 @@ export const FinanceClubView = React.memo<{
                         </button>
                       </div>
 
-                      {/* Stock Tiers Selector (Instant Commit) */}
-                      <div className="pt-2 border-t border-[var(--line)]/60 space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-[11px]">
-                          <span className="font-bold text-[var(--mut)]">เกรดสต็อกเสื้อ &amp; ราคาจำหน่ายหน้าร้าน</span>
-                          <span className="text-[var(--mut)] tabular">
-                            กำไรขั้นต้น <b className="text-[var(--g)]">{Math.round((1 - curTierDef.costRate) * 100)}%</b> · วอลุ่ม ×{curTierDef.volumeMult.toFixed(2)}
+                      {/* Stock Grades & Storefront Pricing Policy (Instant Commit) */}
+                      <div className="pt-2.5 border-t border-[var(--line)]/60 space-y-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
+                          <span className="font-bold text-[var(--ink)]">เกรดสต็อกเสื้อ &amp; ราคาหน้าร้าน</span>
+                          <span className="text-[10.5px] text-[var(--mut)] tabular">
+                            กำไรสุทธิสินค้า <b className="text-[var(--g)]">{megastoreProj.marginPct}%</b> · ค่าสกรีนชื่อ+เบอร์{' '}
+                            <b className="text-[var(--ink)]">+{megastoreProj.printSurchargeBaht}฿</b>
                           </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-1.5">
+
+                        {/* Step 1: Stock Quality Grade */}
+                        <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
                           {MEGASTORE_STOCK_TIERS.map((tier) => {
                             const active = activeTierIdx === tier.idx;
-                            const marginPct = Math.round((1 - tier.costRate) * 100);
+                            const tierPricing = resolveMegastorePricing(tier.idx, activePriceId);
+                            const labelMatch = tier.label.match(/^(.*?)\s*\((.*?)\)$/);
+                            const mainTitle = labelMatch ? labelMatch[1] : tier.label;
+                            const tierTag = labelMatch ? labelMatch[2] : '';
                             return (
                               <button
                                 key={tier.idx}
                                 type="button"
                                 onClick={() => selectStockTier(tier.idx)}
-                                className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                                className={`p-2 mland:p-1.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 ${
                                   active
-                                    ? 'bg-[var(--g-soft)] border-[var(--g)]'
-                                    : 'bg-[var(--surface-2)]/40 border-[var(--line)]/70 hover:border-[var(--g)]/55'
+                                    ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]/35 shadow-xs'
+                                    : 'bg-[var(--surface-2)]/40 border-[var(--line)]/75 hover:border-[var(--g)]/55 hover:bg-[var(--surface-2)]/70'
                                 }`}
                               >
-                                <div className="font-bold text-[11px] truncate text-[var(--ink)]">{tier.label}</div>
-                                <div className="text-[10px] text-[var(--mut)] tabular mt-0.5">
-                                  เปล่า {tier.blankJerseyBaht}฿ · สกรีน {tier.printedJerseyBaht}฿
+                                <div className="flex items-start justify-between gap-1 min-w-0">
+                                  <div className="min-w-0">
+                                    <div className="font-extrabold text-[11px] mland:text-[10px] leading-tight text-[var(--ink)] truncate">
+                                      {mainTitle}
+                                    </div>
+                                    {tierTag && (
+                                      <div className={`text-[9.5px] mland:text-[8.5px] font-semibold leading-tight mt-0.5 ${active ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                                        {tierTag}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {active && (
+                                    <span className="w-4 h-4 rounded-full bg-[var(--g)] text-white inline-flex items-center justify-center shrink-0">
+                                      <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="text-[9.5px] font-semibold tabular mt-0.5 flex items-center justify-between gap-1">
-                                  <span className="text-[var(--g)]">กำไร {marginPct}%</span>
-                                  <span className="text-[var(--mut)]">×{tier.volumeMult.toFixed(2)}</span>
+
+                                <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/45 text-[10px] mland:text-[9px] tabular">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-[var(--mut)]">ไม่สกรีน</span>
+                                    <b className="text-[var(--ink)]">{tierPricing.effectiveBlankBaht}฿</b>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-[var(--mut)]">สกรีนชื่อ+เบอร์</span>
+                                    <b className="text-[var(--ink)]">{tierPricing.effectivePrintedBaht}฿</b>
+                                  </div>
+                                </div>
+
+                                <div className="pt-1 border-t border-[var(--line)]/45 text-[9.5px] mland:text-[8.5px] font-bold tabular flex items-center justify-between gap-1">
+                                  <span className="text-[var(--g)]">กำไร {tierPricing.marginPct}%</span>
+                                  <span className="text-[var(--mut)]">{tier.capitalNote}</span>
                                 </div>
                               </button>
                             );
                           })}
+                        </div>
+
+                        {/* Step 2: Storefront Price Strategy */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9.5px]">
+                            <span className="font-bold text-[var(--mut)]">นโยบายราคาหน้าร้าน</span>
+                            <span className="text-[var(--mut)] tabular">
+                              ของชำร่วย <b className="text-[var(--ink)]">×{megastoreProj.souvenirPriceMult.toFixed(2)}</b>
+                            </span>
+                          </div>
+                          <div className="seg-bar grid grid-cols-3 w-full bg-[var(--surface-2)]/65">
+                            {MEGASTORE_PRICE_STRATEGIES.map((plan) => (
+                              <button
+                                key={plan.id}
+                                type="button"
+                                onClick={() => selectPriceStrategy(plan.id)}
+                                className={`seg-btn whitespace-nowrap truncate ${
+                                  activePriceId === plan.id ? 'seg-btn-active' : ''
+                                }`}
+                              >
+                                {plan.short}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="text-[10px] mland:text-[9px] text-[var(--mut)] leading-snug px-0.5">
+                            {curTierDef.desc} · {megastoreProj.priceDef.desc}
+                          </div>
                         </div>
                       </div>
                     </section>
@@ -2458,54 +2533,133 @@ export const FinanceClubView = React.memo<{
 
                     {merchPeriod !== 'seasons' ? (
                       <>
-                        {/* Official 3-Kit Showroom (Home, Away, Spotlight Printed with live sponsor print) */}
-                        <div className="rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/75 p-2.5 space-y-2 shrink-0">
-                          <div className="grid grid-cols-3 divide-x divide-[var(--line)]/55 text-center items-end">
-                            <div className="flex flex-col items-center gap-1 px-1">
-                              <KitJersey club={clubK} team={me} state={state} hideNumber size={48} />
-                              <div className="text-[10.5px] font-bold leading-tight truncate w-full">ชุดเหย้า (ไม่สกรีน)</div>
-                              <div className="text-[10px] font-bold text-[var(--g)] tabular">{curTierDef.blankJerseyBaht}฿</div>
+                        {/* Official 3-Kit Showroom (Home Front, Away Front, Back Printed with Name + Number) */}
+                        <div className="rounded-xl bg-[var(--surface-2)]/40 border border-[var(--line)]/75 p-2.5 mland:p-2 space-y-2 shrink-0">
+                          <div className="grid grid-cols-3 gap-2 mland:gap-1.5 text-center items-stretch">
+                            <div className="rounded-xl bg-[var(--surface)]/90 border border-[var(--line)]/70 px-1.5 py-2 mland:py-1.5 flex flex-col items-center justify-between gap-1">
+                              <div className="text-[9px] mland:text-[8px] font-semibold text-[var(--mut)] leading-none">
+                                ด้านหน้า
+                              </div>
+                              <KitJersey club={clubK} team={me} state={state} hideNumber size={46} />
+                              <div className="w-full space-y-0.5">
+                                <div className="text-[10.5px] mland:text-[9.5px] font-bold text-[var(--ink)] leading-tight truncate">ชุดเหย้า</div>
+                                <div className="text-[10px] mland:text-[9px] font-bold text-[var(--g)] tabular">
+                                  ไม่สกรีน · {megastoreProj.effectiveBlankBaht}฿
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1 px-1">
-                              <KitJersey club={clubK} team={me} state={state} away hideNumber size={48} />
-                              <div className="text-[10.5px] font-bold leading-tight truncate w-full">ชุดเยือน (ไม่สกรีน)</div>
-                              <div className="text-[10px] font-bold text-[var(--g)] tabular">{curTierDef.blankJerseyBaht}฿</div>
+
+                            <div className="rounded-xl bg-[var(--surface)]/90 border border-[var(--line)]/70 px-1.5 py-2 mland:py-1.5 flex flex-col items-center justify-between gap-1">
+                              <div className="text-[9px] mland:text-[8px] font-semibold text-[var(--mut)] leading-none">
+                                ด้านหน้า
+                              </div>
+                              <KitJersey club={clubK} team={me} state={state} away hideNumber size={46} />
+                              <div className="w-full space-y-0.5">
+                                <div className="text-[10.5px] mland:text-[9.5px] font-bold text-[var(--ink)] leading-tight truncate">ชุดเยือน</div>
+                                <div className="text-[10px] mland:text-[9px] font-bold text-[var(--g)] tabular">
+                                  ไม่สกรีน · {megastoreProj.effectiveBlankBaht}฿
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1 px-1">
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                setShowroomBackAway((v) => !v);
+                              }}
+                              title="แตะเพื่อสลับดูสกรีนหลังเสื้อชุดเหย้า / ชุดเยือน"
+                              className="rounded-xl bg-[var(--g-soft)]/55 hover:bg-[var(--g-soft)]/80 border border-[var(--g)]/45 px-1.5 py-2 mland:py-1.5 flex flex-col items-center justify-between gap-1 cursor-pointer transition-colors"
+                            >
+                              <div className="text-[9px] mland:text-[8px] font-bold text-[var(--g)] leading-none truncate max-w-full">
+                                ด้านหลัง ({spotlightIsGK ? 'ชุดโกล' : showroomBackAway ? 'ชุดเยือน' : 'ชุดเหย้า'})
+                              </div>
                               <KitJersey
                                 club={clubK}
                                 team={me}
                                 state={state}
+                                away={showroomBackAway}
+                                side="back"
                                 shirtNo={spotlightNo}
+                                playerName={spotlightShortName}
                                 isGK={spotlightIsGK}
-                                size={48}
+                                size={46}
                               />
-                              <div className="text-[10.5px] font-bold leading-tight truncate w-full">{spotlightLabel}</div>
-                              <div className="text-[10px] font-bold text-[var(--g)] tabular">{curTierDef.printedJerseyBaht}฿</div>
-                            </div>
+                              <div className="w-full space-y-0.5">
+                                <div className="text-[10.5px] mland:text-[9.5px] font-extrabold text-[var(--ink)] leading-tight truncate" title={spotlightLabel}>
+                                  {spotlightPl ? `#${spotlightNo} ${spotlightShortName}` : 'ตัวอย่างสกรีน'}
+                                </div>
+                                <div className="text-[10px] mland:text-[9px] font-bold text-[var(--g)] tabular">
+                                  สกรีนชื่อ+เบอร์ · {megastoreProj.effectivePrintedBaht}฿
+                                </div>
+                              </div>
+                            </button>
                           </div>
 
-                          {/* Featured Presenter Selector */}
-                          <div className="pt-2 border-t border-[var(--line)]/55 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                            <div className="min-w-0 flex items-center gap-1.5">
-                              <span className="font-bold text-[var(--mut)] shrink-0">พรีเซ็นเตอร์หน้าร้าน:</span>
-                              <span className="text-[var(--g)] font-semibold truncate">
-                                {activeFeaturedName ? '+32% ยอดเสื้อเจ้าตัว' : 'อัตโนมัติตามฟอร์ม'}
-                              </span>
+                          {/* Featured Presenter Showcase & Selector */}
+                          <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)]/85 px-2.5 py-1.5 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {spotlightPl ? (
+                                <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8">
+                                  <PlayerFace player={spotlightPl} team={me} state={state} club={state.club} isMyClub size={32} />
+                                </div>
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-center shrink-0 text-[var(--mut)]">
+                                  <Shirt className="w-4 h-4" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 text-[10px] leading-tight">
+                                  <span className="font-bold text-[var(--mut)] shrink-0">พรีเซ็นเตอร์หน้าร้าน</span>
+                                  <span className="opacity-40">·</span>
+                                  <span className={`font-bold truncate ${activeFeaturedName ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                                    {activeFeaturedName ? 'โชว์สกรีนหลังเสื้อ (+32% ยอดตัวนี้)' : 'อัตโนมัติ (ตัวขายดี/ดาวเด่น)'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+                                  {spotlightPl && <PositionBadge role={spotlightPl.ro} size="2xs" />}
+                                  <span className="font-bold text-[11.5px] mland:text-[10.5px] text-[var(--ink)] truncate">
+                                    {spotlightPl ? `#${spotlightNo} ${spotlightPl.n}` : 'เลือกอัตโนมัติ'}
+                                  </span>
+                                  {spotlightPl && me.cap === spotlightPl.n && (
+                                    <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <select
-                              aria-label="เลือกนักเตะพรีเซ็นเตอร์หน้าร้าน"
-                              value={activeFeaturedName || ''}
-                              onChange={(e) => changeFeaturedPlayer(e.target.value)}
-                              className="px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] font-semibold text-[var(--ink)] max-w-[180px] cursor-pointer"
-                            >
-                              <option value="">อัตโนมัติ (ตามฟอร์ม)</option>
-                              {sortedSquadForPresenter.map((pl) => (
-                                <option key={pl.n} value={pl.n}>
-                                  #{getShirtNo(me, pl)} {pl.n} ({pl.ro} · {pl.ov})
-                                </option>
-                              ))}
-                            </select>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <div className="relative">
+                                <div className="inline-flex items-center gap-1 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] pointer-events-none whitespace-nowrap">
+                                  <span>{activeFeaturedName ? 'เปลี่ยนตัว' : 'เลือกนักเตะ'}</span>
+                                  <ChevronDown className="w-3.5 h-3.5 text-[var(--mut)]" />
+                                </div>
+                                <select
+                                  aria-label="เลือกนักเตะพรีเซ็นเตอร์หน้าร้าน"
+                                  value={activeFeaturedName || ''}
+                                  onChange={(e) => changeFeaturedPlayer(e.target.value)}
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                >
+                                  <option value="">อัตโนมัติ (ตัวขายดี/ดาวเด่น)</option>
+                                  {sortedSquadForPresenter.map((pl) => (
+                                    <option key={pl.n} value={pl.n}>
+                                      #{getShirtNo(me, pl)} {pl.n} ({pl.ro} · {pl.ov})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              {activeFeaturedName && (
+                                <button
+                                  type="button"
+                                  onClick={() => changeFeaturedPlayer('')}
+                                  title="กลับไปใช้พรีเซ็นเตอร์อัตโนมัติตามฟอร์ม"
+                                  aria-label="รีเซ็ตพรีเซ็นเตอร์เป็นอัตโนมัติ"
+                                  className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--red-soft)] hover:text-[var(--red)] border border-[var(--line)] inline-flex items-center justify-center text-[var(--mut)] cursor-pointer transition-colors"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -2517,7 +2671,7 @@ export const FinanceClubView = React.memo<{
                             <div className="text-[10.5px] font-bold text-[var(--g)]">{fmtMoney(activeBlankRev)}</div>
                           </div>
                           <div className="px-1">
-                            <div className="text-[10px] text-[var(--mut)]">สกรีนนักเตะรวม</div>
+                            <div className="text-[10px] text-[var(--mut)]">สกรีนชื่อ+เบอร์</div>
                             <div className="font-bold text-xs mt-0.5">{activePrintedUnits.toLocaleString()} ตัว</div>
                             <div className="text-[10.5px] font-bold text-[var(--g)]">{fmtMoney(activePrintedRev)}</div>
                           </div>
@@ -2670,7 +2824,7 @@ export const FinanceClubView = React.memo<{
 
                             <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1 border-y border-[var(--line)]/60 text-[10.5px] text-center tabular">
                               <div className="px-1">
-                                <div className="text-[var(--mut)]">สกรีนนักเตะ</div>
+                                <div className="text-[var(--mut)]">สกรีนชื่อ+เบอร์</div>
                                 <b>{arch.printedJerseysTotal.units.toLocaleString()} ตัว</b> · {fmtMoney(arch.printedJerseysTotal.revenue)}
                               </div>
                               <div className="px-1">

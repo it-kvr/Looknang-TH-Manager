@@ -408,6 +408,8 @@ export const KitJersey: React.FC<{
   sponsorBrand?: ShirtSponsorBrand | null;
   hideNumber?: boolean;
   shirtNo?: number | string;
+  playerName?: string;
+  side?: 'front' | 'back';
   isGK?: boolean;
 }> = ({
   club,
@@ -418,9 +420,12 @@ export const KitJersey: React.FC<{
   sponsorBrand,
   hideNumber = false,
   shirtNo = '10',
+  playerName,
+  side = 'front',
   isGK = false
 }) => {
   const uid = React.useId().replace(/:/g, '');
+  const isBack = side === 'back';
   const gkBase = isGK ? pickGK(club.c1, club.c2) : null;
   const c = gkBase || (away ? club.c2 : club.c1);
   const d = gkBase ? (colDist(gkBase, '#111827') > 160 ? '#111827' : '#ffffff') : (away ? club.c1 : club.c2);
@@ -441,17 +446,23 @@ export const KitJersey: React.FC<{
       : p === 4 || p === 5 || p === 8 || p === 9 || p === 11
         ? '#ffffff'
         : d;
+  const numStroke = colLum(numFill) > 0.5 ? '#090d16' : '#ffffff';
   const numText = String(shirtNo ?? '10');
-  const numFontSize = numText.length >= 2 ? 19 : 21;
+  const numFontSize = isBack ? (numText.length >= 2 ? 27 : 31) : numText.length >= 2 ? 19 : 21;
+  const rawBackName = (playerName || '').trim();
+  const backNameText = rawBackName.length > 10 ? `${rawBackName.slice(0, 9)}.` : rawBackName;
+  const backNameFontSize = backNameText.length >= 9 ? 7.6 : backNameText.length >= 7 ? 8.6 : 9.6;
 
   const resolvedBrand =
-    sponsorBrand !== undefined
-      ? sponsorBrand
-      : state && (!team || team.id === state.me)
-        ? resolveStateSponsorBrand(state)
-        : team
-          ? getAiTeamSponsorBrand(team.id, state?.season ?? 1, state ? resolveStateSponsorBrand(state).id : null)
-          : SHIRT_SPONSOR_BRANDS[0];
+    isBack
+      ? null
+      : sponsorBrand !== undefined
+        ? sponsorBrand
+        : state && (!team || team.id === state.me)
+          ? resolveStateSponsorBrand(state)
+          : team
+            ? getAiTeamSponsorBrand(team.id, state?.season ?? 1, state ? resolveStateSponsorBrand(state).id : null)
+            : SHIRT_SPONSOR_BRANDS[0];
 
   const isDarkShirt = colLum(c) < 0.44;
   const spCenterX = 50;
@@ -496,32 +507,43 @@ export const KitJersey: React.FC<{
           </>
         )}
 
-        {/* Collar Styles */}
-        {collar === 0 && <path d="M30 10c4 9 10 11 20 11s16-2 20-11" fill="none" stroke={accent} strokeWidth="4" strokeLinecap="round" />}
-        {collar === 1 && <path d="M30 10l20 17 20-17" fill="none" stroke={accent} strokeWidth="4" strokeLinejoin="round" />}
-        {collar === 2 && (
+        {/* Collar Styles (Front vs Shallow Back Neckline) */}
+        {isBack ? (
           <>
-            <path d="M30 10l12 12 8-4 8 4 12-12z" fill={d} stroke={accent} strokeWidth="1.5" />
-            <line x1="50" y1="18" x2="50" y2="29" stroke={accent} strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M30 10c5 4.2 11 5.5 20 5.5s15-1.3 20-5.5" fill="none" stroke={d} strokeWidth="4.2" strokeLinecap="round" />
+            <path d="M32 10.4c4.5 3.4 10 4.5 18 4.5s13.5-1.1 18-4.5" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" />
           </>
-        )}
-        {collar === 3 && (
+        ) : (
           <>
-            <path d="M30 10c4 9 10 11 20 11s16-2 20-11" fill="none" stroke={d} strokeWidth="5.5" />
-            <path d="M32 11c4 7 9 9 18 9s14-2 18-9" fill="none" stroke={accent} strokeWidth="2" />
+            {collar === 0 && <path d="M30 10c4 9 10 11 20 11s16-2 20-11" fill="none" stroke={accent} strokeWidth="4" strokeLinecap="round" />}
+            {collar === 1 && <path d="M30 10l20 17 20-17" fill="none" stroke={accent} strokeWidth="4" strokeLinejoin="round" />}
+            {collar === 2 && (
+              <>
+                <path d="M30 10l12 12 8-4 8 4 12-12z" fill={d} stroke={accent} strokeWidth="1.5" />
+                <line x1="50" y1="18" x2="50" y2="29" stroke={accent} strokeWidth="2.5" strokeLinecap="round" />
+              </>
+            )}
+            {collar === 3 && (
+              <>
+                <path d="M30 10c4 9 10 11 20 11s16-2 20-11" fill="none" stroke={d} strokeWidth="5.5" />
+                <path d="M32 11c4 7 9 9 18 9s14-2 18-9" fill="none" stroke={accent} strokeWidth="2" />
+              </>
+            )}
           </>
         )}
       </g>
 
       <path d={J} fill="none" stroke="#0e2b1f" strokeWidth="2" />
 
-      {/* Real Club Crest on Left Chest */}
-      <g
-        transform="translate(55, 25) scale(0.46)"
-        dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(resolveCrestSpec(club.name || team?.name || 'Club', team, club, true), `${uid}-jc`) }}
-      />
+      {/* Real Club Crest on Left Chest (Front View Only) */}
+      {!isBack && (
+        <g
+          transform="translate(55, 25) scale(0.46)"
+          dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(resolveCrestSpec(club.name || team?.name || 'Club', team, club, true), `${uid}-jc`) }}
+        />
+      )}
 
-      {/* Screen-Printed Center-Chest Sponsor Emblem (text-free, centered) */}
+      {/* Screen-Printed Center-Chest Sponsor Emblem (Front View Only) */}
       {resolvedBrand && (
         <g>
           <rect
@@ -581,17 +603,39 @@ export const KitJersey: React.FC<{
         </g>
       )}
 
+      {/* Back View: Player Name + Center Back Squad Number */}
+      {isBack && backNameText && (
+        <text
+          x="50"
+          y="33"
+          textAnchor="middle"
+          fontSize={backNameFontSize}
+          fontWeight="800"
+          fontFamily="Sarabun"
+          fill={numFill}
+          stroke={numStroke}
+          strokeOpacity="0.55"
+          strokeWidth="1.6"
+          paintOrder="stroke"
+          letterSpacing="0.3"
+        >
+          {backNameText}
+        </text>
+      )}
+
       {!hideNumber && (
         <text
           x="50"
-          y="74.5"
+          y={isBack ? (backNameText ? 66.5 : 59) : 74.5}
           textAnchor="middle"
           fontSize={numFontSize}
           fontWeight="800"
           fontFamily="Sarabun"
           fill={numFill}
-          stroke="#0008"
-          strokeWidth="1.1"
+          stroke={numStroke}
+          strokeOpacity="0.6"
+          strokeWidth={isBack ? '2.2' : '1.4'}
+          paintOrder="stroke"
         >
           {numText}
         </text>

@@ -131,15 +131,16 @@ export const CustomFormationModal: React.FC<{
     if (!ds) return;
     const dist = Math.hypot(clientX - ds.startX, clientY - ds.startY);
     const pitchH = ds.cachedRect?.height || svgRef.current?.getBoundingClientRect().height || 260;
-    const targetLift = ds.isTouch ? clamp(pitchH * 0.085, 16, 26) : 0;
-    const liftRamp = ds.isTouch ? clamp(dist / 24, 0, 1) : 1;
+    const targetLift = ds.isTouch ? clamp(pitchH * 0.21, 46, 58) : 0;
+    const t = clamp(dist / 18, 0, 1);
+    const liftRamp = ds.isTouch ? 1 - (1 - t) * (1 - t) : 1;
     const liftPx = targetLift * liftRamp;
 
     const rawPt = clientToSvg(clientX, clientY, ds.cachedRect, ds.cachedInvCtm);
     const liftPt = clientToSvg(clientX, clientY - liftPx, ds.cachedRect, ds.cachedInvCtm);
     if (!rawPt || !liftPt) return;
 
-    const grabFade = 1 - liftRamp * 0.55;
+    const grabFade = ds.isTouch ? 1 - liftRamp : 1;
     const adjPx = liftPt.px + ds.grabDxSvg * grabFade;
     const adjPy = liftPt.py + ds.grabDySvg * grabFade;
 
