@@ -1415,7 +1415,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
           ag.ty = clamp(targetY, 43, 57);
         } else if (!wallDefs.some((w) => w.id === ag.id) && !ag.gk) {
           // Box runners sprint into penalty area during free kick approach
-          if (ag.pos === 'FW' || ag.ro === 'CB') {
+          if (ag.pos === 'FW' || ag.ro === 'CB' || ag.ro === 'LCB' || ag.ro === 'RCB') {
             ag.tx = clamp(inp.attRight ? 88 + (ag.slotIndex % 3) * 2.2 : 12 - (ag.slotIndex % 3) * 2.2, 6, 94);
             ag.ty = clamp(40 + (ag.slotIndex % 4) * 6.5, 34, 66);
           }

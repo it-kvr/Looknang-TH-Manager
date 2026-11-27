@@ -1,9 +1,9 @@
 export type Position = 'GK' | 'DF' | 'MF' | 'FW';
 export type SubRole =
   | 'GK'
-  | 'CB' | 'LB' | 'RB' | 'LWB' | 'RWB'
+  | 'CB' | 'LCB' | 'RCB' | 'LB' | 'RB' | 'LWB' | 'RWB'
   | 'CDM' | 'LDM' | 'RDM' | 'CM' | 'LCM' | 'RCM' | 'CAM' | 'LM' | 'RM'
-  | 'ST' | 'CF' | 'LW' | 'RW';
+  | 'ST' | 'LST' | 'RST' | 'CF' | 'LW' | 'RW';
 
 export type StatKey = 'sh' | 'ps' | 'dr' | 'tk' | 'ph';
 export type Mentality = 'X' | 'A' | 'B' | 'D' | 'Z';

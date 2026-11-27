@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, TimelineKind, MatchTimelineItem, ArchivedStreamComment, MatchHighlightClip } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
-import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
+import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE, baseRoleOf } from '../data/thaiFootballData';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
 import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
 import { useScrollTopOnChange } from '../utils/scrollReset';
@@ -2414,8 +2414,8 @@ export const MatchModal: React.FC<{
     const defPressers = activeAgents
       .filter((a) => a.side === defSide && a.pos !== 'GK')
       .sort((u, v) => {
-        const uPenalty = u.role === 'CB' && defBallNormX >= 42 ? 22 : 0;
-        const vPenalty = v.role === 'CB' && defBallNormX >= 42 ? 22 : 0;
+        const uPenalty = baseRoleOf(u.role) === 'CB' && defBallNormX >= 42 ? 22 : 0;
+        const vPenalty = baseRoleOf(v.role) === 'CB' && defBallNormX >= 42 ? 22 : 0;
         return (Math.hypot(u.x - b.x, u.y - b.y) + uPenalty) - (Math.hypot(v.x - b.x, v.y - b.y) + vPenalty);
       });
     const primaryPresserId = defPressers[0]?.id;
@@ -2480,13 +2480,17 @@ export const MatchModal: React.FC<{
         ? (setPiece.takerId ? activeAgents.find((z) => z.id === setPiece.takerId) : undefined) ||
           resolveSetPieceTaker(w, setPiece.side, 'corner')
         : undefined;
-    const cornerScoreAtt = (z: LivePitchAgent) =>
-      (z.role === 'CB' ? 44 : z.pos === 'FW' ? 30 : z.role === 'CDM' || z.role === 'LB' || z.role === 'RB' || z.role === 'LWB' || z.role === 'RWB' ? -22 : 6) +
-      z.d.hd +
-      z.d.str +
-      (z.sig === 'hd' ? 12 : 0) +
-      (agentHasTrait(z, 'aerial_menace') ? 16 : 0) +
-      (agentHasTrait(z, 'near_post_runner') ? 8 : 0);
+    const cornerScoreAtt = (z: LivePitchAgent) => {
+      const zBase = baseRoleOf(z.role);
+      return (
+        (zBase === 'CB' ? 44 : z.pos === 'FW' ? 30 : zBase === 'CDM' || z.role === 'LB' || z.role === 'RB' || z.role === 'LWB' || z.role === 'RWB' ? -22 : 6) +
+        z.d.hd +
+        z.d.str +
+        (z.sig === 'hd' ? 12 : 0) +
+        (agentHasTrait(z, 'aerial_menace') ? 16 : 0) +
+        (agentHasTrait(z, 'near_post_runner') ? 8 : 0)
+      );
+    };
     const cornerAttList =
       setPiece && setPiece.type === 'corner'
         ? activeAgents
@@ -2497,13 +2501,16 @@ export const MatchModal: React.FC<{
       setPiece && setPiece.type === 'corner'
         ? activeAgents
             .filter((z) => z.side !== setPiece.side && z.pos !== 'GK')
-            .sort(
-              (u, v) =>
-                (v.role === 'CB' ? 36 : v.pos === 'DF' ? 20 : v.role === 'CDM' ? 10 : 0) +
+            .sort((u, v) => {
+              const uBase = baseRoleOf(u.role);
+              const vBase = baseRoleOf(v.role);
+              return (
+                (vBase === 'CB' ? 36 : v.pos === 'DF' ? 20 : vBase === 'CDM' ? 10 : 0) +
                 v.d.hd +
                 v.d.str -
-                ((u.role === 'CB' ? 36 : u.pos === 'DF' ? 20 : u.role === 'CDM' ? 10 : 0) + u.d.hd + u.d.str)
-            )
+                ((uBase === 'CB' ? 36 : u.pos === 'DF' ? 20 : uBase === 'CDM' ? 10 : 0) + u.d.hd + u.d.str)
+              );
+            })
         : [];
 
     const celeb = w.celebration;
@@ -2934,11 +2941,11 @@ export const MatchModal: React.FC<{
           }
           if (fkDistToGoal >= 36) {
             const boxCands = activeAgents
-              .filter((z) => z.side === setPiece.side && z.id !== fkTakerId && (z.role === 'CB' || z.pos === 'FW'))
+              .filter((z) => z.side === setPiece.side && z.id !== fkTakerId && (baseRoleOf(z.role) === 'CB' || z.pos === 'FW'))
               .sort(
                 (u, v) =>
-                  (v.role === 'CB' ? 20 : 12) + v.d.hd + (v.sig === 'hd' ? 10 : 0) -
-                  ((u.role === 'CB' ? 20 : 12) + u.d.hd + (u.sig === 'hd' ? 10 : 0))
+                  (baseRoleOf(v.role) === 'CB' ? 20 : 12) + v.d.hd + (v.sig === 'hd' ? 10 : 0) -
+                  ((baseRoleOf(u.role) === 'CB' ? 20 : 12) + u.d.hd + (u.sig === 'hd' ? 10 : 0))
               );
             const bIdx = boxCands.findIndex((z) => z.id === ag.id);
             if (bIdx >= 0 && bIdx < 4) {
@@ -2972,7 +2979,7 @@ export const MatchModal: React.FC<{
         }
         if (ag.side !== setPiece.side && ag.pos !== 'GK' && fkDistToGoal >= 36) {
           const defHoldX = fkAttRight ? 85.5 + (ag.slotIndex % 3) * 2.2 : 14.5 - (ag.slotIndex % 3) * 2.2;
-          if (ag.pos === 'DF' || ag.role === 'CDM') {
+          if (ag.pos === 'DF' || baseRoleOf(ag.role) === 'CDM') {
             ag.tx = clamp(defHoldX, 6, 94);
             ag.ty = clamp(32 + ((ag.slotIndex * 7.5) % 36), 28, 72);
             ag.intent = 'MARK';
@@ -3228,14 +3235,14 @@ export const MatchModal: React.FC<{
         const attPushBias = cfg.tac === 'X' ? 3.5 : cfg.tac === 'A' ? 2.0 : cfg.tac === 'Z' ? -5.0 : cfg.tac === 'D' ? -2.5 : 0;
 
         // ROLE-DISTINCT OFF-BALL INTELLIGENCE (anchored faithfully to each player's formation lane & line)
-        if (ag.role === 'ST' || (ag.sig === 'run' && ag.pos === 'FW' && ag.role !== 'LW' && ag.role !== 'RW' && ag.role !== 'CF')) {
+        if (baseRoleOf(ag.role) === 'ST' || (ag.sig === 'run' && ag.pos === 'FW' && ag.role !== 'LW' && ag.role !== 'RW' && ag.role !== 'CF')) {
           const shoulderNorm = Math.min(88.5, oppDefNorm - 1.8);
           const readyToSprint = ballNormX > 52 && carrier && carrier.side === ag.side && (cfg.pass >= 2 || cfg.tempo === 2 || cfg.tac === 'A' || cfg.tac === 'X');
           const wideCrossSituation = ballNormX > 66 && Math.abs(b.y - 50) > 20;
           let stLaneY = clamp(widenedY * 0.78 + 50 * 0.22 + (b.y - 50) * 0.14 + Math.sin(w.minuteFloat * 0.9 + ag.slotIndex) * 4.0, 18, 82);
           if (wideCrossSituation) {
             const boxStrikers = activeAgents
-              .filter((z) => z.side === ag.side && z.id !== carrier?.id && (z.role === 'ST' || z.role === 'CF'))
+              .filter((z) => z.side === ag.side && z.id !== carrier?.id && (baseRoleOf(z.role) === 'ST' || z.role === 'CF'))
               .sort((u, v) => (attRight ? u.slotX - v.slotX : v.slotX - u.slotX));
             const sIdx = boxStrikers.findIndex((z) => z.id === ag.id);
             const ballTopSide = b.y < 50;
@@ -4621,7 +4628,7 @@ export const MatchModal: React.FC<{
           pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) วิ่งเข้ามา${isCurlerFk ? 'ปั่นฟรีคิกโค้งๆ' : 'ซัดฟรีคิก'}ข้ามกำแพง!`);
         } else {
           const boxTarget =
-            attPool.filter((a) => a.pos === 'FW' || a.role === 'CB').sort((u, v) => (v.d.hd + (v.sig === 'hd' ? 10 : 0) + (agentHasTrait(v, 'aerial_menace') ? 15 : 0)) - (u.d.hd + (u.sig === 'hd' ? 10 : 0) + (agentHasTrait(u, 'aerial_menace') ? 15 : 0)))[0] ||
+            attPool.filter((a) => a.pos === 'FW' || baseRoleOf(a.role) === 'CB').sort((u, v) => (v.d.hd + (v.sig === 'hd' ? 10 : 0) + (agentHasTrait(v, 'aerial_menace') ? 15 : 0)) - (u.d.hd + (u.sig === 'hd' ? 10 : 0) + (agentHasTrait(u, 'aerial_menace') ? 15 : 0)))[0] ||
             attPool[1] ||
             taker;
           const destX = clamp(attRight ? 88 + Math.random() * 6 : 6 + Math.random() * 6, 6, 94);
@@ -4666,13 +4673,13 @@ export const MatchModal: React.FC<{
             .filter((a) => a.id !== taker?.id && a.pos !== 'GK')
             .sort(
               (u, v) =>
-                (v.role === 'CB' ? 44 : v.pos === 'FW' ? 30 : 0) +
+                (baseRoleOf(v.role) === 'CB' ? 44 : v.pos === 'FW' ? 30 : 0) +
                 v.d.hd +
                 v.d.str +
                 (v.sig === 'hd' ? 12 : 0) +
                 (agentHasTrait(v, 'aerial_menace') ? 16 : 0) +
                 (agentHasTrait(v, 'near_post_runner') ? 8 : 0) -
-                ((u.role === 'CB' ? 44 : u.pos === 'FW' ? 30 : 0) +
+                ((baseRoleOf(u.role) === 'CB' ? 44 : u.pos === 'FW' ? 30 : 0) +
                   u.d.hd +
                   u.d.str +
                   (u.sig === 'hd' ? 12 : 0) +
@@ -6252,7 +6259,7 @@ export const MatchModal: React.FC<{
     );
     if (inWingZone && Math.random() < crossProb) {
       const boxRunners = attPool
-        .filter((a) => a.id !== carrier.id && (a.pos === 'FW' || a.role === 'CAM' || a.role === 'CM'))
+        .filter((a) => a.id !== carrier.id && (a.pos === 'FW' || a.role === 'CAM' || baseRoleOf(a.role) === 'CM'))
         .sort((u, v) => {
           const uOff = checkPassOffside(w, side, carrier, u, defPool).isOffside ? -30 : 0;
           const vOff = checkPassOffside(w, side, carrier, v, defPool).isOffside ? -30 : 0;
@@ -6368,7 +6375,7 @@ export const MatchModal: React.FC<{
 
     // 5. Through-Ball onto an Off-Ball Run ("ทำทาง") with Real Offside Check!
     const forwardRunners = attPool
-      .filter((a) => a.id !== carrier.id && (a.role === 'ST' || a.role === 'CF' || a.role === 'LW' || a.role === 'RW' || a.intent === 'MAKE_RUN' || a.intent === 'OVERLAP'))
+      .filter((a) => a.id !== carrier.id && (baseRoleOf(a.role) === 'ST' || a.role === 'CF' || a.role === 'LW' || a.role === 'RW' || a.intent === 'MAKE_RUN' || a.intent === 'OVERLAP'))
       .filter((a) => (attRight ? a.x > carrier.x - 4 : a.x < carrier.x + 4));
 
     const throughWeight = clamp(
@@ -6491,7 +6498,8 @@ export const MatchModal: React.FC<{
         let wgt = 10;
         if (attCfg.pass === 0 || agentHasTrait(carrier, 'tempo_controller')) {
           wgt += dist < 22 ? 30 : -dist * 0.65;
-          if (cand.role === 'CF' || cand.role === 'CM' || cand.role === 'CAM' || cand.role === 'CDM') wgt += 11;
+          const candBase = baseRoleOf(cand.role);
+          if (cand.role === 'CF' || candBase === 'CM' || cand.role === 'CAM' || candBase === 'CDM') wgt += 11;
         } else if (attCfg.pass === 2 || carrier.sig === 'dist' || agentHasTrait(carrier, 'long_diagonal') || agentHasTrait(carrier, 'ball_playing_cb')) {
           wgt += prog > 12 ? 28 : prog < 0 ? -6 : 2;
           if (Math.abs(cand.y - carrier.y) > 25) wgt += 16;
@@ -9056,7 +9064,7 @@ export const MatchModal: React.FC<{
             ? closerAtt
             : undefined;
       const topDefCand = defPool
-        .filter((d) => d.pos === 'DF' || d.pos === 'GK' || d.role === 'CDM')
+        .filter((d) => d.pos === 'DF' || d.pos === 'GK' || baseRoleOf(d.role) === 'CDM')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
       const topDefDist = topDefCand ? Math.hypot(topDefCand.x - b.toX, topDefCand.y - b.toY) : 99;
       const topDef = topDefCand && topDefDist <= (topDefCand.pos === 'GK' ? 8.2 : 7.2) ? topDefCand : undefined;
@@ -10762,7 +10770,7 @@ export const MatchModal: React.FC<{
           const fatigueNeed = (100 - fitNow) * 1.15;
           const cardRisk = yCnt > 0 ? 18 : 0;
           const lowFormBonus = rtNow < 6.1 ? 11 : 0;
-          const chaseNeed = isChasing && (x.pl.pos === 'DF' || x.pl.ro === 'CDM') && rtNow < 6.7 ? 12 : 0;
+          const chaseNeed = isChasing && (x.pl.pos === 'DF' || baseRoleOf(x.pl.ro) === 'CDM') && rtNow < 6.7 ? 12 : 0;
           const protectVeteran = isSafeLead && x.pl.age >= 24 ? 16 : 0;
           const keepYoungster = x.pl.age <= 21 && fitNow >= 64 ? -22 : 0;
           return { ...x, outScore: fatigueNeed + cardRisk + lowFormBonus + offPos + chaseNeed + protectVeteran + keepYoungster };
@@ -11693,7 +11701,7 @@ export const MatchModal: React.FC<{
             let boxAttackersReady = true;
             if (spType === 'corner') {
               const cornerAttackers = w.agents.filter(
-                (a) => !a.sentOff && a.side === sp.side && a.pos !== 'GK' && a.id !== sp.takerId && (a.role === 'CB' || a.pos === 'FW')
+                (a) => !a.sentOff && a.side === sp.side && a.pos !== 'GK' && a.id !== sp.takerId && (baseRoleOf(a.role) === 'CB' || a.pos === 'FW')
               );
               const arrivedCount = cornerAttackers.filter(
                 (a) => Math.hypot(a.tx - a.x, a.ty - a.y) <= 3.6 || (spAttRight ? a.x >= 82 : a.x <= 18)
@@ -11703,7 +11711,7 @@ export const MatchModal: React.FC<{
               const fkGoalX = spAttRight ? 100 : 0;
               if (Math.hypot(fkGoalX - sp.x, 50 - sp.y) >= 36) {
                 const fkBoxRunners = w.agents.filter(
-                  (a) => !a.sentOff && a.side === sp.side && a.id !== sp.takerId && (a.role === 'CB' || a.pos === 'FW')
+                  (a) => !a.sentOff && a.side === sp.side && a.id !== sp.takerId && (baseRoleOf(a.role) === 'CB' || a.pos === 'FW')
                 );
                 const arrivedFk = fkBoxRunners.filter(
                   (a) => Math.hypot(a.tx - a.x, a.ty - a.y) <= 4.0 || (spAttRight ? a.x >= 80 : a.x <= 20)

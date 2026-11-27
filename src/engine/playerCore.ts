@@ -224,11 +224,11 @@ export function firstEmptySlot(m: GameMode): number {
 
 export const SPW = (p: Position): SubRole =>
   p === 'DF'
-    ? P(['CB', 'CB', 'CB', 'LB', 'RB', 'LWB', 'RWB'])
+    ? P(['CB', 'LCB', 'RCB', 'LB', 'RB', 'LWB', 'RWB'])
     : p === 'MF'
-      ? P(['CM', 'CM', 'CDM', 'CAM', 'LM', 'RM'])
+      ? P(['CM', 'LCM', 'RCM', 'CDM', 'LDM', 'RDM', 'CAM', 'LM', 'RM'])
       : p === 'FW'
-        ? P(['ST', 'ST', 'CF', 'LW', 'RW'])
+        ? P(['ST', 'LST', 'RST', 'CF', 'LW', 'RW'])
         : 'GK';
 
 export interface PositionShirtGuide {
@@ -271,6 +271,18 @@ const ROLE_SHIRT_POOLS: Record<SubRole, PositionShirtGuide> = {
   },
   CB: {
     label: 'เซ็นเตอร์แบ็ก (CB)',
+    primary: [4, 5],
+    alt: [3, 6, 14, 15, 24, 26, 33],
+    reason: 'กองหลังตัวกลางที่ออกบอลดีมักชอบเบอร์ 4, 5, 6 ส่วนเบอร์ 24, 26 เป็นเบอร์ยอดนิยมของกองหลังตัวหลักยุคใหม่'
+  },
+  LCB: {
+    label: 'เซ็นเตอร์แบ็กซ้าย (LCB)',
+    primary: [4, 5],
+    alt: [3, 6, 14, 15, 24, 26, 33],
+    reason: 'กองหลังตัวกลางที่ออกบอลดีมักชอบเบอร์ 4, 5, 6 ส่วนเบอร์ 24, 26 เป็นเบอร์ยอดนิยมของกองหลังตัวหลักยุคใหม่'
+  },
+  RCB: {
+    label: 'เซ็นเตอร์แบ็กขวา (RCB)',
     primary: [4, 5],
     alt: [3, 6, 14, 15, 24, 26, 33],
     reason: 'กองหลังตัวกลางที่ออกบอลดีมักชอบเบอร์ 4, 5, 6 ส่วนเบอร์ 24, 26 เป็นเบอร์ยอดนิยมของกองหลังตัวหลักยุคใหม่'
@@ -343,6 +355,18 @@ const ROLE_SHIRT_POOLS: Record<SubRole, PositionShirtGuide> = {
   },
   ST: {
     label: 'กองหน้าตัวเป้า (ST)',
+    primary: [9],
+    alt: [7, 10, 11, 14, 18, 19, 20, 99],
+    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
+  },
+  LST: {
+    label: 'กองหน้าตัวเป้าซ้าย (LST)',
+    primary: [9],
+    alt: [7, 10, 11, 14, 18, 19, 20, 99],
+    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
+  },
+  RST: {
+    label: 'กองหน้าตัวเป้าขวา (RST)',
     primary: [9],
     alt: [7, 10, 11, 14, 18, 19, 20, 99],
     reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
@@ -672,7 +696,8 @@ export function rollPlayerTraits(
     const weighted: FootballTraitDef[] = [];
     avail.forEach((t) => {
       let w = 2;
-      if (t.roles?.includes(ro)) w += 4;
+      const eqRo = (EQ[ro] || ro) as SubRole;
+      if (t.roles?.includes(ro) || t.roles?.includes(eqRo)) w += 4;
       if (t.pos.length === 1) w += 2;
       if (step === 0 && (t.tone === 'gk' || (pos === 'FW' && t.tone === 'att') || (pos === 'DF' && t.tone === 'def') || (pos === 'MF' && t.tone === 'play'))) {
         w += 3;
@@ -751,11 +776,11 @@ export function rollPlayerBio(
     minH = 182;
     maxH = 194;
     bmiBase = 23.0;
-  } else if (ro === 'CB') {
+  } else if (ro === 'CB' || ro === 'LCB' || ro === 'RCB') {
     minH = 179;
     maxH = 192;
     bmiBase = 23.1;
-  } else if (ro === 'ST' || ro === 'CF') {
+  } else if (ro === 'ST' || ro === 'LST' || ro === 'RST' || ro === 'CF') {
     minH = 173;
     maxH = 189;
     bmiBase = 22.8;
@@ -1277,8 +1302,11 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null): DtResult {
   };
   const roleMod: Partial<Record<SubRole, Partial<CoreAttrs>>> = {
     CF: { ps: 5, dr: 2, sh: -2 },
-    ST: { sh: 4, ph: 2, ps: -4 }
+    ST: { sh: 4, ph: 2, ps: -4 },
+    LST: { sh: 4, ph: 2, ps: -4 },
+    RST: { sh: 4, ph: 2, ps: -4 }
   };
+  const baseRo = EQ[q.ro] || q.ro;
   const rawBaseA: CoreAttrs = aSrc
     ? { ...aSrc }
     : q.customA
@@ -1324,15 +1352,15 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null): DtResult {
 
   const d: Record<string, number> = {
     pw: cl(baseA.sh * 0.6 + baseA.ph * 0.4 + hv(1)),
-    fin: cl(baseA.sh + hv(2) + (q.pos === 'FW' ? 4 : 0) + (q.ro === 'ST' ? 2 : 0)),
+    fin: cl(baseA.sh + hv(2) + (q.pos === 'FW' ? 4 : 0) + (baseRo === 'ST' ? 2 : 0)),
     cur: cl(baseA.sh * 0.5 + baseA.ps * 0.5 + hv(3) + (q.ro === 'CAM' || q.ro === 'CF' ? 2 : 0)),
-    lsh: cl(baseA.sh * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(32) + (q.ro === 'CAM' || q.ro === 'CM' || q.ro === 'LW' || q.ro === 'RW' ? 3 : 0)),
+    lsh: cl(baseA.sh * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(32) + (q.ro === 'CAM' || baseRo === 'CM' || q.ro === 'LW' || q.ro === 'RW' ? 3 : 0)),
     fk: cl(baseA.sh * 0.4 + baseA.ps * 0.45 + baseA.dr * 0.15 + hv(20) + (q.pos === 'MF' ? 3 : 0)),
-    run: cl(baseA.sh * 0.5 + baseA.dr * 0.3 + baseA.ph * 0.2 + hv(5) + (q.ro === 'ST' || q.ro === 'LW' || q.ro === 'RW' ? 3 : 0)),
+    run: cl(baseA.sh * 0.5 + baseA.dr * 0.3 + baseA.ph * 0.2 + hv(5) + (baseRo === 'ST' || q.ro === 'LW' || q.ro === 'RW' ? 3 : 0)),
     drb: cl(baseA.dr * 0.78 + baseA.ph * 0.12 + tlVal * 0.1 + hv(30) + (q.ro === 'LW' || q.ro === 'RW' || q.ro === 'CAM' || q.ro === 'CF' ? 3 : 0)),
     ctrl: cl(baseA.dr * 0.55 + baseA.ps * 0.35 + tlVal * 0.1 + hv(31) + (q.pos === 'MF' || q.ro === 'CF' ? 3 : 0)),
     spass: cl(baseA.ps * 0.72 + baseA.dr * 0.16 + tlVal * 0.08 + hv(28) + (q.pos === 'MF' ? 4 : q.ro === 'CF' || q.ro === 'CAM' ? 3 : 0)),
-    lpass: cl(baseA.ps * 0.65 + baseA.sh * 0.18 + tlVal * 0.10 + hv(29) + (q.ro === 'CM' || q.ro === 'CDM' || q.ro === 'CB' || q.ro === 'LB' || q.ro === 'RB' ? 3 : 0)),
+    lpass: cl(baseA.ps * 0.65 + baseA.sh * 0.18 + tlVal * 0.10 + hv(29) + (baseRo === 'CM' || baseRo === 'CDM' || baseRo === 'CB' || q.ro === 'LB' || q.ro === 'RB' ? 3 : 0)),
     crs: cl(baseA.ps * 0.7 + baseA.dr * 0.3 + hv(4) + (wing ? 6 : 0) + (q.ro === 'CF' ? 4 : 0)),
     vis: cl(baseA.ps * 0.55 + q.ov * 0.3 + tlVal * 0.15 + hv(26)),
     rd: cl(baseA.tk * 0.6 + baseA.ps * 0.4 + hv(6)),
@@ -1340,17 +1368,17 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null): DtResult {
     pos: cl(
       q.pos === 'GK'
         ? q.ov * 0.25 + baseA.tk * 0.55 + baseA.ps * 0.1 + baseA.ph * 0.1 + hv(21)
-        : baseA.tk * 0.55 + baseA.ps * 0.35 + baseA.ph * 0.10 + hv(21) + (q.pos === 'DF' || q.ro === 'CDM' ? 3 : 0)
+        : baseA.tk * 0.55 + baseA.ps * 0.35 + baseA.ph * 0.10 + hv(21) + (q.pos === 'DF' || baseRo === 'CDM' ? 3 : 0)
     ),
     mrk: cl(baseA.tk * 0.65 + baseA.ph * 0.2 + baseA.ps * 0.15 + hv(18) + (q.pos === 'DF' ? 4 : 0)),
-    blk: cl(baseA.tk * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(19) + (q.ro === 'CB' ? 4 : 0)),
+    blk: cl(baseA.tk * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(19) + (baseRo === 'CB' ? 4 : 0)),
     hd: cl(baseA.ph * 0.7 + baseA.tk * 0.3 + hv(8)),
     spd: cl(baseA.dr * 0.5 + baseA.ph * 0.5 + hv(9) - Math.max(0, ag - 31) * 2),
     acc: cl(baseA.dr * 0.55 + baseA.ph * 0.45 + hv(33) - Math.max(0, ag - 30) * 2 + (wing ? 2 : 0)),
     str: cl(baseA.ph + hv(10)),
     sta: cl(baseA.ph * 0.8 + hv(11) + (ag < 30 ? 3 : -3)),
     agi: cl(baseA.dr * 0.65 + baseA.ph * 0.25 + (100 - Math.max(0, ag - 28) * 2) * 0.1 + hv(22)),
-    jmp: cl(baseA.ph * 0.65 + baseA.tk * 0.2 + (q.pos === 'GK' || q.ro === 'CB' || q.ro === 'ST' ? 5 : 0) + hv(23)),
+    jmp: cl(baseA.ph * 0.65 + baseA.tk * 0.2 + (q.pos === 'GK' || baseRo === 'CB' || baseRo === 'ST' ? 5 : 0) + hv(23)),
     tol: cl(55 + baseA.ph * 0.3 + hv(12)),
     rec: cl(82 - Math.max(0, ag - 24) * 2 + hv(0)),
     end: cl(baseA.ph * 0.55 + baseA.tk * 0.15 + 22 + (ag <= 29 ? 4 : -4) + hv(24)),
@@ -2115,6 +2143,8 @@ export const ROLE_ADAPT_THRESHOLD_CROSS = 20;
 
 export const ROLE_ADAPT_TARGETS: Record<string, { cores: StatKey[]; subs: string[] }> = {
   ST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
+  LST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
+  RST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
   CF: { cores: ['sh', 'ps', 'dr'], subs: ['fin', 'vis', 'spass', 'ctrl'] },
   LW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },
   RW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },
@@ -2132,6 +2162,8 @@ export const ROLE_ADAPT_TARGETS: Record<string, { cores: StatKey[]; subs: string
   LB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
   RB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
   CB: { cores: ['tk', 'ph'], subs: ['tkl', 'mrk', 'hd', 'blk', 'str'] },
+  LCB: { cores: ['tk', 'ph'], subs: ['tkl', 'mrk', 'hd', 'blk', 'str'] },
+  RCB: { cores: ['tk', 'ph'], subs: ['tkl', 'mrk', 'hd', 'blk', 'str'] },
   GK: { cores: ['ph', 'tk'], subs: ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist'] }
 };
 

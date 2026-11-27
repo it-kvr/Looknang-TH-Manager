@@ -90,7 +90,7 @@ function getLineAverage(players: Player[], slots: { pos: Position }[], targetPos
 function getFlankAverage(players: Player[], slots: { sp: SubRole }[], side: 'L' | 'R' | 'C'): number {
   const leftRoles = new Set<SubRole>(['LB', 'LWB', 'LM', 'LW']);
   const rightRoles = new Set<SubRole>(['RB', 'RWB', 'RM', 'RW']);
-  const centerRoles = new Set<SubRole>(['CB', 'CDM', 'LDM', 'RDM', 'CM', 'LCM', 'RCM', 'CAM', 'CF', 'ST']);
+  const centerRoles = new Set<SubRole>(['CB', 'LCB', 'RCB', 'CDM', 'LDM', 'RDM', 'CM', 'LCM', 'RCM', 'CAM', 'CF', 'ST', 'LST', 'RST']);
   const set = side === 'L' ? leftRoles : side === 'R' ? rightRoles : centerRoles;
   const matched = players.filter((q, idx) => set.has(slots[idx]?.sp || q.ro));
   if (!matched.length) return 0;
@@ -443,7 +443,7 @@ export function buildAssistantCoachNotes(params: {
     const fwN = fSlots.filter(([r]) => LINE[r] === 'FW').length;
     const hasWingAtk = fSlots.some(([r]) => r === 'LW' || r === 'RW' || r === 'LM' || r === 'RM');
     const hasCam = fSlots.some(([r]) => r === 'CAM' || r === 'CF');
-    const hasCdm = fSlots.some(([r]) => r === 'CDM');
+    const hasCdm = fSlots.some(([r]) => r === 'CDM' || r === 'LDM' || r === 'RDM');
 
     if ((oppHasWingGap || oppTac === 'D' || oppTac === 'Z') && hasWingAtk) tacBonus += 2.2;
     if ((oppTac === 'D' || oppTac === 'Z' || oppCounts[1] >= 5) && hasCam) tacBonus += 1.6;

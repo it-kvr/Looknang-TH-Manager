@@ -1,6 +1,6 @@
 import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
-import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
+import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
@@ -493,7 +493,7 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
       ? pool.map((q) => {
           const D = DT(q, s?.p);
           const role = slotMap[q.n] || q.ro;
-          let w = q.pos === 'DF' || role === 'CDM' ? 2.4 : q.pos === 'MF' ? 1.6 : 0.9;
+          let w = q.pos === 'DF' || (EQ[role] || role) === 'CDM' ? 2.4 : q.pos === 'MF' ? 1.6 : 0.9;
           if (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22) w += 3.2;
           if (D.d.pos < 58) w += 0.8;
           if (D.tr === 0 || D.tr === 6 || D.tr === 17 || D.tr === 21 || D.tr === 23) w = Math.max(0.6, w - 1.0);
@@ -3249,11 +3249,7 @@ export function applyPositionAdaptation(
         if (sIdx >= 0) rawSlotSp = slots[sIdx]?.sp;
       }
       if (!rawSlotSp) return;
-      const normSlot = (rawSlotSp === 'LCM' || rawSlotSp === 'RCM'
-        ? 'CM'
-        : rawSlotSp === 'LDM' || rawSlotSp === 'RDM'
-          ? 'CDM'
-          : rawSlotSp) as SubRole;
+      const normSlot = (EQ[rawSlotSp] || rawSlotSp) as SubRole;
 
       // Never convert outfielders to GK unless genuinely played there, or GK to outfield trivially
       if (q.pos === 'GK' && normSlot !== 'GK') return;

@@ -136,6 +136,118 @@ const TEXT_WIDTH_CACHE = new Map<string, number>();
 const MAX_TEXT_WIDTH_CACHE = 600;
 const sortedAgentsBuf: LivePitchAgent[] = [];
 
+const BALL_SPHERE_CACHE = new Map<number, HTMLCanvasElement>();
+const MAX_BALL_SPHERE_CACHE = 32;
+const getBallSphereSprite = (ballR: number): HTMLCanvasElement | null => {
+  if (typeof document === 'undefined') return null;
+  const qR = Math.max(4, Math.round(ballR * 4));
+  const hit = BALL_SPHERE_CACHE.get(qR);
+  if (hit) return hit;
+  const r = qR / 4;
+  const scale = 2;
+  const pad = 1;
+  const dim = Math.ceil((r + pad) * 2 * scale);
+  const off = document.createElement('canvas');
+  off.width = dim;
+  off.height = dim;
+  const octx = off.getContext('2d');
+  if (!octx) return null;
+  octx.scale(scale, scale);
+  octx.translate(r + pad, r + pad);
+  octx.beginPath();
+  octx.arc(0, 0, r, 0, Math.PI * 2);
+  octx.clip();
+  const sphGrad = octx.createRadialGradient(-r * 0.32, -r * 0.34, r * 0.1, 0, 0, r * 1.06);
+  sphGrad.addColorStop(0, '#ffffff');
+  sphGrad.addColorStop(0.55, '#f1f5f9');
+  sphGrad.addColorStop(1, '#94a3b8');
+  octx.fillStyle = sphGrad;
+  octx.fillRect(-r - 1, -r - 1, r * 2 + 2, r * 2 + 2);
+  if (BALL_SPHERE_CACHE.size >= MAX_BALL_SPHERE_CACHE) {
+    const oldest = BALL_SPHERE_CACHE.keys().next().value;
+    if (oldest !== undefined) BALL_SPHERE_CACHE.delete(oldest);
+  }
+  BALL_SPHERE_CACHE.set(qR, off);
+  return off;
+};
+
+const BLESSED_AURA_CACHE = new Map<number, HTMLCanvasElement>();
+const MAX_BLESSED_AURA_CACHE = 24;
+const getBlessedAuraSprite = (playerRadius: number): HTMLCanvasElement | null => {
+  if (typeof document === 'undefined') return null;
+  const qPr = Math.max(8, Math.round(playerRadius * 2));
+  const hit = BLESSED_AURA_CACHE.get(qPr);
+  if (hit) return hit;
+  const pr = qPr / 2;
+  const auraR = pr + 10;
+  const scale = 2;
+  const dim = Math.ceil(auraR * 2 * scale);
+  const off = document.createElement('canvas');
+  off.width = dim;
+  off.height = dim;
+  const octx = off.getContext('2d');
+  if (!octx) return null;
+  octx.scale(scale, scale);
+  octx.translate(auraR, auraR);
+  const auraGrad = octx.createRadialGradient(0, 0, pr * 0.5, 0, 0, auraR);
+  auraGrad.addColorStop(0, 'rgba(250, 204, 21, 0.42)');
+  auraGrad.addColorStop(0.65, 'rgba(52, 211, 153, 0.22)');
+  auraGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+  octx.fillStyle = auraGrad;
+  octx.beginPath();
+  octx.arc(0, 0, auraR, 0, Math.PI * 2);
+  octx.fill();
+  if (BLESSED_AURA_CACHE.size >= MAX_BLESSED_AURA_CACHE) {
+    const oldest = BLESSED_AURA_CACHE.keys().next().value;
+    if (oldest !== undefined) BLESSED_AURA_CACHE.delete(oldest);
+  }
+  BLESSED_AURA_CACHE.set(qPr, off);
+  return off;
+};
+
+const CTX_GRADIENT_CACHE = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasGradient>>();
+const MAX_CTX_GRAD_CACHE = 48;
+const getCachedCtxGradient = (
+  ctx: CanvasRenderingContext2D,
+  key: string,
+  builder: () => CanvasGradient
+): CanvasGradient => {
+  let map = CTX_GRADIENT_CACHE.get(ctx);
+  if (!map) {
+    map = new Map();
+    CTX_GRADIENT_CACHE.set(ctx, map);
+  }
+  const hit = map.get(key);
+  if (hit) return hit;
+  const grad = builder();
+  if (map.size >= MAX_CTX_GRAD_CACHE) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, grad);
+  return grad;
+};
+
+const drawSoftRoundedShadow = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  radius: number,
+  spread = 2.5,
+  dy = 2
+) => {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+  ctx.beginPath();
+  ctx.roundRect(x - spread * 0.5, y + dy - spread * 0.25, w + spread, h + spread * 0.75, radius + 1.5);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+  ctx.beginPath();
+  ctx.roundRect(x, y + dy, w, h, radius);
+  ctx.fill();
+};
+
 const measureTextCached = (ctx: CanvasRenderingContext2D, text: string): number => {
   const key = `${ctx.font}|${text}`;
   const hit = TEXT_WIDTH_CACHE.get(key);
@@ -948,12 +1060,14 @@ const renderVarMonitorPanel = (
     ctx.arc(0, 0, ballR, 0, Math.PI * 2);
     ctx.clip();
 
-    const sphGrad = ctx.createRadialGradient(-ballR * 0.32, -ballR * 0.34, ballR * 0.1, 0, 0, ballR * 1.06);
-    sphGrad.addColorStop(0, '#ffffff');
-    sphGrad.addColorStop(0.55, '#f1f5f9');
-    sphGrad.addColorStop(1, '#94a3b8');
-    ctx.fillStyle = sphGrad;
-    ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+    const ballSprite = getBallSphereSprite(ballR);
+    if (ballSprite) {
+      const spriteHalf = Math.max(4, Math.round(ballR * 4)) / 4 + 1;
+      ctx.drawImage(ballSprite, -spriteHalf, -spriteHalf, spriteHalf * 2, spriteHalf * 2);
+    } else {
+      ctx.fillStyle = '#e2e8f0';
+      ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+    }
 
     const coreOffX = Math.cos(spinPhase * 0.65) * ballR * 0.14;
     const coreOffY = Math.sin(spinPhase * 0.55) * ballR * 0.14;
@@ -2529,25 +2643,38 @@ const renderVarMonitorPanel = (
   if (isFreezePhase) {
     const scanFrac = (pct - 0.36) / 0.28;
     const scanY = scrY + scanFrac * scrH;
-    const scanGrad = ctx.createLinearGradient(scrX, scanY - 10, scrX, scanY + 10);
-    scanGrad.addColorStop(0, 'rgba(56, 189, 248, 0)');
-    scanGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.26)');
-    scanGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    const scanGrad = getCachedCtxGradient(ctx, 'var-scan-line', () => {
+      const g = ctx.createLinearGradient(0, -10, 0, 10);
+      g.addColorStop(0, 'rgba(56, 189, 248, 0)');
+      g.addColorStop(0.5, 'rgba(56, 189, 248, 0.26)');
+      g.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      return g;
+    });
+    ctx.save();
+    ctx.translate(0, scanY);
     ctx.fillStyle = scanGrad;
-    ctx.fillRect(scrX, scanY - 10, scrW, 20);
+    ctx.fillRect(scrX, -10, scrW, 20);
+    ctx.restore();
   }
 
   // Subtle Broadcast Lens Vignette + Monitor Scanlines
-  const vigGrad = ctx.createRadialGradient(
-    scrX + scrW * 0.5,
-    scrY + scrH * 0.5,
-    Math.min(scrW, scrH) * 0.34,
-    scrX + scrW * 0.5,
-    scrY + scrH * 0.5,
-    Math.max(scrW, scrH) * 0.76
+  const vigGrad = getCachedCtxGradient(
+    ctx,
+    `var-vig|${scrX.toFixed(1)}|${scrY.toFixed(1)}|${scrW.toFixed(1)}|${scrH.toFixed(1)}`,
+    () => {
+      const g = ctx.createRadialGradient(
+        scrX + scrW * 0.5,
+        scrY + scrH * 0.5,
+        Math.min(scrW, scrH) * 0.34,
+        scrX + scrW * 0.5,
+        scrY + scrH * 0.5,
+        Math.max(scrW, scrH) * 0.76
+      );
+      g.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      g.addColorStop(1, 'rgba(2, 6, 23, 0.42)');
+      return g;
+    }
   );
-  vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  vigGrad.addColorStop(1, 'rgba(2, 6, 23, 0.42)');
   ctx.fillStyle = vigGrad;
   ctx.fillRect(scrX, scrY, scrW, scrH);
 
@@ -3231,11 +3358,23 @@ export const drawLivePitchToCanvas = (
   if (world.miracle && world.miracle.minsLeft > 0) {
     const pulse = 0.12 + 0.06 * Math.sin(world.minuteFloat * 8);
     const attRightMir = (world.miracle.side === 'H') !== world.secondHalf;
-    const mGrad = ctx.createLinearGradient(attRightMir ? padX + pw : padX, 0, px(50), 0);
-    mGrad.addColorStop(0, `rgba(250, 204, 21, ${pulse})`);
-    mGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+    const midX = px(50);
+    const startX = attRightMir ? padX + pw : padX;
+    const mGrad = getCachedCtxGradient(
+      ctx,
+      `mir|${attRightMir ? 1 : 0}|${startX.toFixed(1)}|${midX.toFixed(1)}`,
+      () => {
+        const g = ctx.createLinearGradient(startX, 0, midX, 0);
+        g.addColorStop(0, 'rgba(250, 204, 21, 1)');
+        g.addColorStop(1, 'rgba(250, 204, 21, 0)');
+        return g;
+      }
+    );
+    ctx.save();
+    ctx.globalAlpha = pulse;
     ctx.fillStyle = mGrad;
     ctx.fillRect(padX, padY, pw, ph);
+    ctx.restore();
   }
 
   // Goal frames & animated rippling nets
@@ -3329,9 +3468,16 @@ export const drawLivePitchToCanvas = (
       ctx.fill();
 
       // Dugout shelter housing with subtle glass sheen
-      const shellGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
-      shellGrad.addColorStop(0, 'rgba(13, 35, 24, 0.96)');
-      shellGrad.addColorStop(1, 'rgba(5, 16, 10, 0.94)');
+      const shellGrad = getCachedCtxGradient(
+        ctx,
+        `dugout|${by.toFixed(1)}|${bh.toFixed(1)}`,
+        () => {
+          const g = ctx.createLinearGradient(0, by, 0, by + bh);
+          g.addColorStop(0, 'rgba(13, 35, 24, 0.96)');
+          g.addColorStop(1, 'rgba(5, 16, 10, 0.94)');
+          return g;
+        }
+      );
       ctx.fillStyle = shellGrad;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
       ctx.lineWidth = 1;
@@ -4202,14 +4348,14 @@ export const drawLivePitchToCanvas = (
     const isBlessed = (ag.blessedMins ?? 0) > 0;
     if (isBlessed) {
       const bPulse = 0.65 + 0.3 * Math.sin(world.minuteFloat * 10 + ag.slotIndex);
-      const auraGrad = ctx.createRadialGradient(0, 0, playerRadius * 0.5, 0, 0, playerRadius + 10);
-      auraGrad.addColorStop(0, `rgba(250, 204, 21, ${0.42 * bPulse})`);
-      auraGrad.addColorStop(0.65, `rgba(52, 211, 153, ${0.22 * bPulse})`);
-      auraGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, playerRadius + 10, 0, Math.PI * 2);
-      ctx.fill();
+      const auraSprite = getBlessedAuraSprite(playerRadius);
+      if (auraSprite) {
+        const auraR = Math.max(8, Math.round(playerRadius * 2)) / 2 + 10;
+        ctx.save();
+        ctx.globalAlpha = bPulse;
+        ctx.drawImage(auraSprite, -auraR, -auraR, auraR * 2, auraR * 2);
+        ctx.restore();
+      }
 
       ctx.strokeStyle = `rgba(253, 224, 71, ${0.9 * bPulse})`;
       ctx.lineWidth = 1.8;
@@ -5195,12 +5341,14 @@ export const drawLivePitchToCanvas = (
   ctx.arc(0, 0, ballR, 0, Math.PI * 2);
   ctx.clip();
 
-  const sphGrad = ctx.createRadialGradient(-ballR * 0.32, -ballR * 0.34, ballR * 0.1, 0, 0, ballR * 1.05);
-  sphGrad.addColorStop(0, '#ffffff');
-  sphGrad.addColorStop(0.55, '#f1f5f9');
-  sphGrad.addColorStop(1, '#94a3b8');
-  ctx.fillStyle = sphGrad;
-  ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+  const ballSprite = getBallSphereSprite(ballR);
+  if (ballSprite) {
+    const spriteHalf = Math.max(4, Math.round(ballR * 4)) / 4 + 1;
+    ctx.drawImage(ballSprite, -spriteHalf, -spriteHalf, spriteHalf * 2, spriteHalf * 2);
+  } else {
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+  }
 
   // Dynamic roll & spin based on field coordinates and flight progress
   const spinAng = (b.x * 0.38 + b.y * 0.27 + (b.progress || 0) * 10.5) * (isCurlBall ? 1.6 : 1);
@@ -5282,10 +5430,7 @@ export const drawLivePitchToCanvas = (
     const fxX = clamp(px(fx.x), bw / 2 + 8, cssW - bw / 2 - 8);
     const fxY = clamp(py(fx.y) - 23 - (1 - alpha) * 9, 16, cssH - 16);
 
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
-    ctx.shadowBlur = 7;
-    ctx.shadowOffsetY = 2;
+    drawSoftRoundedShadow(ctx, fxX - bw / 2, fxY - bh / 2, bw, bh, 6, 2, 1.5);
     ctx.fillStyle = 'rgba(7, 19, 13, 0.92)';
     ctx.strokeStyle = fx.color;
     ctx.lineWidth = 1.25;
@@ -5293,7 +5438,6 @@ export const drawLivePitchToCanvas = (
     ctx.roundRect(fxX - bw / 2, fxY - bh / 2, bw, bh, 6);
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
     if (hasMedCross) {
       const cxIcon = fxX - bw / 2 + 11;
@@ -5370,10 +5514,7 @@ export const drawLivePitchToCanvas = (
     const cy = enterT < 1 ? startY + (targetY - startY) * easeIn : targetY - 22 * easeExit;
     const cx = cssW / 2;
 
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 3;
+    drawSoftRoundedShadow(ctx, cx - cardW / 2, cy, cardW, cardH, 10, 3, 2.5);
     ctx.fillStyle = gb.isOwnGoal ? 'rgba(28, 10, 16, 0.95)' : 'rgba(8, 22, 15, 0.94)';
     ctx.strokeStyle = gb.isOwnGoal ? '#fb7185' : gb.isMyGoal ? '#facc15' : '#4ade80';
     ctx.lineWidth = 1.5;
@@ -5381,7 +5522,6 @@ export const drawLivePitchToCanvas = (
     ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 10);
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
     // Team color accent strip on left
     ctx.fillStyle = gb.kit;
@@ -5429,10 +5569,7 @@ export const drawLivePitchToCanvas = (
     const cardH = 38;
     const cx = cssW / 2;
     const cy = Math.round(padTop + 6);
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 3;
+    drawSoftRoundedShadow(ctx, cx - cardW / 2, cy, cardW, cardH, 10, 3, 2.5);
     ctx.fillStyle = 'rgba(11, 18, 28, 0.94)';
     ctx.strokeStyle = accent;
     ctx.lineWidth = 1.5;
@@ -5440,7 +5577,6 @@ export const drawLivePitchToCanvas = (
     ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 10);
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
     // Mini card icon badge on left (overlapping yellow+red for Y2R, single card for Y/R)
     if (cb.type === 'Y2R') {
@@ -5508,10 +5644,7 @@ export const drawLivePitchToCanvas = (
         const by = clamp(cy - cr - sh - 5.5, 4, cssH - sh - 4);
         const tailX = clamp(cx, bx + 6, bx + sw - 6);
 
-        ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
-        ctx.shadowBlur = 7;
-        ctx.shadowOffsetY = 2;
+        drawSoftRoundedShadow(ctx, bx, by, sw, sh, 5.5, 2, 1.5);
         ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
         ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
         ctx.lineWidth = 1.2;
@@ -5519,7 +5652,6 @@ export const drawLivePitchToCanvas = (
         ctx.roundRect(bx, by, sw, sh, 5.5);
         ctx.fill();
         ctx.stroke();
-        ctx.restore();
 
         // Pointer tail directed at the coach
         ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
@@ -5550,13 +5682,14 @@ export const drawLivePitchToCanvas = (
         ctx.globalAlpha = mAlpha;
         const emX = clamp(cx, 10, cssW - 10);
         const emY = clamp(cy - cr - 8 + bob, 8, cssH - 8);
+        ctx.fillStyle = 'rgba(5, 14, 9, 0.58)';
+        ctx.beginPath();
+        ctx.arc(emX, emY, 7.2, 0, Math.PI * 2);
+        ctx.fill();
         ctx.font = '11px Sarabun, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-        ctx.shadowBlur = 3;
-        ctx.shadowOffsetY = 1;
-        ctx.fillText(c.moodEmoji, emX, emY);
+        ctx.fillText(c.moodEmoji, emX, emY + 0.5);
         ctx.restore();
       }
     });
@@ -5610,10 +5743,7 @@ export const drawLivePitchToCanvas = (
     const boxH = 26;
     const cx = cssW / 2;
     const cy = Math.round(padTop + 5);
-    ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 2;
+    drawSoftRoundedShadow(ctx, cx - boxW / 2, cy, boxW, boxH, 7, 2.5, 2);
     ctx.fillStyle = 'rgba(11, 25, 44, 0.95)';
     ctx.strokeStyle = frameAccent;
     ctx.lineWidth = 1.4;
@@ -5621,7 +5751,6 @@ export const drawLivePitchToCanvas = (
     ctx.roundRect(cx - boxW / 2, cy, boxW, boxH, 7);
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
     ctx.fillStyle = frameAccent;
     ctx.beginPath();
@@ -7773,12 +7902,14 @@ export const drawHighlightClipToCanvas = (
   ctx.beginPath();
   ctx.arc(0, 0, ballR, 0, Math.PI * 2);
   ctx.clip();
-  const sphGrad = ctx.createRadialGradient(-ballR * 0.32, -ballR * 0.34, ballR * 0.1, 0, 0, ballR * 1.05);
-  sphGrad.addColorStop(0, '#ffffff');
-  sphGrad.addColorStop(0.55, '#f1f5f9');
-  sphGrad.addColorStop(1, '#94a3b8');
-  ctx.fillStyle = sphGrad;
-  ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+  const ballSprite = getBallSphereSprite(ballR);
+  if (ballSprite) {
+    const spriteHalf = Math.max(4, Math.round(ballR * 4)) / 4 + 1;
+    ctx.drawImage(ballSprite, -spriteHalf, -spriteHalf, spriteHalf * 2, spriteHalf * 2);
+  } else {
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+  }
 
   const isCurlSpin = cur.style === 'curler' || cur.style === 'knuckle';
   const spinAng = (cur.bx * 0.38 + cur.by * 0.27 + cPct * 11) * (isCurlSpin ? 1.6 : 1);

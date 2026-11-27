@@ -45,26 +45,33 @@ export const SFX0 = [
 ];
 
 export const FSD: Record<string, [SubRole, number, number][]> = {
-  '4-4-2': [['GK', 50, 93], ['LB', 14, 72], ['CB', 38, 77], ['CB', 62, 77], ['RB', 86, 72], ['LM', 12, 49], ['CM', 38, 54], ['CM', 62, 54], ['RM', 88, 49], ['ST', 38, 19], ['ST', 62, 19]],
-  '4-3-3': [['GK', 50, 93], ['LB', 14, 72], ['CB', 38, 77], ['CB', 62, 77], ['RB', 86, 72], ['CM', 27, 47], ['CDM', 50, 58], ['CM', 73, 47], ['LW', 15, 22], ['ST', 50, 14], ['RW', 85, 22]],
-  '4-3-3 (F9)': [['GK', 50, 93], ['LB', 14, 72], ['CB', 38, 77], ['CB', 62, 77], ['RB', 86, 72], ['CM', 28, 48], ['CDM', 50, 59], ['CM', 72, 48], ['LW', 18, 18], ['CF', 50, 26], ['RW', 82, 18]],
-  '3-5-2': [['GK', 50, 93], ['CB', 24, 76], ['CB', 50, 79], ['CB', 76, 76], ['LM', 8, 45], ['CM', 30, 52], ['CDM', 50, 60], ['CM', 70, 52], ['RM', 92, 45], ['ST', 38, 18], ['ST', 62, 18]],
-  '4-2-3-1': [['GK', 50, 93], ['LB', 14, 72], ['CB', 38, 77], ['CB', 62, 77], ['RB', 86, 72], ['CDM', 36, 60], ['CDM', 64, 60], ['LM', 14, 39], ['CAM', 50, 38], ['RM', 86, 39], ['ST', 50, 13]],
-  '5-3-2': [['GK', 50, 93], ['LWB', 8, 62], ['CB', 28, 76], ['CB', 50, 79], ['CB', 72, 76], ['RWB', 92, 62], ['CM', 27, 46], ['CDM', 50, 59], ['CM', 73, 46], ['ST', 38, 18], ['ST', 62, 18]],
-  '3-4-3': [['GK', 50, 93], ['CB', 24, 76], ['CB', 50, 79], ['CB', 76, 76], ['LM', 10, 51], ['CM', 38, 55], ['CM', 62, 55], ['RM', 90, 51], ['LW', 18, 20], ['ST', 50, 13], ['RW', 82, 20]],
-  '5-4-1': [['GK', 50, 93], ['LWB', 8, 64], ['CB', 28, 76], ['CB', 50, 79], ['CB', 72, 76], ['RWB', 92, 64], ['LM', 14, 46], ['CM', 38, 52], ['CM', 62, 52], ['RM', 86, 46], ['ST', 50, 16]],
-  '4-4-1-1': [['GK', 50, 93], ['LB', 14, 72], ['CB', 38, 77], ['CB', 62, 77], ['RB', 86, 72], ['LM', 12, 52], ['CM', 38, 56], ['CM', 62, 56], ['RM', 88, 52], ['CF', 50, 29], ['ST', 50, 12]],
-  '4-1-2-1-2': [['GK', 50, 93], ['LB', 14, 72], ['CB', 38, 77], ['CB', 62, 77], ['RB', 86, 72], ['CDM', 50, 60], ['CM', 27, 48], ['CM', 73, 48], ['CAM', 50, 38], ['ST', 38, 15], ['ST', 62, 15]]
+  '4-4-2': [['GK', 50, 93], ['LB', 14, 72], ['LCB', 38, 77], ['RCB', 62, 77], ['RB', 86, 72], ['LM', 12, 49], ['LCM', 38, 54], ['RCM', 62, 54], ['RM', 88, 49], ['LST', 38, 19], ['RST', 62, 19]],
+  '4-3-3': [['GK', 50, 93], ['LB', 14, 72], ['LCB', 38, 77], ['RCB', 62, 77], ['RB', 86, 72], ['LCM', 27, 47], ['CDM', 50, 58], ['RCM', 73, 47], ['LW', 15, 22], ['ST', 50, 14], ['RW', 85, 22]],
+  '4-3-3 (F9)': [['GK', 50, 93], ['LB', 14, 72], ['LCB', 38, 77], ['RCB', 62, 77], ['RB', 86, 72], ['LCM', 28, 48], ['CDM', 50, 59], ['RCM', 72, 48], ['LW', 18, 18], ['CF', 50, 26], ['RW', 82, 18]],
+  '3-5-2': [['GK', 50, 93], ['LCB', 24, 76], ['CB', 50, 79], ['RCB', 76, 76], ['LM', 8, 45], ['LCM', 30, 52], ['CDM', 50, 60], ['RCM', 70, 52], ['RM', 92, 45], ['LST', 38, 18], ['RST', 62, 18]],
+  '4-2-3-1': [['GK', 50, 93], ['LB', 14, 72], ['LCB', 38, 77], ['RCB', 62, 77], ['RB', 86, 72], ['LDM', 36, 60], ['RDM', 64, 60], ['LM', 14, 39], ['CAM', 50, 38], ['RM', 86, 39], ['ST', 50, 13]],
+  '5-3-2': [['GK', 50, 93], ['LWB', 8, 62], ['LCB', 28, 76], ['CB', 50, 79], ['RCB', 72, 76], ['RWB', 92, 62], ['LCM', 27, 46], ['CDM', 50, 59], ['RCM', 73, 46], ['LST', 38, 18], ['RST', 62, 18]],
+  '3-4-3': [['GK', 50, 93], ['LCB', 24, 76], ['CB', 50, 79], ['RCB', 76, 76], ['LM', 10, 51], ['LCM', 38, 55], ['RCM', 62, 55], ['RM', 90, 51], ['LW', 18, 20], ['ST', 50, 13], ['RW', 82, 20]],
+  '5-4-1': [['GK', 50, 93], ['LWB', 8, 64], ['LCB', 28, 76], ['CB', 50, 79], ['RCB', 72, 76], ['RWB', 92, 64], ['LM', 14, 46], ['LCM', 38, 52], ['RCM', 62, 52], ['RM', 86, 46], ['ST', 50, 16]],
+  '4-4-1-1': [['GK', 50, 93], ['LB', 14, 72], ['LCB', 38, 77], ['RCB', 62, 77], ['RB', 86, 72], ['LM', 12, 52], ['LCM', 38, 56], ['RCM', 62, 56], ['RM', 88, 52], ['CF', 50, 29], ['ST', 50, 12]],
+  '4-1-2-1-2': [['GK', 50, 93], ['LB', 14, 72], ['LCB', 38, 77], ['RCB', 62, 77], ['RB', 86, 72], ['CDM', 50, 60], ['LCM', 27, 48], ['RCM', 73, 48], ['CAM', 50, 38], ['LST', 38, 15], ['RST', 62, 15]]
 };
 
 export const LINE: Record<string, Position> = {
-  GK: 'GK', CB: 'DF', LB: 'DF', RB: 'DF', LWB: 'DF', RWB: 'DF',
+  GK: 'GK', CB: 'DF', LCB: 'DF', RCB: 'DF', LB: 'DF', RB: 'DF', LWB: 'DF', RWB: 'DF',
   CDM: 'MF', LDM: 'MF', RDM: 'MF', CM: 'MF', LCM: 'MF', RCM: 'MF', CAM: 'MF', LM: 'MF', RM: 'MF',
-  ST: 'FW', CF: 'FW', LW: 'FW', RW: 'FW'
+  ST: 'FW', LST: 'FW', RST: 'FW', CF: 'FW', LW: 'FW', RW: 'FW'
 };
 
 // CF (False 9 / Link-up) is kept distinct from ST (Poacher)
-export const EQ: Record<string, string> = { LCM: 'CM', RCM: 'CM', LDM: 'CDM', RDM: 'CDM' };
+export const EQ: Record<string, string> = {
+  LCB: 'CB', RCB: 'CB',
+  LCM: 'CM', RCM: 'CM',
+  LDM: 'CDM', RDM: 'CDM',
+  LST: 'ST', RST: 'ST'
+};
+export const baseRoleOf = (ro?: string | null): string => (ro ? EQ[ro] || ro : '');
+
 export const SIMP = [
   'LB LWB', 'RB RWB', 'CDM CM', 'CM CAM', 'CM LM', 'CM RM', 'LM LW', 'RM RW',
   'ST CF', 'CF CAM', 'CF LW', 'CF RW',
@@ -75,32 +82,41 @@ export const PCOL = ['#ffffff', '#ffc247', '#ff6b6b'];
 
 export const SPX: Record<Position, SubRole[]> = {
   GK: ['GK'],
-  DF: ['CB', 'LB', 'RB', 'LWB', 'RWB'],
-  MF: ['CDM', 'CM', 'CAM', 'LM', 'RM'],
-  FW: ['ST', 'CF', 'LW', 'RW']
+  DF: ['CB', 'LCB', 'RCB', 'LB', 'RB', 'LWB', 'RWB'],
+  MF: ['CDM', 'LDM', 'RDM', 'CM', 'LCM', 'RCM', 'CAM', 'LM', 'RM'],
+  FW: ['ST', 'LST', 'RST', 'CF', 'LW', 'RW']
 };
 
+// Keep indices 0..14 fixed for saveCodec backward compatibility; append new sided roles at the end.
 export const ALL_SUB_ROLES: SubRole[] = [
   'GK',
   'CB', 'LB', 'RB', 'LWB', 'RWB',
   'CDM', 'CM', 'CAM', 'LM', 'RM',
-  'ST', 'CF', 'LW', 'RW'
+  'ST', 'CF', 'LW', 'RW',
+  'LCB', 'RCB', 'LDM', 'RDM', 'LCM', 'RCM', 'LST', 'RST'
 ];
 
 export const SPN: Record<string, string> = {
-  GK: 'ผู้รักษาประตู', CB: 'กองหลังกลาง', LB: 'แบ็กซ้าย', RB: 'แบ็กขวา',
+  GK: 'ผู้รักษาประตู', CB: 'กองหลังกลาง', LCB: 'เซนเตอร์ซ้าย', RCB: 'เซนเตอร์ขวา', LB: 'แบ็กซ้าย', RB: 'แบ็กขวา',
   CDM: 'กองกลางตัวรับ', CM: 'กองกลาง', CAM: 'กองกลางตัวรุก', LM: 'ปีกซ้าย(กลาง)', RM: 'ปีกขวา(กลาง)',
-  ST: 'หน้าเป้า (ปักหลักจบสกอร์)', CF: 'หน้าเชื่อม (False 9 / พักบอล)', LCM: 'กองกลางซ้าย', RCM: 'กองกลางขวา',
+  ST: 'หน้าเป้า (ปักหลักจบสกอร์)', LST: 'หน้าเป้าซ้าย', RST: 'หน้าเป้าขวา', CF: 'หน้าเชื่อม (False 9 / พักบอล)',
+  LCM: 'กองกลางซ้าย', RCM: 'กองกลางขวา',
   LDM: 'ตัวรับซ้าย', RDM: 'ตัวรับขวา', LWB: 'วิงแบ็กซ้าย', RWB: 'วิงแบ็กขวา',
   LW: 'ปีกซ้าย', RW: 'ปีกขวา'
 };
 
 export const ROLE_HINT: Partial<Record<SubRole, string>> = {
   ST: 'ปักหลักค้ำแนวรับคู่แข่ง รอแทงทะลุช่องและเข้าฮอสในกรอบ 6 หลา',
+  LST: 'ยืนกองหน้าตัวเป้าฝั่งซ้าย ประสานงานกับหน้าคู่และหาจังหวะสอดเข้าทำประตู',
+  RST: 'ยืนกองหน้าตัวเป้าฝั่งขวา ประสานงานกับหน้าคู่และหาจังหวะสอดเข้าทำประตู',
   CF: 'ถอยลงมารับบอลเชื่อมเกม ดึงเซนเตอร์หลุดตำแหน่งเพื่อเปิดช่องให้ปีกและตัวสอดเข้ายิง'
 };
 
-export const POSL: SubRole[] = ['ST', 'CF', 'CAM', 'LW', 'RW', 'LM', 'RM', 'CM', 'CDM', 'LCM', 'RCM', 'LDM', 'RDM', 'CB', 'RWB', 'LWB', 'LB', 'RB'];
+export const POSL: SubRole[] = [
+  'ST', 'LST', 'RST', 'CF', 'CAM', 'LW', 'RW',
+  'LM', 'RM', 'CM', 'LCM', 'RCM', 'CDM', 'LDM', 'RDM',
+  'CB', 'LCB', 'RCB', 'RWB', 'LWB', 'LB', 'RB'
+];
 export const SKIN_P = ['#f6d4b3', '#f1c9a0', '#d9a273', '#a8744a', '#6b4630', '#fde4cf', '#c68642', '#4b2e1e'];
 export const HAIR_P = ['#16161a', '#4a2e16', '#8b5a2b', '#c9a227', '#7a2e22', '#d1d5db', '#e5e7eb', '#d97706', '#2563eb', '#be185d'];
 export const HS_N = [
@@ -707,6 +723,8 @@ export const TRAIT_BY_ID: Record<string, FootballTraitDef> = Object.fromEntries(
 export const ROLE_BASE_ATTRS = (pos: Position, sp: SubRole): CoreAttrs => {
   const map: Partial<Record<SubRole, CoreAttrs>> = {
     ST: { sh: 63, ps: 37, dr: 45, tk: 27, ph: 49 },
+    LST: { sh: 63, ps: 37, dr: 45, tk: 27, ph: 49 },
+    RST: { sh: 63, ps: 37, dr: 45, tk: 27, ph: 49 },
     CF: { sh: 58, ps: 50, dr: 49, tk: 29, ph: 46 },
     LW: { sh: 52, ps: 48, dr: 60, tk: 30, ph: 44 },
     RW: { sh: 52, ps: 48, dr: 60, tk: 30, ph: 44 },
@@ -724,6 +742,8 @@ export const ROLE_BASE_ATTRS = (pos: Position, sp: SubRole): CoreAttrs => {
     LB: { sh: 32, ps: 46, dr: 46, tk: 56, ph: 50 },
     RB: { sh: 32, ps: 46, dr: 46, tk: 56, ph: 50 },
     CB: { sh: 28, ps: 40, dr: 34, tk: 60, ph: 58 },
+    LCB: { sh: 28, ps: 40, dr: 34, tk: 60, ph: 58 },
+    RCB: { sh: 28, ps: 40, dr: 34, tk: 60, ph: 58 },
     GK: { sh: 22, ps: 44, dr: 28, tk: 56, ph: 62 }
   };
   const fallback: Record<Position, CoreAttrs> = {

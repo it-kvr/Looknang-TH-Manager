@@ -185,7 +185,7 @@ function buildPositionPlayerComments(
     ];
   }
 
-  if (pos === 'DF' || role === 'CB' || role === 'LB' || role === 'RB') {
+  if (pos === 'DF' || role === 'CB' || role === 'LCB' || role === 'RCB' || role === 'LB' || role === 'RB') {
     const isFullback = role === 'LB' || role === 'RB';
     const baseDf = [
       `${pTag} เข้าบอลเด็ดขาดมาก 🛡️`,
@@ -214,9 +214,9 @@ function buildPositionPlayerComments(
     ];
   }
 
-  if (pos === 'MF' || role === 'CDM' || role === 'CM' || role === 'CAM') {
+  if (pos === 'MF' || role === 'CDM' || role === 'LDM' || role === 'RDM' || role === 'CM' || role === 'LCM' || role === 'RCM' || role === 'CAM') {
     const isCam = role === 'CAM';
-    const isCdm = role === 'CDM';
+    const isCdm = role === 'CDM' || role === 'LDM' || role === 'RDM';
     const baseMf = [
       `${pTag} คุมจังหวะเนียนดี 🎯`,
       `${pTag} หายไปจากเกมป่าวเนี่ย`,

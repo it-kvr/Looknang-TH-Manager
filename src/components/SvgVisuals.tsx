@@ -1068,18 +1068,26 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
 
 export const PITCH_POSITION_ZONES: PitchPositionZone[] = [
   { id: 'LW', sp: 'LW', label: 'ปีกซ้าย', x1: 3, y1: 7, x2: 26, y2: 29, line: 'FW' },
-  { id: 'ST', sp: 'ST', label: 'หน้าเป้า', x1: 26, y1: 7, x2: 74, y2: 20, line: 'FW' },
+  { id: 'LST', sp: 'LST', label: 'หน้าซ้าย', x1: 26, y1: 7, x2: 43, y2: 20, line: 'FW' },
+  { id: 'ST', sp: 'ST', label: 'หน้าเป้า', x1: 43, y1: 7, x2: 57, y2: 20, line: 'FW' },
+  { id: 'RST', sp: 'RST', label: 'หน้าขวา', x1: 57, y1: 7, x2: 74, y2: 20, line: 'FW' },
   { id: 'CF', sp: 'CF', label: 'หน้าต่ำ/เชื่อม', x1: 26, y1: 20, x2: 74, y2: 29.5, line: 'FW' },
   { id: 'RW', sp: 'RW', label: 'ปีกขวา', x1: 74, y1: 7, x2: 97, y2: 29, line: 'FW' },
   { id: 'LM', sp: 'LM', label: 'กลางซ้าย', x1: 3, y1: 29, x2: 25, y2: 57, line: 'MF' },
   { id: 'CAM', sp: 'CAM', label: 'กลางรุก', x1: 25, y1: 29.5, x2: 75, y2: 43, line: 'MF' },
   { id: 'RM', sp: 'RM', label: 'กลางขวา', x1: 75, y1: 29, x2: 97, y2: 57, line: 'MF' },
-  { id: 'CM', sp: 'CM', label: 'กองกลาง', x1: 25, y1: 43, x2: 75, y2: 57, line: 'MF' },
+  { id: 'LCM', sp: 'LCM', label: 'กลางซ้าย', x1: 25, y1: 43, x2: 43, y2: 57, line: 'MF' },
+  { id: 'CM', sp: 'CM', label: 'กองกลาง', x1: 43, y1: 43, x2: 57, y2: 57, line: 'MF' },
+  { id: 'RCM', sp: 'RCM', label: 'กลางขวา', x1: 57, y1: 43, x2: 75, y2: 57, line: 'MF' },
   { id: 'LWB', sp: 'LWB', label: 'วิงแบ็กซ้าย', x1: 3, y1: 57, x2: 25, y2: 69, line: 'DF' },
-  { id: 'CDM', sp: 'CDM', label: 'กลางตัวรับ', x1: 25, y1: 57, x2: 75, y2: 69, line: 'MF' },
+  { id: 'LDM', sp: 'LDM', label: 'รับซ้าย', x1: 25, y1: 57, x2: 43, y2: 69, line: 'MF' },
+  { id: 'CDM', sp: 'CDM', label: 'กลางตัวรับ', x1: 43, y1: 57, x2: 57, y2: 69, line: 'MF' },
+  { id: 'RDM', sp: 'RDM', label: 'รับขวา', x1: 57, y1: 57, x2: 75, y2: 69, line: 'MF' },
   { id: 'RWB', sp: 'RWB', label: 'วิงแบ็กขวา', x1: 75, y1: 57, x2: 97, y2: 69, line: 'DF' },
   { id: 'LB', sp: 'LB', label: 'แบ็กซ้าย', x1: 3, y1: 69, x2: 23, y2: 85, line: 'DF' },
-  { id: 'CB', sp: 'CB', label: 'เซนเตอร์แบ็ก', x1: 23, y1: 69, x2: 77, y2: 85, line: 'DF' },
+  { id: 'LCB', sp: 'LCB', label: 'หลังซ้าย', x1: 23, y1: 69, x2: 43, y2: 85, line: 'DF' },
+  { id: 'CB', sp: 'CB', label: 'เซนเตอร์แบ็ก', x1: 43, y1: 69, x2: 57, y2: 85, line: 'DF' },
+  { id: 'RCB', sp: 'RCB', label: 'หลังขวา', x1: 57, y1: 69, x2: 77, y2: 85, line: 'DF' },
   { id: 'RB', sp: 'RB', label: 'แบ็กขวา', x1: 77, y1: 69, x2: 97, y2: 85, line: 'DF' },
   { id: 'GK', sp: 'GK', label: 'ผู้รักษาประตู', x1: 28, y1: 85, x2: 72, y2: 96, line: 'GK' }
 ];
@@ -1090,7 +1098,7 @@ export const getPitchZoneAt = (x: number, y: number): PitchPositionZone => {
   );
   if (found) return found;
   if (y >= 85) return PITCH_POSITION_ZONES[PITCH_POSITION_ZONES.length - 1];
-  return PITCH_POSITION_ZONES[7]; // CM fallback
+  return PITCH_POSITION_ZONES.find((z) => z.sp === 'CM') || PITCH_POSITION_ZONES[0];
 };
 
 
@@ -1237,11 +1245,12 @@ export const FormationPitch: React.FC<{
                   opacity={dragPreview ? (isActiveZone ? 1 : 0.65) : 0.72}
                 />
                 <text
-                  x={x + 4}
+                  x={isActiveZone ? Math.max(36, Math.min(264, x + w / 2)) : x + w / 2}
                   y={y + 8.5}
-                  fontSize={isActiveZone ? '8' : '6.8'}
+                  textAnchor="middle"
+                  fontSize={isActiveZone ? '7.2' : '6.2'}
                   fontWeight="800"
-                  fontFamily="Sarabun"
+                  fontFamily="ui-sans-serif, system-ui, 'Noto Sans Thai', sans-serif"
                   fill={isActiveZone ? '#ffffff' : pal.text}
                   stroke="rgba(5, 22, 13, 0.8)"
                   strokeWidth="1.6"
