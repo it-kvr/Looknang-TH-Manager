@@ -4,7 +4,7 @@ import type { SubRole, MainTab, Player, Team, ScoutMission, GameState } from '..
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, type CreatedPlayerCandidate } from '../engine/playerCore';
+import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, dtInfo, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { appendPlayerCareerLog } from '../engine/history';
 import {
   LEAGUE_TRANSFER_RULES,
@@ -23,6 +23,7 @@ import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { TalentBadge } from '../components/TalentBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { TransferMarketIcon } from '../components/TransferMarketIcon';
@@ -432,7 +433,8 @@ export const MarketView: React.FC<{
           if (target.tries >= 3 || deal.chance < 20) target.locked = 1;
         } else {
           const srcList = offerDraft.source === 'mk' ? d.mk : d.scout?.results || [];
-          const target = srcList[offerDraft.idx];
+          const byName = srcList.findIndex((p) => p.n === (offerDraft.playerName || q.n));
+          const target = srcList[byName >= 0 ? byName : offerDraft.idx];
           if (!target) return;
           target.tries = (target.tries || 0) + 1;
           if (target.tries >= 3 || (deal.chance < 20 && !target.free)) target.locked = 1;
@@ -449,7 +451,7 @@ export const MarketView: React.FC<{
         setOfferDraft({
           ...offerDraft,
           counter,
-          msg: `ขอปรับเงื่อนไขเป็น${deal.type === 'free' ? '' : ` ${cPct}% · `}จ่ายทันที ${fmtMoneyNum(counter.cashNow)} · ค่าเหนื่อย ${fmtMoneyNum(counter.wg)}/นัด · ${ROLE_L[counter.role]}`
+          msg: `ขอปรับเงื่อนไขเป็น${deal.type === 'free' ? '' : `ค่าตัว ${cPct}% · `}จ่ายทันที ${fmtMoneyNum(counter.cashNow)} · ค่าเหนื่อย ${fmtMoneyNum(counter.wg)}/นัด · ${ROLE_L[counter.role]}`
         });
       }
     }
@@ -460,118 +462,288 @@ export const MarketView: React.FC<{
     const { q: rawQ, sellerTeam } = getDraftTarget(offerDraft, state);
     if (!rawQ) return null;
     const q: Player = offerDraft.source === 'club' && !rawQ.price ? { ...rawQ, price: Math.max(8, vlu(rawQ)) } : rawQ;
+    const info = dtInfo(q);
     const swCands = me.sq
       .map((z, i) => ({ z, i }))
       .filter(({ z }) => !z.loan && !z.me && z.inj === 0 && tx.posCounts[z.pos] > tx.minPos[z.pos])
       .sort((a, b) => vlu(b.z) - vlu(a.z));
     const E = evalOffer(q, offerDraft, me);
+    const isLoanType = offerDraft.type === 'loan' || offerDraft.type === 'loanopt';
+    const isBuyFeeType = offerDraft.type === 'cash' || offerDraft.type === 'inst' || offerDraft.type === 'swap';
+    const sellerMinBlocked = offerDraft.source === 'club' && !!sellerTeam && sellerTeam.sq.length <= 16 && offerDraft.type !== 'swap';
+    const windowBlocked = !tx.tw.open && !q.free;
     const canAfford = state.money >= E.cashNow && !(tx.ffpLocked && E.cashNow > 0);
     const needSwapOk = offerDraft.type !== 'swap' || !!E.swapQ;
     const fullSq = me.sq.length >= tx.maxSquad && offerDraft.type !== 'swap';
-    const loanCapHit = (offerDraft.type === 'loan' || offerDraft.type === 'loanopt') && tx.loansCount >= tx.maxLoans;
+    const loanCapHit = isLoanType && tx.loansCount >= tx.maxLoans;
     const freedWage = offerDraft.type === 'swap' && E.swapQ ? ensureCon(E.swapQ).wg : 0;
-    const wageOverCap = tx.curWage - freedWage + E.wg > tx.wageCap;
+    const projectedWage = +(tx.curWage - freedWage + E.wg).toFixed(1);
+    const wageOverCap = projectedWage > tx.wageCap;
+    const moneyAfterDeal = +(state.money - E.cashNow).toFixed(1);
+    const askWage = q.askWg || wagOf(q);
+    const triesUsed = q.tries || 0;
+    const triesLeft = Math.max(0, 3 - triesUsed);
+
+    const counter = offerDraft.counter;
+    const counterFreedWage = counter?.type === 'swap' && counter.swapQ ? ensureCon(counter.swapQ).wg : 0;
+    const counterProjectedWage = counter ? +(tx.curWage - counterFreedWage + counter.wg).toFixed(1) : 0;
+    const counterCanAfford = counter ? state.money >= counter.cashNow && !(tx.ffpLocked && counter.cashNow > 0) : true;
+    const counterWageOverCap = counter ? counterProjectedWage > tx.wageCap : false;
+    const counterBlocked = !!counter && (!counterCanAfford || counterWageOverCap || fullSq || loanCapHit || !needSwapOk || windowBlocked);
+
     const types: [OfferDraft['type'], string][] = q.free
       ? [['free', '🆓 เซ็นฟรีเอเยนต์']]
       : [['cash', '💰 จ่ายสด'], ['inst', '📅 ผ่อน 2 งวด'], ['swap', '🔄 แลกตัว+เงิน'], ['loan', '🤝 ยืม 1 ซีซั่น'], ['loanopt', '🤝 ยืม+ซื้อขาด']];
     const chCol = E.chance >= 75 ? 'var(--g)' : E.chance >= 45 ? '#b45309' : 'var(--red)';
 
+    const cashSubNote = E.sgBonus > 0
+      ? `รวมโบนัสเซ็น +${fmtMoneyNum(E.sgBonus)}`
+      : offerDraft.type === 'inst'
+        ? 'งวดแรก 55%'
+        : offerDraft.type === 'swap' && E.swapQ
+          ? `หักแลกตัว -${fmtMoneyNum(E.swapVal)}`
+          : isLoanType
+            ? 'ค่ายืม 1 ฤดูกาล'
+            : q.free
+              ? 'ไร้ค่าตัว'
+              : 'จ่ายครั้งเดียว';
+
+    const thirdCardLabel = E.dueLater > 0
+      ? 'ผ่อนจ่ายปลายปี'
+      : E.loanOpt > 0
+        ? 'ออปชันซื้อขาด'
+        : offerDraft.type === 'swap' && E.swapQ
+          ? 'มูลค่าแลกตัว (-80%)'
+          : 'ราคาตลาดอ้างอิง';
+    const thirdCardVal = E.dueLater > 0
+      ? fmtMoneyNum(E.dueLater)
+      : E.loanOpt > 0
+        ? fmtMoneyNum(E.loanOpt)
+        : offerDraft.type === 'swap' && E.swapQ
+          ? fmtMoneyNum(E.swapVal)
+          : q.free
+            ? 'ฟรี'
+            : fmtMoneyNum(E.p0);
+    const thirdCardSub = E.dueLater > 0
+      ? 'งวดที่ 2 (50%)'
+      : E.loanOpt > 0
+        ? 'จ่ายเมื่อใช้สิทธิ์ซื้อ'
+        : offerDraft.type === 'swap' && E.swapQ
+          ? `${E.swapQ.ro} · ${E.swapQ.n}`
+          : q.free
+            ? 'ประหยัดค่าตัว 100%'
+            : isLoanType
+              ? 'มูลค่านักเตะ'
+              : `เสนอ ${offerDraft.pct}%`;
+    const thirdCardDanger = false;
+
     return (
-      <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden" onClick={() => setOfferDraft(null)}>
-        <div className="w-full max-w-3xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-          <div className="shrink-0 flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
-            <PlayerFace player={q} team={sellerTeam} state={state} size={44} />
-            <div className="flex-1 min-w-0">
-              <div className="font-bold text-sm sm:text-base mland:text-xs truncate">
-                {q.n} <span className="text-xs mland:text-[10px] text-[var(--g)]">({q.ro} · {SPN[q.ro] || q.pos})</span>
-              </div>
-              <div className="text-[11px] sm:text-xs mland:text-[10px] text-[var(--mut)] truncate tabular">
-                {sellerTeam ? `${sellerTeam.name} · ` : ''}อายุ {q.age} ปี · {q.free ? <b className="text-[var(--g)]">ฟรีเอเยนต์</b> : `ค่าตัว ${fmtMoney(q.price || 0)}`} · ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}
-              </div>
-              <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-1" />
+      <div
+        className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center stage-viewport overflow-hidden"
+        onClick={() => setOfferDraft(null)}
+      >
+        <div
+          className="w-full max-w-[880px] mland:max-w-[min(94vw,840px)] h-[min(calc(var(--app-dvh,1dvh)*86),610px)] mland:h-[calc(var(--app-dvh,1dvh)*92)] max-h-full rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Fixed Header */}
+          <div className="shrink-0 flex items-center gap-3 mland:gap-2 px-4 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
+            <div className="shrink-0 [&>svg]:w-11 [&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9">
+              <PlayerFace player={q} team={sellerTeam} state={state} size={44} />
             </div>
-            <OvrBadge ov={q.ov} size="lg" />
-            <button
-              type="button"
-              onClick={() => setOfferDraft(null)}
-              aria-label="ปิดหน้าต่างเจรจา"
-              className="btn-icon"
-            >
-              ✕
-            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <PositionBadge role={q.ro} size="sm" />
+                <span className="font-bold text-sm sm:text-base mland:text-xs truncate text-[var(--ink)]">{q.n}</span>
+                <span className="hidden sm:inline text-[11px] mland:text-[9.5px] font-semibold text-[var(--g)] shrink-0">
+                  {SPN[q.ro] || q.pos}
+                </span>
+                {q.altRoles && q.altRoles.length > 0 && (
+                  <span className="hidden md:inline text-[10.5px] mland:text-[9px] text-[var(--mut)] shrink-0">
+                    · ถนัดรอง {q.altRoles.join(', ')}
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] truncate tabular mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                {sellerTeam ? (
+                  <span className="inline-flex items-center gap-1 font-semibold text-[var(--ink)]/85">
+                    <ClubCrest name={sellerTeam.name} size={13} team={sellerTeam} club={state.club} />
+                    <span>{sellerTeam.name}</span>
+                    <span className="text-[var(--mut)] font-normal">({TN[sellerTeam.tier]})</span>
+                  </span>
+                ) : (
+                  <span className={q.free ? 'text-[var(--g)] font-bold' : ''}>
+                    {q.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขายกลาง'}
+                  </span>
+                )}
+                <span aria-hidden="true">·</span>
+                <span>อายุ {q.age} ปี ({info.gro})</span>
+                <span aria-hidden="true">·</span>
+                <PlayerBioStrip bio={info.bio} variant="inline" />
+                <span aria-hidden="true">·</span>
+                <span>
+                  {q.free ? 'ไร้ค่าตัว' : `ราคาประเมิน ${fmtMoneyNum(E.p0)}`} · ค่าเหนื่อยที่ขอ ~{fmtMoneyNum(askWage)}/นัด
+                </span>
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center gap-1.5 mland:gap-1">
+              <div className="hidden sm:flex flex-col items-end gap-0.5">
+                <PotentialBadge pot={q.pot || q.ov} size="xs" />
+                <span className="text-[9.5px] text-[var(--mut)] font-semibold tabular">POT สูงสุด</span>
+              </div>
+              <OvrBadge ov={q.ov} size="lg" />
+              <button
+                type="button"
+                onClick={() => onInspectPlayer(q, sellerTeam || null)}
+                title="ดูการ์ดนักเตะและค่าพลังทั้งหมด"
+                className="btn btn-xs btn-secondary px-2"
+              >
+                🔍 การ์ด
+              </button>
+              <button
+                type="button"
+                onClick={() => setOfferDraft(null)}
+                aria-label="ปิดหน้าต่างเจรจา"
+                className="btn-icon"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 grid grid-cols-1 sm:grid-cols-[1.15fr_0.85fr] mland:grid-cols-[1.15fr_0.85fr] gap-3.5 mland:gap-2.5 items-start">
-            <div className="space-y-3 mland:space-y-2">
+          {/* Stable 2-Column Body */}
+          <div className="flex-1 min-h-0 overflow-y-auto sm:overflow-hidden mland:overflow-hidden p-3.5 sm:p-4 mland:p-2.5 grid grid-cols-1 sm:grid-cols-[1.08fr_0.92fr] mland:grid-cols-[1.08fr_0.92fr] gap-3.5 mland:gap-2.5 items-stretch">
+            {/* Left Column: Offer Controls */}
+            <div className="min-h-0 flex flex-col gap-3 mland:gap-2 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
+              {/* 1) Offer Type */}
               <div>
-                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">1) รูปแบบข้อเสนอ</div>
-                <div className="flex flex-wrap gap-1.5 mland:gap-1">
+                <div className="flex items-center justify-between text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">
+                  <span>1) รูปแบบข้อเสนอ</span>
+                  <span className="tabular font-semibold">
+                    โควตายืม {tx.loansCount}/{tx.maxLoans} คน
+                  </span>
+                </div>
+                <div className={`grid gap-1.5 mland:gap-1 ${q.free ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3 mland:grid-cols-3'}`}>
                   {types.map(([k, l]) => {
-                    const isLoanType = k === 'loan' || k === 'loanopt';
-                    const disabledLoan = isLoanType && tx.loansCount >= tx.maxLoans;
+                    const isLoanBtn = k === 'loan' || k === 'loanopt';
+                    const disabledLoan = isLoanBtn && tx.loansCount >= tx.maxLoans;
+                    const disabledMinSeller = offerDraft.source === 'club' && !!sellerTeam && sellerTeam.sq.length <= 16 && k !== 'swap';
                     return (
                       <button
                         key={k}
                         type="button"
-                        disabled={disabledLoan}
+                        disabled={disabledLoan || disabledMinSeller}
                         onClick={() => setOfferDraft({ ...offerDraft, type: k, counter: null, msg: '' })}
-                        className={`btn btn-sm ${
+                        className={`btn btn-sm truncate ${
                           offerDraft.type === k ? 'btn-primary' : 'btn-secondary'
                         }`}
                       >
-                        {l}{disabledLoan ? ` (เต็ม ${tx.maxLoans})` : ''}
+                        {l}{disabledLoan ? ` (เต็ม)` : ''}
                       </button>
                     );
                   })}
                 </div>
+                {sellerTeam && sellerTeam.sq.length <= 16 && (
+                  <p className="text-[11px] mland:text-[9.5px] text-[#9a6700] dark:text-[var(--lamp)] mt-1 font-medium">
+                    ⚠️ {sellerTeam.name} มีนักเตะขั้นต่ำ {sellerTeam.sq.length} คน จึงรับเฉพาะข้อเสนอแบบแลกตัว
+                  </p>
+                )}
               </div>
 
-              {['cash', 'inst', 'swap'].includes(offerDraft.type) && (
-                <div>
-                  <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1 tabular">ระดับค่าตัวเทียบตลาด ({offerDraft.pct}%)</div>
-                  <div className="grid grid-cols-4 gap-1.5 mland:gap-1">
-                    {[85, 95, 100, 115].map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setOfferDraft({ ...offerDraft, pct: p, counter: null, msg: '' })}
-                        className={`btn btn-sm tabular ${
-                          offerDraft.pct === p ? 'btn-primary' : 'btn-secondary'
-                        }`}
-                      >
-                        {p}%
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {offerDraft.type === 'swap' && (
-                <div>
-                  <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">เลือกนักเตะที่ใช้แลก (หัก 80% ของค่าตัว)</div>
-                  {swCands.length > 0 ? (
-                    <select
-                      aria-label="เลือกนักเตะที่ใช้แลก"
-                      value={offerDraft.swapIdx ?? ''}
-                      onChange={(e) => setOfferDraft({ ...offerDraft, swapIdx: e.target.value ? Number(e.target.value) : null, counter: null, msg: '' })}
-                      className="w-full px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold"
-                    >
-                      {swCands.map(({ z, i }) => (
-                        <option key={z.n} value={i}>
-                          {z.ro} · {z.n} (OVR {z.ov} · ลดค่าตัว {fmtMoneyNum(Math.round(vlu(z) * 0.8))})
-                        </option>
+              {/* 2) Fee / Swap / Loan Terms */}
+              <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-2 mland:space-y-1.5">
+                {isBuyFeeType ? (
+                  <>
+                    <div className="flex items-center justify-between text-xs mland:text-[10.5px] font-bold text-[var(--mut)] tabular">
+                      <span>ระดับค่าตัวเทียบตลาด ({offerDraft.pct}%)</span>
+                      <span className="text-[var(--ink)]">{fmtMoneyNum(Math.round((E.p0 * offerDraft.pct) / 100))}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5 mland:gap-1">
+                      {[85, 95, 100, 115].map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setOfferDraft({ ...offerDraft, pct: p, counter: null, msg: '' })}
+                          className={`btn btn-sm tabular ${
+                            offerDraft.pct === p ? 'btn-primary' : 'btn-secondary'
+                          }`}
+                        >
+                          {p}%
+                        </button>
                       ))}
-                    </select>
-                  ) : (
-                    <p className="text-xs text-[var(--red)]">ไม่มีนักเตะเกินโควตาตำแหน่งให้แลก</p>
-                  )}
-                </div>
-              )}
+                    </div>
+                    {offerDraft.type === 'inst' && (
+                      <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
+                        จ่ายทันที 55% ({fmtMoneyNum(E.cashNow - E.sgBonus)}) + ผ่อนจ่ายปลายปี 50% ({fmtMoneyNum(E.dueLater)})
+                      </div>
+                    )}
+                    {offerDraft.type === 'swap' && (
+                      <div className="pt-1 border-t border-[var(--line)]/70 space-y-1">
+                        <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">
+                          เลือกนักเตะที่ใช้แลก (หัก 80% ของค่าตัว)
+                        </div>
+                        {swCands.length > 0 ? (
+                          <>
+                            <select
+                              aria-label="เลือกนักเตะที่ใช้แลก"
+                              value={offerDraft.swapIdx ?? ''}
+                              onChange={(e) => setOfferDraft({ ...offerDraft, swapIdx: e.target.value ? Number(e.target.value) : null, counter: null, msg: '' })}
+                              className="w-full px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-semibold"
+                            >
+                              {swCands.map(({ z, i }) => (
+                                <option key={z.n} value={i}>
+                                  {z.ro} · {z.n} (OVR {z.ov} · ลดค่าตัว {fmtMoneyNum(Math.round(vlu(z) * 0.8))})
+                                </option>
+                              ))}
+                            </select>
+                            {E.swapQ && (
+                              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
+                                หักค่าตัว {fmtMoneyNum(E.swapVal)} · คืนเพดานค่าเหนื่อย {fmtMoneyNum(freedWage)}/นัด
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-xs text-[var(--red)] font-semibold">ไม่มีนักเตะเกินโควตาตำแหน่งให้แลก</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : isLoanType ? (
+                  <div className="space-y-1 text-[11px] mland:text-[9.5px] tabular">
+                    <div className="flex items-center justify-between font-bold text-[var(--ink)]">
+                      <span>เงื่อนไขยืมตัว 1 ฤดูกาล</span>
+                      <span className="text-[var(--g)]">ค่ายืม {fmtMoneyNum(E.cashNow - E.sgBonus)}</span>
+                    </div>
+                    <p className="text-[var(--mut)] leading-snug">
+                      {offerDraft.type === 'loanopt'
+                        ? `จบฤดูกาลสามารถใช้ออปชันซื้อขาดได้ในราคา ${fmtMoneyNum(E.loanOpt)} (ช่วยรับภาระค่าเหนื่อยตลอดสัญญายืม)`
+                        : 'ยืมใช้งานจนจบฤดูกาลปัจจุบันแล้วส่งตัวกลับต้นสังกัด (ไม่มีออปชันซื้อขาด)'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1 text-[11px] mland:text-[9.5px] tabular">
+                    <div className="flex items-center justify-between font-bold text-[var(--ink)]">
+                      <span>เซ็นสัญญาฟรีเอเยนต์</span>
+                      <span className="text-[var(--g)]">ค่าตัว 0</span>
+                    </div>
+                    <p className="text-[var(--mut)] leading-snug">
+                      ไม่มีค่าตัวโอนย้าย ตกลงเฉพาะระยะสัญญา บทบาทในทีม และค่าเหนื่อยรายนัด
+                    </p>
+                  </div>
+                )}
+              </div>
 
-              <div>
-                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">2) เงื่อนไขสัญญา</div>
-                {!['loan', 'loanopt'].includes(offerDraft.type) && (
-                  <div className="grid grid-cols-4 gap-1.5 mland:gap-1 mb-1.5 mland:mb-1">
+              {/* 3) Personal Contract Terms */}
+              <div className="space-y-2 mland:space-y-1.5">
+                <div className="flex items-center justify-between text-xs mland:text-[10.5px] font-bold text-[var(--mut)]">
+                  <span>2) เงื่อนไขสัญญาส่วนตัว</span>
+                  <span className="text-[var(--ink)] tabular">
+                    ค่าเหนื่อย {fmtMoneyNum(E.wg)}/นัด{E.sgBonus > 0 ? ` · โบนัส +${fmtMoneyNum(E.sgBonus)}` : ''}
+                  </span>
+                </div>
+
+                {!isLoanType ? (
+                  <div className="grid grid-cols-4 gap-1.5 mland:gap-1">
                     {[1, 2, 3, 5].map((y) => (
                       <button
                         key={y}
@@ -585,14 +757,20 @@ export const MarketView: React.FC<{
                       </button>
                     ))}
                   </div>
+                ) : (
+                  <div className="h-8 mland:h-6.5 px-3 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">
+                    <span>ระยะเวลาสัญญายืม</span>
+                    <b className="text-[var(--ink)]">1 ฤดูกาล</b>
+                  </div>
                 )}
-                <div className="grid grid-cols-3 gap-1.5 mland:gap-1 mb-1.5 mland:mb-1">
+
+                <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
                   {([['key', '⭐ ตัวหลัก'], ['rot', '🔄 หมุนเวียน'], ['pro', '🌱 ดาวรุ่ง']] as const).map(([k, l]) => (
                     <button
                       key={k}
                       type="button"
                       onClick={() => setOfferDraft({ ...offerDraft, role: k, counter: null, msg: '' })}
-                      className={`btn btn-sm ${
+                      className={`btn btn-sm truncate ${
                         offerDraft.role === k ? 'btn-primary' : 'btn-secondary'
                       }`}
                     >
@@ -600,6 +778,7 @@ export const MarketView: React.FC<{
                     </button>
                   ))}
                 </div>
+
                 <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
                   {([['ประหยัด (-15%)', 0], ['มาตรฐาน', 1], ['จัดเต็ม (+20%)', 2]] as const).map(([l, k]) => (
                     <button
@@ -617,71 +796,181 @@ export const MarketView: React.FC<{
               </div>
             </div>
 
-            <div className="space-y-3 mland:space-y-2">
-              <div className="grid grid-cols-2 gap-2 mland:gap-1.5 text-center p-3 mland:p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]">
-                <div>
-                  <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">จ่ายทันที</div>
-                  <b className={`text-sm mland:text-xs tabular ${!canAfford ? 'text-[var(--red)]' : ''}`}>{fmtMoneyNum(E.cashNow)}</b>
+            {/* Right Column: Complete Player Info, Financial Summary & Negotiation State */}
+            <div className="min-h-0 flex flex-col gap-2.5 mland:gap-2 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
+              {/* Player Scouting Snapshot */}
+              <div className="shrink-0 p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-1.5 mland:space-y-1">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <PotentialBadge pot={q.pot || q.ov} size="xs" showLabel />
+                    <TalentBadge talent={info.D0.tlVal} size="xs" prefix="พรสวรรค์" />
+                  </div>
+                  <span className="text-[10.5px] mland:text-[9px] font-bold tabular text-[var(--ink)]/85">
+                    {info.stTxt}
+                  </span>
                 </div>
-                <div>
-                  <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">ค่าเหนื่อยหลังดีล</div>
-                  <b className={`text-sm mland:text-xs tabular ${wageOverCap ? 'text-[var(--red)]' : ''}`}>
-                    {fmtMoneyNum(Math.round(tx.curWage - freedWage + E.wg))}/{fmtMoneyNum(tx.wageCap)}
-                  </b>
-                </div>
-                <div>
-                  <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">{E.dueLater ? 'ผ่อนปลายปี' : E.loanOpt ? 'ซื้อขาด' : 'ค่าเหนื่อยนักเตะ'}</div>
-                  <b className="text-sm mland:text-xs tabular">{E.dueLater ? fmtMoneyNum(E.dueLater) : E.loanOpt ? fmtMoneyNum(E.loanOpt) : `${fmtMoneyNum(E.wg)}/นัด`}</b>
-                </div>
-                <div>
-                  <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">งบคงเหลือ</div>
-                  <b className="text-sm mland:text-xs tabular">{fmtMoneyNum(state.money)}</b>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-0.5 text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
+                  <div className="truncate">
+                    จุดเด่น: <b className="text-[var(--ink)]">{info.top.map(([k, v]) => `${k} ${v}`).join(' · ')}</b>
+                  </div>
+                  <div className="truncate">
+                    นิสัย: <b className="text-[var(--ink)]">{info.TR[0]}</b>
+                  </div>
+                  {q.con && (
+                    <div className="truncate">
+                      สัญญาเดิม: <b className="text-[var(--ink)]">{q.con.yr} ปี · {fmtMoneyNum(q.con.wg)}/นัด</b>
+                    </div>
+                  )}
+                  <div className={`truncate ${q.con ? '' : 'sm:col-span-2'}`}>
+                    สไตล์: <b className="text-[var(--ink)]">{info.traits.length > 0 ? info.traits.map((t) => `${t.icon}${t.name}`).slice(0, 2).join(', ') : 'สมดุลรอบด้าน'}</b>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs mland:text-[10.5px]">
-                <span className="whitespace-nowrap font-semibold">โอกาสตอบรับ</span>
-                <div className="flex-1 h-2.5 mland:h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${E.chance}%`, background: chCol }} />
+              {/* Complete Financial & League Rule Summary */}
+              <div className="shrink-0 p-3 mland:p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
+                <div className="grid grid-cols-2 gap-2 mland:gap-1.5 text-center">
+                  <div className="p-1.5 mland:p-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60">
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">จ่ายทันที</div>
+                    <b className={`text-sm mland:text-xs tabular block leading-tight ${!canAfford ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                      {fmtMoneyNum(E.cashNow)}
+                    </b>
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate">{cashSubNote}</div>
+                  </div>
+                  <div className="p-1.5 mland:p-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60">
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ค่าเหนื่อยนักเตะ</div>
+                    <b className="text-sm mland:text-xs tabular block leading-tight text-[var(--ink)]">
+                      {fmtMoneyNum(E.wg)}/นัด
+                    </b>
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate tabular">
+                      ขอ ~{fmtMoneyNum(askWage)}/นัด
+                    </div>
+                  </div>
+                  <div className="p-1.5 mland:p-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60">
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">{thirdCardLabel}</div>
+                    <b className={`text-sm mland:text-xs tabular block leading-tight ${thirdCardDanger ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                      {thirdCardVal}
+                    </b>
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate">{thirdCardSub}</div>
+                  </div>
+                  <div className="p-1.5 mland:p-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60">
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">งบสโมสรปัจจุบัน</div>
+                    <b className={`text-sm mland:text-xs tabular block leading-tight ${tx.ffpLocked ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                      {fmtMoneyNum(state.money)}
+                    </b>
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate tabular">
+                      {tx.ffpLocked ? 'ติดกฎ FFP งบติดลบ' : `หลังดีล ${fmtMoneyNum(moneyAfterDeal)}`}
+                    </div>
+                  </div>
                 </div>
-                <b className="tabular shrink-0" style={{ color: chCol }}>{E.chance}%</b>
+
+                <div className="pt-1.5 border-t border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
+                  <span>
+                    เพดานค่าเหนื่อย:{' '}
+                    <b className={wageOverCap ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                      {fmtMoneyNum(projectedWage)} / {fmtMoneyNum(tx.wageCap)}
+                    </b>
+                  </span>
+                  <span>
+                    ขนาดทีม:{' '}
+                    <b className={fullSq ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                      {me.sq.length}/{tx.maxSquad} คน
+                    </b>
+                  </span>
+                </div>
               </div>
 
-              {offerDraft.msg && (
-                <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)]/80 border border-[var(--lamp)]/45 text-xs mland:text-[10.5px] space-y-2 mland:space-y-1.5">
-                  <div className="font-bold">💬 ผลการเจรจา ({q.tries || 0}/3)</div>
-                  <p className="leading-snug">{offerDraft.msg}</p>
-                  {offerDraft.counter && (
-                    <button type="button" onClick={() => submitOffer(true)} className="btn btn-sm btn-primary w-full">
-                      ✅ ตกลงตามข้อเสนอสวน ({fmtMoneyNum(offerDraft.counter.cashNow)} · {fmtMoneyNum(offerDraft.counter.wg)}/นัด)
-                    </button>
+              {/* Acceptance Chance & Stable Negotiation Result Box */}
+              <div className={`flex-1 min-h-[112px] mland:min-h-[88px] p-3 mland:p-2 rounded-xl border flex flex-col justify-between gap-2 mland:gap-1.5 ${
+                offerDraft.msg
+                  ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)]/50'
+                  : q.locked
+                    ? 'bg-[var(--red-soft)] border-[var(--red)]/35'
+                    : 'bg-[var(--surface-2)]/55 border-[var(--line)]'
+              }`}>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs mland:text-[10.5px]">
+                    <span className="whitespace-nowrap font-semibold">โอกาสตอบรับ</span>
+                    <div className="flex-1 h-2.5 mland:h-2 rounded-full bg-[var(--surface)] border border-[var(--line)]/50 overflow-hidden">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${E.chance}%`, background: chCol }} />
+                    </div>
+                    <b className="tabular shrink-0" style={{ color: chCol }}>{E.chance}%</b>
+                    <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold tabular shrink-0">
+                      ({triesUsed}/3)
+                    </span>
+                  </div>
+                  {!q.free && E.chance < 20 && !q.locked && !offerDraft.msg && (
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--red)] font-medium leading-tight">
+                      ⚠️ โอกาสต่ำกว่า 20% หากถูกปฏิเสธ การเจรจารอบนี้จะยุติทันที
+                    </div>
                   )}
                 </div>
-              )}
+
+                {offerDraft.msg ? (
+                  <div className="space-y-1.5 text-xs mland:text-[10px]">
+                    <div className="font-bold text-[var(--ink)]">💬 ผลการเจรจา ({triesUsed}/3)</div>
+                    <p className="leading-snug text-[var(--ink)]/90">{offerDraft.msg}</p>
+                    {counter && (
+                      <button
+                        type="button"
+                        disabled={counterBlocked}
+                        onClick={() => submitOffer(true)}
+                        className="btn btn-sm btn-primary w-full truncate"
+                      >
+                        {counterBlocked
+                          ? counterWageOverCap
+                            ? `ข้อเสนอสวนเกินเพดานค่าเหนื่อย (${fmtMoneyNum(tx.wageCap)})`
+                            : !counterCanAfford
+                              ? 'ข้อเสนอสวนเกินงบสโมสร / ติด FFP'
+                              : 'ยังไม่สามารถรับข้อเสนอสวนได้'
+                          : `✅ ตกลงตามข้อเสนอสวน (${fmtMoneyNum(counter.cashNow)} · ${fmtMoneyNum(counter.wg)}/นัด)`}
+                      </button>
+                    )}
+                  </div>
+                ) : q.locked ? (
+                  <div className="text-xs mland:text-[10px] text-[var(--red)] font-semibold leading-snug">
+                    🚫 การเจรจาในรอบนี้ยุติลงแล้ว ไม่สามารถยื่นข้อเสนอเพิ่มเติมได้
+                  </div>
+                ) : (
+                  <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                    <b className="text-[var(--ink)]">💡 พร้อมยื่นข้อเสนอ</b> (เหลือสิทธิ์ {triesLeft} ครั้ง) ·{' '}
+                    {q.free
+                      ? 'นักเตะฟรีเอเยนต์พิจารณาจากค่าเหนื่อย บทบาทในทีม และระยะเวลาสัญญา'
+                      : 'พิจารณาทั้งมูลค่าดีลให้ต้นสังกัดและเงื่อนไขสัญญาส่วนตัวของนักเตะ'}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
+          {/* Fixed Footer */}
+          <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
             <button type="button" onClick={() => setOfferDraft(null)} className="btn btn-md btn-surface">
               ปิด
             </button>
             <button
               type="button"
-              disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || !!q.locked}
+              disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || sellerMinBlocked || windowBlocked || !!q.locked}
               onClick={() => submitOffer(false)}
               className="btn btn-md btn-gold flex-1"
             >
               {q.locked
                 ? 'การเจรจาล่มแล้ว'
-                : loanCapHit
-                  ? `โควตายืมเต็ม ${tx.maxLoans} คน`
-                  : wageOverCap
-                    ? `เกินเพดานค่าเหนื่อย ${fmtMoneyNum(tx.wageCap)}`
-                    : fullSq
-                      ? `ทีมเต็ม ${tx.maxSquad} คน`
-                      : !canAfford
-                        ? 'งบไม่พอ / ติดกฎ FFP'
-                        : '🤝 ยื่นข้อเสนอเจรจา'}
+                : windowBlocked
+                  ? `ตลาดซื้อขายปิดอยู่ (${tx.tw.rangeText})`
+                  : sellerMinBlocked
+                    ? `ทีมขายมีนักเตะขั้นต่ำ ${sellerTeam?.sq.length} คน (ต้องใช้การแลกตัว)`
+                    : loanCapHit
+                      ? `โควตายืมเต็ม ${tx.maxLoans} คน`
+                      : wageOverCap
+                        ? `เกินเพดานค่าเหนื่อย ${fmtMoneyNum(tx.wageCap)}`
+                        : fullSq
+                          ? `ทีมเต็ม ${tx.maxSquad} คน`
+                          : !needSwapOk
+                            ? 'ยังไม่มีนักเตะให้แลกตัว'
+                            : !canAfford
+                              ? (tx.ffpLocked ? 'งบติดลบตามกฎ FFP' : 'งบสโมสรไม่พอจ่ายทันที')
+                              : '🤝 ยื่นข้อเสนอเจรจา'}
             </button>
           </div>
         </div>
