@@ -34,6 +34,13 @@ import { PlayerAppearanceModal } from '../modals/PlayerAppearanceModal';
 import { AthleteCard } from '../components/AthleteCard';
 import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
+import {
+  getActiveFavBoost,
+  getPlayerMentalScore,
+  getPlayerPhysScore,
+  getWellbeingTierMeta
+} from '../engine/wellbeing';
+import { PlayerWellbeingCard } from '../components/PlayerWellbeingCard';
 
 export const PlayerCareerView = React.memo<{
   state: GameState;
@@ -98,6 +105,12 @@ export const PlayerCareerView = React.memo<{
   const kit1 = tc(meTeam, state, false);
   const kit2 = tc(meTeam, state, true);
   const isPitchOrNaturalGK = mySlot ? mySlot === 'GK' : (p.pos === 'GK' || p.sp === 'GK');
+  const isCoachFav = meTeam.favPlayer === p.name || meTeam.favPlayer === fakePlayer.n;
+  const favBoost = getActiveFavBoost(fakePlayer, meTeam, p);
+  const myMental = getPlayerMentalScore(fakePlayer, p);
+  const myPhys = getPlayerPhysScore(fakePlayer, p);
+  const mentalMeta = getWellbeingTierMeta(myMental, 'mental', false);
+  const physMeta = getWellbeingTierMeta(myPhys, 'phys', injCount > 0);
 
   return (
     <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[214px_1fr] grid-rows-[minmax(0,1fr)] flex-1 min-h-0 gap-2.5 mland:gap-1.5 items-stretch overflow-hidden">
@@ -134,6 +147,18 @@ export const PlayerCareerView = React.memo<{
               <span className={`text-[9.5px] mland:text-[7.5px] font-bold tabular whitespace-nowrap ${palette.repText}`}>
                 ★ {p.rep ?? 10}
               </span>
+              {isCoachFav && (
+                <span
+                  title={favBoost > 0 ? `ลูกรักโค้ช (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักโค้ชประจำทีม'}
+                  className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-black leading-none shrink-0 ${
+                    favBoost > 0
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-rose-500/25 border border-rose-400/60 text-rose-100'
+                  }`}
+                >
+                  {favBoost > 0 ? `💖+${favBoost}` : '💖'}
+                </span>
+              )}
               {meTeam.cap === p.name && (
                 <CaptainBadge team={meTeam} state={state} size="sm" />
               )}
@@ -210,24 +235,33 @@ export const PlayerCareerView = React.memo<{
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {careerTab === 'plan' && (
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col justify-between gap-2 mland:gap-1.5 overflow-y-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <h3 className="font-bold text-sm mland:text-xs">📅 แผนฝึกซ้อมประจำสัปดาห์</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2 shrink-0 pb-1 border-b border-[var(--line)]/60">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <h3 className="font-bold text-sm mland:text-xs">📅 แผนฝึกซ้อม &amp; ดูแลตัวเอง</h3>
                   <StaminaBar
                     value={p.en}
                     variant="inline"
-                    label="ความฟิต"
+                    label="ฟิต"
                     barWidthClass="w-10 mland:w-8"
-                    className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]"
                   />
+                  <span className="text-[11px] mland:text-[9px] tabular inline-flex items-center gap-1.5 text-[var(--mut)]">
+                    <span aria-hidden="true">·</span>
+                    <span className={`font-bold ${mentalMeta.txtCls}`}>🧠 ใจ {myMental}</span>
+                    <span aria-hidden="true">·</span>
+                    <span className={`font-bold ${physMeta.txtCls}`}>💪 กาย {myPhys}</span>
+                    {favBoost > 0 && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-black text-rose-600 dark:text-rose-400">💖 ลูกรัก +{favBoost}</span>
+                      </>
+                    )}
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 text-[10.5px] mland:text-[8.5px]">
                   {p.vid ? (
-                    <span className="px-2 py-0.5 rounded-full bg-[var(--g-soft)] border border-[var(--g)]/35 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)]">
-                      📺 บัฟวิดีโอนัดหน้า (+0.3 เรตติ้ง)
-                    </span>
+                    <span className="font-bold text-[var(--g)]">📺 บัฟวิดีโอนัดหน้า (+0.3 เรตติ้ง)</span>
                   ) : null}
-                  <span className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">มีผลหลังจบการแข่งแต่ละนัด</span>
+                  <span className="text-[var(--mut)]">มีผลหลังจบการแข่งแต่ละนัด</span>
                 </div>
               </div>
               <div className="grid grid-cols-2 lg:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5 flex-1 content-start">
@@ -291,6 +325,16 @@ export const PlayerCareerView = React.memo<{
                   </span>
                 )}
               </div>
+              <PlayerWellbeingCard
+                player={fakePlayer}
+                team={meTeam}
+                state={state}
+                isMyTeam
+                isMePlayer
+                onUpdateState={onUpdateState}
+                onToast={onToast}
+                compact
+              />
             </div>
           )}
 
@@ -612,6 +656,16 @@ export const PlayerCareerView = React.memo<{
 
           {careerTab === 'stats' && (
             <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1 overflow-y-auto pr-0.5 pb-2">
+              <PlayerWellbeingCard
+                player={fakePlayer}
+                team={meTeam}
+                state={state}
+                isMyTeam
+                isMePlayer
+                onUpdateState={onUpdateState}
+                onToast={onToast}
+                compact
+              />
               <PlayerSeasonProgressionCard
                 player={fakePlayer}
                 state={state}

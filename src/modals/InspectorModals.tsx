@@ -28,6 +28,8 @@ import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { WdlFormStrip, WdlRecordBadges } from '../components/WdlBadge';
+import { getActiveFavBoost } from '../engine/wellbeing';
+import { PlayerWellbeingCard } from '../components/PlayerWellbeingCard';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -55,6 +57,8 @@ export const PlayerInspectorModal: React.FC<{
   const canEditShirtNo = !isRetired && Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
+  const isFav = !isRetired && !!liveTeam && liveTeam.favPlayer === livePlayer.n;
+  const favBoost = !isRetired ? getActiveFavBoost(livePlayer, liveTeam, isMePlayer ? state.p : null) : 0;
   const staminaMeta = getStaminaMeta(livePlayer.fit);
   const fitVal = staminaMeta.f;
   const fitCol = isRetired
@@ -278,7 +282,7 @@ export const PlayerInspectorModal: React.FC<{
                 bio={info.bio}
                 categories={summarizeStatGroups(info.G)}
                 renderStageTopLeft={(palette) =>
-                  isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap ? (
+                  isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap || isFav ? (
                     <div className="flex items-center gap-1 min-w-0">
                       {isMePlayer && (
                         <span
@@ -286,6 +290,18 @@ export const PlayerInspectorModal: React.FC<{
                           className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
                         >
                           ★
+                        </span>
+                      )}
+                      {isFav && (
+                        <span
+                          title={favBoost > 0 ? `ลูกรัก (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม'}
+                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-black leading-none shrink-0 ${
+                            favBoost > 0
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'bg-rose-500/25 border border-rose-400/60 text-rose-100'
+                          }`}
+                        >
+                          {favBoost > 0 ? `💖+${favBoost}` : '💖'}
                         </span>
                       )}
                       {livePlayer.blessed && (
@@ -362,8 +378,20 @@ export const PlayerInspectorModal: React.FC<{
               />
             </div>
 
-            {/* Right Column: Season Progression Graph -> Attribute Breakdown */}
+            {/* Right Column: Wellbeing & Favorite Boost -> Season Progression Graph -> Attribute Breakdown */}
             <div className="min-h-0 flex flex-col gap-1.5 mland:gap-1 md:h-full mland:h-full md:overflow-y-auto mland:overflow-y-auto pr-0.5 pb-2">
+              <PlayerWellbeingCard
+                player={livePlayer}
+                team={liveTeam}
+                state={state}
+                isMyTeam={isMyTeam}
+                isMePlayer={isMePlayer}
+                isRetired={isRetired}
+                onUpdateState={onUpdateState}
+                onToast={onToast}
+                compact
+              />
+
               <PlayerSeasonProgressionCard
                 player={livePlayer}
                 state={state}

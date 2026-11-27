@@ -7,7 +7,7 @@ import {
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
-import { P, clamp, capMoney } from './utils/math';
+import { P, clamp, capMoney, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
@@ -16,6 +16,7 @@ import { resolveStateSponsorBrand } from './data/sponsorBrands';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
+import { getActiveFavBoost, updateTeamWellbeingAfterMatchday, type MatchdayWellbeingCtx } from './engine/wellbeing';
 import { AppEntrySplash, AppToast, AppTopHud, AppNavDock, type NextMatchDescriptor } from './components/AppShellSections';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -248,7 +249,12 @@ export default function App() {
     setSlot(targetSlot);
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
-    showToast(`รับตำแหน่งผู้จัดการทีม ${fresh.teams[fresh.me].name} แล้ว!`);
+    const grant = fresh.initialBoardGrant;
+    showToast(
+      grant
+        ? `รับตำแหน่งผู้จัดการ ${fresh.teams[fresh.me].name}! บอร์ดมอบโบนัสแรกเข้า +${fmtMoney(grant.amount)} (ระดับ${grant.levelLabel}) · งบรวม ${fmtMoney(fresh.money)}`
+        : `รับตำแหน่งผู้จัดการทีม ${fresh.teams[fresh.me].name} แล้ว!`
+    );
   }, [showToast]);
 
   const handleStartPlayer = useCallback((
@@ -392,6 +398,84 @@ export default function App() {
       resObj.ratings = { ...(resObj.ratings || {}), [d.p.name]: payload.pf.rt };
     }
 
+    const subbedOutByTeam: Record<number, Record<string, number>> = {};
+    const recordSubOut = (teamId: number, outName: string, min: number) => {
+      if (!subbedOutByTeam[teamId]) subbedOutByTeam[teamId] = {};
+      if (subbedOutByTeam[teamId][outName] == null || min < subbedOutByTeam[teamId][outName]) {
+        subbedOutByTeam[teamId][outName] = min;
+      }
+    };
+    payload.subs.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
+
+    const ownGoalsByTeam = new Map<number, string[]>();
+    (payload.evs || []).forEach((ev) => {
+      if (ev.og && ev.who) {
+        const arr = ownGoalsByTeam.get(ev.t) || [];
+        arr.push(ev.who);
+        ownGoalsByTeam.set(ev.t, arr);
+      }
+    });
+
+    const buildUserSideWellbeingCtx = (
+      team: Team,
+      gf: number,
+      ga: number,
+      isBigMatch = false
+    ): MatchdayWellbeingCtx => ({
+      matchPlayed: true,
+      matchResult: gf > ga ? 'W' : gf < ga ? 'L' : 'D',
+      goalDiff: gf - ga,
+      isBigMatch,
+      matchEnv: payload.matchEnv,
+      ratings: resObj.ratings || payload.ratings,
+      playedNames: payload.playedNames?.[team.id],
+      motm: payload.motm,
+      cards: payload.cards,
+      ownGoalNames: ownGoalsByTeam.get(team.id),
+      subbedOut: subbedOutByTeam[team.id],
+      isUserClub: team.id === d.me
+    });
+
+    const buildSimWellbeingCtx = (
+      team: Team,
+      gf: number,
+      ga: number,
+      r: MatchResult,
+      isBigMatch = false
+    ): MatchdayWellbeingCtx => ({
+      matchPlayed: true,
+      matchResult: gf > ga ? 'W' : gf < ga ? 'L' : 'D',
+      goalDiff: gf - ga,
+      isBigMatch,
+      ratings: r.ratings,
+      playedNames: r.playedNames?.[team.id],
+      motm: r.motm,
+      cards: r.cards,
+      ownGoalNames: (r.evs || []).filter((e) => e.og && e.t === team.id).map((e) => e.who),
+      subbedOut: subbedOutByTeam[team.id],
+      isUserClub: team.id === d.me
+    });
+
+    const syncCupParticipantWellbeing = (participants: { team: Team; ctx: MatchdayWellbeingCtx }[]) => {
+      const prevFavBoost = me.favPlayer
+        ? getActiveFavBoost(me.sq.find((q) => q.n === me.favPlayer) || me.sq[0], me, d.p)
+        : 0;
+      participants.forEach(({ team, ctx }) => {
+        updateTeamWellbeingAfterMatchday(team, d, ctx);
+      });
+      if (me.favPlayer) {
+        const favPl = me.sq.find((q) => q.n === me.favPlayer);
+        if (favPl) {
+          const nextBoost = getActiveFavBoost(favPl, me, favPl.me ? d.p : null);
+          if (nextBoost > 0) {
+            pushFeed(d, 'ลูกรักโค้ช', `💖 ${favPl.n} สุขภาพใจ/กายดีเยี่ยม! รับพลังเสริมชั่วคราว +${nextBoost} OVR นัดถัดไป`, 'ok');
+          } else if (prevFavBoost > 0) {
+            pushFeed(d, 'ลูกรักโค้ช', `⚠️ ${favPl.n} สุขภาพจิตใจหรือร่างกายยังไม่ถึงเกณฑ์ โบนัสลูกรักชั่วคราวหมดลงแล้ว`, 'urg');
+          }
+        }
+      }
+    };
+
     const liveInjs = payload.injuries || [];
     const liveInjTeamIds = Array.from(new Set(liveInjs.map((x) => x.teamId)));
     const liveInjNames = liveInjs.map((x) => x.name);
@@ -508,23 +592,30 @@ export default function App() {
         const roundBefore = c.r;
         const nx: number[] = [];
         const userWin = pickWinner(H, A, resObj, d);
+        const cupWellbeing: { team: Team; ctx: MatchdayWellbeingCtx }[] = [];
         for (let i = 0; i < c.ids.length; i += 2) {
           const ch = d.teams[c.ids[i]];
           const ca = d.teams[c.ids[i + 1]];
+          const big = c.ids.length <= 4;
           if (ch.id === homeId && ca.id === awayId) {
             nx[i / 2] = userWin.id;
             tallyCupMatchPlayers('cup', ch, ca, resObj);
-            updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind: 'cup', big: c.ids.length <= 4 });
+            updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind: 'cup', big });
             c.log.push(`${RN[c.r]}: ${ch.name} ${payload.gh}-${payload.ga} ${ca.name}${payload.penText ? ` (${payload.penText})` : ''}`);
+            cupWellbeing.push({ team: ch, ctx: buildUserSideWellbeingCtx(ch, payload.gh, payload.ga, big) });
+            cupWellbeing.push({ team: ca, ctx: buildUserSideWellbeingCtx(ca, payload.ga, payload.gh, big) });
           } else {
             const cr = simMatch(ch, ca, d);
             const cw = pickWinner(ch, ca, cr, d);
             nx[i / 2] = cw.id;
             tallyCupMatchPlayers('cup', ch, ca, cr);
-            updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind: 'cup', big: c.ids.length <= 4 });
+            updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind: 'cup', big });
             c.log.push(`${RN[c.r]}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
             applyPositionAdaptation(d, ch, ca, cr);
             applyAiClubMatchMissions(d, ch, ca, cr);
+            cr.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
+            cupWellbeing.push({ team: ch, ctx: buildSimWellbeingCtx(ch, cr.gh, cr.ga, cr, big) });
+            cupWellbeing.push({ team: ca, ctx: buildSimWellbeingCtx(ca, cr.ga, cr.gh, cr, big) });
           }
         }
         d.cupLog = d.cupLog || [];
@@ -601,6 +692,7 @@ export default function App() {
           });
         }
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        syncCupParticipantWellbeing(cupWellbeing);
         recordMatchMissions();
         return { shouldConfetti, missionToast };
       }
@@ -613,6 +705,7 @@ export default function App() {
         const roundLabel = kind === 'sc' ? 'ชิงชนะเลิศ' : RN[c.r] || `รอบ ${c.r + 1}`;
         const nx: number[] = [];
         const userWin = pickWinner(H, A, resObj, d);
+        const extraWellbeing: { team: Team; ctx: MatchdayWellbeingCtx }[] = [];
         for (let i = 0; i < c.ids.length; i += 2) {
           const ch = d.teams[c.ids[i]];
           const ca = d.teams[c.ids[i + 1]];
@@ -621,20 +714,26 @@ export default function App() {
             else if (ca) nx.push(ca.id);
             continue;
           }
+          const big = c.ids.length <= 4;
           if (ch.id === homeId && ca.id === awayId) {
             nx.push(userWin.id);
             tallyCupMatchPlayers(kind, ch, ca, resObj);
-            updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind, big: c.ids.length <= 4 });
+            updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind, big });
             c.log.push(`${roundLabel}: ${ch.name} ${payload.gh}-${payload.ga} ${ca.name}${payload.penText ? ` (${payload.penText})` : ''}`);
+            extraWellbeing.push({ team: ch, ctx: buildUserSideWellbeingCtx(ch, payload.gh, payload.ga, big) });
+            extraWellbeing.push({ team: ca, ctx: buildUserSideWellbeingCtx(ca, payload.ga, payload.gh, big) });
           } else {
             const cr = simMatch(ch, ca, d);
             const cw = pickWinner(ch, ca, cr, d);
             nx.push(cw.id);
             tallyCupMatchPlayers(kind, ch, ca, cr);
-            updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind, big: c.ids.length <= 4 });
+            updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind, big });
             c.log.push(`${roundLabel}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
             applyPositionAdaptation(d, ch, ca, cr);
             applyAiClubMatchMissions(d, ch, ca, cr);
+            cr.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
+            extraWellbeing.push({ team: ch, ctx: buildSimWellbeingCtx(ch, cr.gh, cr.ga, cr, big) });
+            extraWellbeing.push({ team: ca, ctx: buildSimWellbeingCtx(ca, cr.ga, cr.gh, cr, big) });
           }
         }
         d.cupLog = d.cupLog || [];
@@ -714,6 +813,7 @@ export default function App() {
           });
         }
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        syncCupParticipantWellbeing(extraWellbeing);
         recordMatchMissions();
         return { shouldConfetti, missionToast };
       }
@@ -723,23 +823,30 @@ export default function App() {
         const roundBefore = c.r;
         const nx: number[] = [];
         const userWin = pickWinner(H, A, resObj, d);
+        const asiaWellbeing: { team: Team; ctx: MatchdayWellbeingCtx }[] = [];
         for (let i = 0; i < c.ids.length; i += 2) {
           const ah = d.teams[c.ids[i]];
           const aa = d.teams[c.ids[i + 1]];
+          const big = c.ids.length <= 4;
           if (ah.id === homeId && aa.id === awayId) {
             nx[i / 2] = userWin.id;
             tallyCupMatchPlayers('asia', ah, aa, resObj);
-            updateTeamsFanbaseOnMatch(ah, payload.gh, aa, payload.ga, { kind: 'asia', big: c.ids.length <= 4 });
+            updateTeamsFanbaseOnMatch(ah, payload.gh, aa, payload.ga, { kind: 'asia', big });
             c.log.push(`${RN[c.r]}: ${ah.name} ${payload.gh}-${payload.ga} ${aa.name}${payload.penText ? ` (${payload.penText})` : ''}`);
+            asiaWellbeing.push({ team: ah, ctx: buildUserSideWellbeingCtx(ah, payload.gh, payload.ga, big) });
+            asiaWellbeing.push({ team: aa, ctx: buildUserSideWellbeingCtx(aa, payload.ga, payload.gh, big) });
           } else {
             const ar = simMatch(ah, aa, d);
             const aw = pickWinner(ah, aa, ar, d);
             nx[i / 2] = aw.id;
             tallyCupMatchPlayers('asia', ah, aa, ar);
-            updateTeamsFanbaseOnMatch(ah, ar.gh, aa, ar.ga, { kind: 'asia', big: c.ids.length <= 4 });
+            updateTeamsFanbaseOnMatch(ah, ar.gh, aa, ar.ga, { kind: 'asia', big });
             c.log.push(`${RN[c.r]}: ${ah.name} ${ar.gh}-${ar.ga} ${aa.name}`);
             applyPositionAdaptation(d, ah, aa, ar);
             applyAiClubMatchMissions(d, ah, aa, ar);
+            ar.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
+            asiaWellbeing.push({ team: ah, ctx: buildSimWellbeingCtx(ah, ar.gh, ar.ga, ar, big) });
+            asiaWellbeing.push({ team: aa, ctx: buildSimWellbeingCtx(aa, ar.ga, ar.gh, ar, big) });
           }
         }
         d.cupLog = d.cupLog || [];
@@ -816,6 +923,7 @@ export default function App() {
           });
         }
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        syncCupParticipantWellbeing(asiaWellbeing);
         recordMatchMissions();
         return { shouldConfetti, missionToast };
       }
@@ -829,14 +937,10 @@ export default function App() {
       const roundCards: { h: Team; a: Team; cards?: MatchCardEvent[] }[] = [
         { h: H, a: A, cards: payload.cards }
       ];
-      const subbedOutByTeam: Record<number, Record<string, number>> = {};
-      const recordSubOut = (teamId: number, outName: string, min: number) => {
-        if (!subbedOutByTeam[teamId]) subbedOutByTeam[teamId] = {};
-        if (subbedOutByTeam[teamId][outName] == null || min < subbedOutByTeam[teamId][outName]) {
-          subbedOutByTeam[teamId][outName] = min;
-        }
+      const wellbeingByTeam: Record<number, MatchdayWellbeingCtx> = {
+        [H.id]: buildUserSideWellbeingCtx(H, payload.gh, payload.ga, isDerby),
+        [A.id]: buildUserSideWellbeingCtx(A, payload.ga, payload.gh, isDerby)
       };
-      payload.subs.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
 
       // Simulate remaining fixtures in user's league & other tiers
       d.fx[d.md].forEach(([fidH, fidA]) => {
@@ -850,6 +954,8 @@ export default function App() {
         applyAiClubMatchMissions(d, th, ta, r);
         roundCards.push({ h: th, a: ta, cards: r.cards });
         r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
+        wellbeingByTeam[th.id] = buildSimWellbeingCtx(th, r.gh, r.ga, r);
+        wellbeingByTeam[ta.id] = buildSimWellbeingCtx(ta, r.ga, r.gh, r);
       });
 
       if (d.fxo) {
@@ -866,6 +972,8 @@ export default function App() {
             applyAiClubMatchMissions(d, th, ta, r);
             roundCards.push({ h: th, a: ta, cards: r.cards });
             r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
+            wellbeingByTeam[th.id] = buildSimWellbeingCtx(th, r.gh, r.ga, r);
+            wellbeingByTeam[ta.id] = buildSimWellbeingCtx(ta, r.ga, r.gh, r);
           });
         });
       }
@@ -969,7 +1077,7 @@ export default function App() {
       }
 
       applyLiveInjuries();
-      afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam });
+      afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam, wellbeingByTeam });
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
       recordMatchMissions();
       d.money = capMoney(d.money);

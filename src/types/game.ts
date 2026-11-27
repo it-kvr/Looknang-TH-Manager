@@ -14,12 +14,29 @@ export type TrainingFocus = 'FW' | 'MF' | 'DF' | 'F';
 export type TrainingProgramId = 'balanced' | 'attack' | 'defense' | 'tactics' | 'setpiece' | 'fitness' | 'recovery';
 export type TrainingIntensity = 'light' | 'normal' | 'heavy';
 export type PreferredFoot = 'L' | 'R' | 'B';
+export type TeamTalkId = 'inspire' | 'calm' | 'tactics' | 'praise';
+export type TalkTopicId = 'encourage' | 'challenge' | 'personal' | 'tactical' | 'coach_chat' | 'teammate_bond' | 'mindfulness';
+
+export interface TalkDialogueLog {
+  turn: number;
+  playerName: string;
+  topicId: TalkTopicId;
+  topicLabel: string;
+  coachLine: string;
+  playerReply: string;
+  deltaMental: number;
+  deltaPhys: number;
+}
 
 export interface TeamTrainingPlan {
   program: TrainingProgramId;
   intensity: TrainingIntensity;
   restStarters?: boolean;
   doubleSessionMd?: number;
+  teamTalkMd?: number;
+  lastTeamTalkId?: TeamTalkId;
+  lastTeamTalkNote?: string;
+  lastTalkLog?: TalkDialogueLog;
   individualFocus?: Record<string, 'REST' | 'FOCUS'>;
   lastReport?: {
     md: number;
@@ -143,6 +160,20 @@ export interface Player {
   seasonProg?: PlayerSeasonProgression;
   retired?: boolean;
   retiredSeason?: number;
+  mental?: number;
+  phys?: number;
+  mentalNote?: string;
+  physNote?: string;
+  mentalFactors?: WellbeingFactor[];
+  physFactors?: WellbeingFactor[];
+  favBoost?: number;
+  careTalkMd?: number;
+  carePhysMd?: number;
+}
+
+export interface WellbeingFactor {
+  label: string;
+  delta: number;
 }
 
 export interface CreatedPlayerTemplate {
@@ -254,6 +285,8 @@ export interface Team {
   tacticTrialLabel?: string;
   fans?: number;
   seasonObj?: number;
+  favPlayer?: string;
+  favChangedTurn?: number;
 }
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
@@ -359,6 +392,15 @@ export interface PlayerCareerProfile {
   history?: PlayerSeasonHistoryRecord[];
   roleTrain?: SubRole | null;
   sigDrills?: number;
+  mental?: number;
+  phys?: number;
+  mentalNote?: string;
+  physNote?: string;
+  mentalFactors?: WellbeingFactor[];
+  physFactors?: WellbeingFactor[];
+  favBoost?: number;
+  careTalkMd?: number;
+  carePhysMd?: number;
 }
 
 export interface AutoRule {
@@ -1015,6 +1057,14 @@ export interface GameState {
   boardDirectiveCd?: number;
   boardEffects?: BoardTempEffect[];
   boardFeedbackLog?: BoardFeedbackEntry[];
+  initialBoardGrant?: {
+    amount: number;
+    baseBudget: number;
+    totalBudget: number;
+    bucket: 'top' | 'mid' | 'underdog';
+    levelLabel: string;
+    tier: number;
+  };
   schedRes?: Record<number, ArchivedMatchReport>;
   schedRoundRes?: Record<number, ArchivedMatchReport[]>;
   cupLog?: (ArchivedMatchReport & { md: number; comp: 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; r: number })[];

@@ -18,6 +18,15 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
+import {
+  getActiveFavBoost,
+  getFavSwitchCooldownRemaining,
+  getPlayerMentalScore,
+  getPlayerPhysScore,
+  getTeamCareQuotaInfo,
+  getWellbeingTierMeta,
+  setTeamFavoritePlayer
+} from '../engine/wellbeing';
 
 export const SquadTacticsView = React.memo<{
   state: GameState;
@@ -1960,6 +1969,69 @@ export const SquadTacticsView = React.memo<{
                 )}
 
                 <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
+                {(() => {
+                  const favPl = me.favPlayer ? me.sq.find((q) => q.n === me.favPlayer) : null;
+                  const favCp = favPl?.me ? state.p : null;
+                  const favM = favPl ? getPlayerMentalScore(favPl, favCp) : 0;
+                  const favP = favPl ? getPlayerPhysScore(favPl, favCp) : 0;
+                  const favB = favPl ? getActiveFavBoost(favPl, me, favCp) : 0;
+                  const favCd = getFavSwitchCooldownRemaining(state, me);
+                  const quota = getTeamCareQuotaInfo(state, me);
+                  return (
+                    <div
+                      className={`px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl border flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10px] ${
+                        favPl && favB > 0
+                          ? 'bg-gradient-to-r from-rose-500/12 via-amber-500/10 to-emerald-500/10 border-rose-500/45'
+                          : favPl
+                            ? 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/50'
+                            : 'bg-[var(--surface-2)]/70 border-[var(--line)]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        <span className="font-extrabold text-[var(--ink)]">💖 ลูกรักประจำทีม:</span>
+                        {favPl ? (
+                          <>
+                            <span className="font-bold text-[var(--ink)]">{favPl.n}</span>
+                            <span className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
+                              (🧠 ใจ {favM} · 💪 กาย {favP})
+                            </span>
+                            {favB > 0 ? (
+                              <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[10px] mland:text-[8.5px] font-black tabular">
+                                +{favB} OVR ชั่วคราวทำงาน!
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold">
+                                รอใจ ≥72 &amp; กาย ≥72 เพื่อรับ +5..+10
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-[var(--mut)]">
+                            ยังไม่ได้เลือก — กด 💖 ที่นักเตะ (ถ้าสุขภาพใจ ≥72 และกาย ≥72 จะสุ่ม +5 ถึง +10 OVR ชั่วคราว)
+                          </span>
+                        )}
+                        {isMgr && (
+                          <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
+                            · ดูแลทีม {quota.remaining}/{quota.limit}
+                            {favCd > 0 ? ` · เปลี่ยนลูกรักได้อีก ${favCd} นัด` : ''}
+                          </span>
+                        )}
+                      </div>
+                      {favPl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            onInspectPlayer(favPl, me);
+                          }}
+                          className="btn btn-xs btn-secondary shrink-0"
+                        >
+                          ดู/ดูแลลูกรัก →
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
                 {isMgr && incomingOffers.length > 0 && (
                   <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 flex items-center justify-between gap-2 text-xs mland:text-[10.5px]">
                     <span className="font-semibold truncate">
@@ -1984,7 +2056,7 @@ export const SquadTacticsView = React.memo<{
                   <div
                     className={
                       isMgr
-                        ? 'grid grid-cols-[24px_minmax(0,1.65fr)_38px_68px_104px] sm:grid-cols-[26px_minmax(0,1.75fr)_32px_46px_74px_78px_130px] lg:grid-cols-[28px_minmax(0,1.8fr)_36px_50px_76px_62px_86px_144px] mland:grid-cols-[24px_minmax(0,1.65fr)_28px_42px_66px_70px_114px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                        ? 'grid grid-cols-[24px_minmax(0,1.55fr)_36px_64px_124px] sm:grid-cols-[26px_minmax(0,1.7fr)_32px_46px_74px_78px_154px] lg:grid-cols-[28px_minmax(0,1.75fr)_36px_50px_76px_62px_86px_168px] mland:grid-cols-[24px_minmax(0,1.6fr)_28px_42px_66px_70px_136px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
                         : 'grid grid-cols-[minmax(0,1.8fr)_36px_54px_76px_72px_94px] mland:grid-cols-[minmax(0,1.8fr)_30px_48px_66px_60px_80px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
                     }
                   >
@@ -2024,24 +2096,33 @@ export const SquadTacticsView = React.memo<{
                       const bio = getPlayerBio(q);
                       const footMeta = getFootColorMeta(bio.foot);
                       const unavailable = q.inj > 0 || (q.sus || 0) > 0;
+                      const isFav = me.favPlayer === q.n;
+                      const favCp = isMe ? state.p : null;
+                      const favBoost = getActiveFavBoost(q, me, favCp);
+                      const mScore = getPlayerMentalScore(q, favCp);
+                      const pScore = getPlayerPhysScore(q, favCp);
+                      const mMeta = getWellbeingTierMeta(mScore, 'mental', false);
+                      const pMeta = getWellbeingTierMeta(pScore, 'phys', q.inj > 0);
 
                       return (
                         <div
                           key={q.n}
                           className={`px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 items-center gap-1 sm:gap-1.5 mland:gap-1 transition-colors ${
                             isMgr
-                              ? 'grid grid-cols-[24px_minmax(0,1.65fr)_38px_68px_104px] sm:grid-cols-[26px_minmax(0,1.75fr)_32px_46px_74px_78px_130px] lg:grid-cols-[28px_minmax(0,1.8fr)_36px_50px_76px_62px_86px_144px] mland:grid-cols-[24px_minmax(0,1.65fr)_28px_42px_66px_70px_114px]'
+                              ? 'grid grid-cols-[24px_minmax(0,1.55fr)_36px_64px_124px] sm:grid-cols-[26px_minmax(0,1.7fr)_32px_46px_74px_78px_154px] lg:grid-cols-[28px_minmax(0,1.75fr)_36px_50px_76px_62px_86px_168px] mland:grid-cols-[24px_minmax(0,1.6fr)_28px_42px_66px_70px_136px]'
                               : 'grid grid-cols-[minmax(0,1.8fr)_36px_54px_76px_72px_94px] mland:grid-cols-[minmax(0,1.8fr)_30px_48px_66px_60px_80px]'
                           } ${
                             isSelected
                               ? 'bg-[var(--g-soft)]/55'
                               : unavailable
                                 ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09]'
-                                : isMe
-                                  ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
-                                  : q.listed
-                                    ? 'bg-[var(--lamp-soft)]/20 hover:bg-[var(--surface-2)]/45'
-                                    : 'hover:bg-[var(--surface-2)]/45'
+                                : isFav && favBoost > 0
+                                  ? 'bg-rose-500/[0.06] hover:bg-rose-500/[0.1]'
+                                  : isMe
+                                    ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                                    : q.listed
+                                      ? 'bg-[var(--lamp-soft)]/20 hover:bg-[var(--surface-2)]/45'
+                                      : 'hover:bg-[var(--surface-2)]/45'
                           }`}
                         >
                           {isMgr && (
@@ -2077,6 +2158,18 @@ export const SquadTacticsView = React.memo<{
                                 </span>
                                 <span className="truncate">{q.n}</span>
                                 {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
+                                {isFav && (
+                                  <span
+                                    title={favBoost > 0 ? `ลูกรักประจำทีม (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥72)'}
+                                    className={`px-1 rounded text-[9px] mland:text-[7.5px] font-black shrink-0 ${
+                                      favBoost > 0
+                                        ? 'bg-rose-600 text-white'
+                                        : 'bg-rose-500/15 border border-rose-500/40 text-rose-700 dark:text-rose-300'
+                                    }`}
+                                  >
+                                    {favBoost > 0 ? `💖+${favBoost}` : '💖'}
+                                  </span>
+                                )}
                                 {isMe && (
                                   <span
                                     title="ตัวคุณ"
@@ -2105,6 +2198,13 @@ export const SquadTacticsView = React.memo<{
                                   <PlayerStatusBadge yc={q.yc} variant="pill" showYellow />
                                 )}
                                 <span className="shrink-0">{isStarter ? 'ตัวจริง' : 'สำรอง'}</span>
+                                <span
+                                  className="inline-flex items-center gap-1 px-1 py-[0.5px] rounded bg-[var(--surface-2)]/80 border border-[var(--line)]/80 text-[9px] mland:text-[7.5px] font-bold shrink-0"
+                                  title={`สุขภาพจิตใจ ${mScore}/100 (${mMeta.label}) · สุขภาพกาย ${pScore}/100 (${pMeta.label})`}
+                                >
+                                  <span className={mMeta.txtCls}>🧠{mScore}</span>
+                                  <span className={pMeta.txtCls}>💪{pScore}</span>
+                                </span>
                                 {!q.loan && (
                                   <span className={expiringSoon ? 'text-[var(--red)] font-bold' : ''}>
                                     · {con.yr <= 0 ? 'หมดสัญญา!' : `สัญญา ${con.yr} ปี`}
@@ -2127,7 +2227,13 @@ export const SquadTacticsView = React.memo<{
 
                           <div className="flex items-center justify-center gap-0.5">
                             <OvrBadge ov={q.ov} size="sm" />
-                            <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
+                            {favBoost > 0 ? (
+                              <span className="text-[9.5px] mland:text-[8px] font-black text-rose-600 dark:text-rose-400 tabular">
+                                +{favBoost}
+                              </span>
+                            ) : (
+                              <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
+                            )}
                           </div>
 
                           <div className="flex items-center justify-center min-w-0">
@@ -2170,6 +2276,42 @@ export const SquadTacticsView = React.memo<{
 
                           {isMgr && (
                             <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
+                              <button
+                                type="button"
+                                title={isFav ? 'ยกเลิกตำแหน่งลูกรัก' : 'ตั้งเป็นลูกรักประจำทีม (+5..+10 เมื่อใจ/กายดี)'}
+                                onClick={() => {
+                                  let res = { changed: false, boost: 0, cooldownRemaining: 0 };
+                                  onUpdateState((d) => {
+                                    const t = d.teams[d.me];
+                                    if (!t) return;
+                                    res = setTeamFavoritePlayer(d, t, isFav ? null : q.n);
+                                  });
+                                  if (!res.changed && !isFav && res.cooldownRemaining > 0) {
+                                    SFX.tap();
+                                    onToast(`⏳ ติดคูลดาวน์เปลี่ยนลูกรัก รออีก ${res.cooldownRemaining} นัด`);
+                                    return;
+                                  }
+                                  if (isFav) {
+                                    SFX.tap();
+                                    onToast(`💔 ยกเลิก ${q.n} จากตำแหน่งลูกรักแล้ว (รอ 3 นัดก่อนตั้งใหม่)`);
+                                  } else {
+                                    if (res.boost > 0) SFX.win();
+                                    else SFX.confirm();
+                                    onToast(
+                                      res.boost > 0
+                                        ? `💖 ตั้ง ${q.n} เป็นลูกรัก! รับพลังชั่วคราว +${res.boost} OVR`
+                                        : `💖 ตั้ง ${q.n} เป็นลูกรักแล้ว (ดูแลใจ/กายให้ ≥72 เพื่อรับ +5..+10)`
+                                    );
+                                  }
+                                }}
+                                className={`btn btn-xs px-1.5 ${
+                                  isFav
+                                    ? 'bg-rose-600 text-white border border-rose-600 shadow-xs'
+                                    : 'btn-secondary opacity-80 hover:opacity-100'
+                                }`}
+                              >
+                                {isFav ? '💖' : '🤍'}
+                              </button>
                               <button
                                 type="button"
                                 disabled={!!q.loan}

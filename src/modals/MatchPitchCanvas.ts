@@ -4,6 +4,7 @@ import { getTurfGradeSpec } from '../data/crestAndKitData';
 import { PARTNER_DEAL_BRAND_SPECS, SHIRT_SPONSOR_BRANDS } from '../data/sponsorBrands';
 import { clamp } from '../utils/math';
 import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
+import { getActiveFavBoost } from '../engine/wellbeing';
 import { HL_ACT } from '../engine/matchHighlights';
 import { faceBodySvg } from '../components/SvgVisuals';
 import { getClubCaptainPalette } from '../components/CaptainBadge';
@@ -39,10 +40,18 @@ export const buildAgentsForTeam = (
       ? DT(pl, careerP)
       : { d: { spd: 60, fin: 60, pw: 60, cur: 60, spass: 60, lpass: 60, crs: 60, run: 60, rd: 60, tkl: 60, pos: 60, mrk: 60, blk: 60, hd: 60, agi: 60, jmp: 60, tol: 60, rec: 65, end: 60, bal: 60, sv: 60, rfx: 60, hnd: 60, cl: 60, dist: 60, sta: 65, comp: 60, vis: 60, det: 60, str: 60 }, sig: 'comp', tr: 3 };
     const effectiveD: Record<string, number> = { ...dt.d };
+    const favBoost = pl ? getActiveFavBoost(pl, team, pl.me ? careerP : null) : 0;
+    if (favBoost > 0) {
+      Object.keys(effectiveD).forEach((k) => {
+        if (typeof effectiveD[k] === 'number') {
+          effectiveD[k] = clamp(Math.round(effectiveD[k] + favBoost), 20, 199);
+        }
+      });
+    }
     if (statDeltas) {
       Object.entries(statDeltas).forEach(([k, delta]) => {
         if (delta && typeof effectiveD[k] === 'number') {
-          effectiveD[k] = clamp(Math.round(effectiveD[k] + delta), 20, 99);
+          effectiveD[k] = clamp(Math.round(effectiveD[k] + delta), 20, 199);
         }
       });
     }
@@ -79,7 +88,7 @@ export const buildAgentsForTeam = (
       sig: dt.sig,
       tr: dt.tr,
       traits: pl ? getPlayerTraits(pl, careerP).map((t) => t.id) : [],
-      ov: pl?.ov || 60,
+      ov: (pl?.ov || 60) + favBoost,
       vis: pl ? visOf(pl, careerP) : [2, 0, 0, 0, 0, i + 1, 0]
     };
   });

@@ -3917,6 +3917,16 @@ export const FinanceClubView = React.memo<{
                         <span>ต้องติดอันดับ 1–{targetRank} · เสริมพลังทีมช่วยดันอันดับพลังในลีกตอนนี้ (เป้าปรับซีซั่นหน้า)</span>
                       )}
                     </div>
+                    {state.initialBoardGrant && (state.season ?? 1) === 1 && (
+                      <div className="pt-1 border-t border-[var(--line)]/50 flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
+                        <span className="text-[var(--mut)]">
+                          💼 โบนัสแรกเข้าจากบอร์ด (ระดับ{state.initialBoardGrant.levelLabel})
+                        </span>
+                        <span className="font-bold text-[var(--g)] shrink-0">
+                          +{fmtMoney(state.initialBoardGrant.amount)} (รวม {fmtMoney(state.initialBoardGrant.totalBudget)})
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Streamlined Optional Board Directive Strip */}

@@ -3,6 +3,7 @@ import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp, capMoney } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
 import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
+import { ensureTeamWellbeing, getActiveFavBoost, getWellbeingOvrAdjustment, initPlayerWellbeing } from './wellbeing';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -198,6 +199,7 @@ export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
       if (mePl?.no) d.p.no = mePl.no;
     }
     ensureAiTeamPhilosophies(d, false);
+    d.teams.forEach((tm) => ensureTeamWellbeing(tm, d));
     d.money = capMoney(d.money);
     return d;
   } catch {
@@ -903,7 +905,7 @@ export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: 
   const potBoost = talent >= 80 ? R(4, 10) : 0;
   const ro = forceRo || SPW(pos);
   const bio = rollPlayerBio(pos, ro);
-  return {
+  const pl: Player = {
     n: genPlayerName(),
     pos,
     ro,
@@ -920,6 +922,8 @@ export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: 
     inj: 0,
     vis: rndVis(pos, yo)
   };
+  initPlayerWellbeing(pl);
+  return pl;
 }
 
 export function pickClubPhilosophy(id: number, tier: number, diff = 0, randomize = true): ClubPhilosophyDef {
@@ -1236,7 +1240,9 @@ export function fitA(q: Player, a: CoreAttrs): CoreAttrs {
 export const ef = (q: Player) => {
   const fitVal = q.fit ?? 100;
   const tiredPenalty = fitVal < 58 ? (58 - fitVal) * 0.45 : 0;
-  return q.ov * (0.75 + (0.25 * fitVal) / 100) - tiredPenalty - (q.inj > 0 || (q.sus || 0) > 0 ? 60 : 0);
+  const favBonus = getActiveFavBoost(q);
+  const wellbeingAdj = getWellbeingOvrAdjustment(q);
+  return (q.ov + favBonus + wellbeingAdj) * (0.75 + (0.25 * fitVal) / 100) - tiredPenalty - (q.inj > 0 || (q.sus || 0) > 0 ? 60 : 0);
 };
 
 export function xi(t: Team): Player[] {
@@ -1836,6 +1842,24 @@ export function syncMe(s: GameState) {
       if (q.age && (!s.p.age || s.p.age < q.age)) s.p.age = q.age;
       else if (s.p.age) q.age = s.p.age;
     }
+    if (s.p.mental != null) q.mental = s.p.mental;
+    else if (q.mental != null) s.p.mental = q.mental;
+    if (s.p.phys != null) q.phys = s.p.phys;
+    else if (q.phys != null) s.p.phys = q.phys;
+    if (s.p.mentalNote != null) q.mentalNote = s.p.mentalNote;
+    else if (q.mentalNote != null) s.p.mentalNote = q.mentalNote;
+    if (s.p.physNote != null) q.physNote = s.p.physNote;
+    else if (q.physNote != null) s.p.physNote = q.physNote;
+    if (s.p.mentalFactors) q.mentalFactors = s.p.mentalFactors;
+    else if (q.mentalFactors) s.p.mentalFactors = q.mentalFactors;
+    if (s.p.physFactors) q.physFactors = s.p.physFactors;
+    else if (q.physFactors) s.p.physFactors = q.physFactors;
+    if (s.p.favBoost != null) q.favBoost = s.p.favBoost;
+    else if (q.favBoost != null) s.p.favBoost = q.favBoost;
+    if (s.p.careTalkMd != null) q.careTalkMd = s.p.careTalkMd;
+    else if (q.careTalkMd != null) s.p.careTalkMd = q.careTalkMd;
+    if (s.p.carePhysMd != null) q.carePhysMd = s.p.carePhysMd;
+    else if (q.carePhysMd != null) s.p.carePhysMd = q.carePhysMd;
     recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, s.p);
   }
 }

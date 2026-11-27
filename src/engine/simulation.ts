@@ -7,6 +7,14 @@ import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlay
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
+import {
+  getActiveFavBoost,
+  initPlayerWellbeing,
+  refreshAiTeamFavoritePlayer,
+  syncFavoritePlayerBoost,
+  updateTeamWellbeingAfterMatchday,
+  type MatchdayWellbeingCtx
+} from './wellbeing';
 
 export function rate(
   t: Team,
@@ -334,10 +342,11 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
     const q = x[i];
     const D = DT(q, careerP);
     const b = q.pos === 'FW' ? 5 : q.pos === 'MF' ? 3 : q.pos === 'DF' ? 1 : 0;
+    const favBonus = getActiveFavBoost(q, t, careerP);
     if (b) {
-      const sc = q.pos === 'DF'
+      const sc = (q.pos === 'DF'
         ? D.d.hd * 0.7 + D.d.str * 0.3
-        : D.d.fin * 0.45 + D.d.pw * 0.2 + D.d.run * 0.15 + D.d.cur * 0.1 + D.d.spd * 0.1;
+        : D.d.fin * 0.45 + D.d.pw * 0.2 + D.d.run * 0.15 + D.d.cur * 0.1 + D.d.spd * 0.1) + favBonus * 0.75;
       let traitBoost = 1;
       if (hasTrait(q, 'poacher_instinct', careerP)) traitBoost += 0.32;
       if (hasTrait(q, 'finesse_shot', careerP)) traitBoost += 0.24;
@@ -372,7 +381,7 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
       if (t.setPieces?.corner === q.n) assistBoost += 0.18;
       if (t.setPieces?.freekick === q.n) assistBoost += 0.1;
       if (hasTrait(q, 'selfish_shooter', careerP)) assistBoost *= 0.68;
-      const aSc = D.d.crs * 0.28 + D.d.spass * 0.18 + D.d.lpass * 0.16 + D.a.ps * 0.20 + D.d.cur * 0.08 + D.a.dr * 0.05 + D.d.rd * 0.05;
+      const aSc = D.d.crs * 0.28 + D.d.spass * 0.18 + D.d.lpass * 0.16 + D.a.ps * 0.20 + D.d.cur * 0.08 + D.a.dr * 0.05 + D.d.rd * 0.05 + favBonus * 0.75;
       const aVal = Math.max(1, Math.round((q.pos === 'MF' ? 4 : q.pos === 'FW' ? 3 : 1) * assistBoost * Math.pow(aSc / 70, 2)));
       assistBaseWeights[i] = aVal;
       assistBaseTotal += aVal;
@@ -3049,6 +3058,72 @@ export function initAsia(s: GameState) {
   s.pa = false;
 }
 
+export function getClubLevelAndGrantMeta(team: Team): {
+  squadAvg: number;
+  bucket: 'top' | 'mid' | 'underdog';
+  levelLabel: string;
+  tier: number;
+  baseBudget: number;
+  minBonus: number;
+  maxBonus: number;
+  startBd: number;
+  pressureLabel: string;
+} {
+  const tier = clamp(team.tier ?? 0, 0, 2);
+  const squadAvg = Math.round(
+    (team.sq || []).reduce((sum, q) => sum + (q.ov || 40), 0) / Math.max(1, team.sq?.length || 1)
+  );
+  const topThreshold = BASE[tier] + 2;
+  const midThreshold = BASE[tier] - 1;
+  const bucket: 'top' | 'mid' | 'underdog' =
+    squadAvg >= topThreshold ? 'top' : squadAvg >= midThreshold ? 'mid' : 'underdog';
+  const levelLabel = bucket === 'top' ? 'เต็งลีก' : bucket === 'mid' ? 'กลางตาราง' : 'ท้าทาย';
+
+  // Underdogs receive larger rebuilding grants from the board, while favorites get tighter cash & stricter expectations
+  const baseBudget = tier === 0 ? 450 : tier === 1 ? 650 : 900;
+  const rangeByBucket: Record<'top' | 'mid' | 'underdog', [number, number][]> = {
+    top: [
+      [50, 120],
+      [90, 180],
+      [150, 260]
+    ],
+    mid: [
+      [110, 190],
+      [180, 300],
+      [280, 440]
+    ],
+    underdog: [
+      [160, 280],
+      [250, 420],
+      [380, 620]
+    ]
+  };
+  const [minBonus, maxBonus] = rangeByBucket[bucket][tier];
+  const startBd = bucket === 'top' ? 48 : bucket === 'mid' ? 55 : 60;
+  const pressureLabel =
+    bucket === 'top'
+      ? 'สูง · เสมอ/แพ้โดนหักหนัก'
+      : bucket === 'mid'
+        ? 'ปานกลาง · สมดุล'
+        : 'ผ่อนคลาย · งบสร้างทีมสูง';
+  return { squadAvg, bucket, levelLabel, tier, baseBudget, minBonus, maxBonus, startBd, pressureLabel };
+}
+
+export function rollInitialBoardGrant(team: Team): NonNullable<GameState['initialBoardGrant']> & { startBd: number } {
+  const meta = getClubLevelAndGrantMeta(team);
+  const raw = R(meta.minBonus, meta.maxBonus);
+  const amount = clamp(Math.round(raw / 5) * 5, meta.minBonus, meta.maxBonus);
+  return {
+    amount,
+    baseBudget: meta.baseBudget,
+    totalBudget: meta.baseBudget + amount,
+    bucket: meta.bucket,
+    levelLabel: meta.levelLabel,
+    tier: meta.tier,
+    startBd: meta.startBd
+  };
+}
+
 export function createNewGame(
   mode: GameMode,
   opts: {
@@ -3071,6 +3146,18 @@ export function createNewGame(
   });
 
   const meId = pv && opts.pick != null && opts.pick >= 0 && opts.pick < 16 ? opts.pick : R(0, 15);
+  const myTeam = teams[meId];
+  const rolledGrant = mode === 'm' && myTeam ? rollInitialBoardGrant(myTeam) : undefined;
+  const initialGrant = rolledGrant
+    ? {
+        amount: rolledGrant.amount,
+        baseBudget: rolledGrant.baseBudget,
+        totalBudget: rolledGrant.totalBudget,
+        bucket: rolledGrant.bucket,
+        levelLabel: rolledGrant.levelLabel,
+        tier: rolledGrant.tier
+      }
+    : undefined;
   const s: GameState = {
     ver: 2,
     mode,
@@ -3078,7 +3165,8 @@ export function createNewGame(
     md: 0,
     teams,
     me: meId,
-    money: 450,
+    money: initialGrant ? initialGrant.totalBudget : 450,
+    ...(initialGrant ? { initialBoardGrant: initialGrant } : {}),
     v: 't',
     hist: [],
     mk: [],
@@ -3096,7 +3184,7 @@ export function createNewGame(
     records: {},
     fan: 55,
     mor: 55,
-    bd: 55,
+    bd: rolledGrant ? rolledGrant.startBd : 55,
     ...(opts.diff !== undefined ? { diff: opts.diff } : {})
   };
 
@@ -3107,6 +3195,20 @@ export function createNewGame(
   if (mode === 'm') {
     ensureClubIdentity(s);
     syncAndEvaluateClubDemands(s, { initial: true });
+    if (initialGrant) {
+      logFin(s, `โบนัสแรกเข้าจากบอร์ดบริหาร (${initialGrant.levelLabel})`, initialGrant.amount);
+      pushBoardFeedback(
+        s,
+        'ok',
+        `บอร์ดบริหารมอบงบโบนัสแรกเข้า +${fmtMoney(initialGrant.amount)} ตามระดับทีม "${initialGrant.levelLabel}" (งบรวมตั้งต้น ${fmtMoney(s.money)})`
+      );
+      pushFeed(
+        s,
+        'บอร์ดบริหาร',
+        `💼 บอร์ดบริหารอนุมัติโบนัสแรกเข้า +${fmtMoney(initialGrant.amount)} สำหรับสโมสรระดับ${initialGrant.levelLabel} (งบตั้งต้นรวม ${fmtMoney(s.money)})`,
+        'ok'
+      );
+    }
   } else if (opts.player) {
     const p = opts.player;
     const chosenNo = clamp(p.no || (p.pos === 'GK' ? 1 : p.pos === 'DF' ? 4 : p.pos === 'MF' ? 8 : 10), 1, 99);
@@ -3300,6 +3402,16 @@ export function startSeason(s: GameState) {
       keepMeNo: (s.season ?? 1) === 1 && s.mode === 'p'
     });
     t.sq.forEach((q) => {
+      initPlayerWellbeing(q, {
+        team: t,
+        careerP: q.me ? s.p : null,
+        force: (s.season ?? 1) === 1 || q.mental == null || q.phys == null
+      });
+      if ((s.season ?? 1) > 1 && q.mental != null && q.phys != null) {
+        // Preseason refresh with realistic variance
+        q.mental = clamp(Math.round(q.mental * 0.45 + 72 * 0.55 + R(-7, 8)), 42, 95);
+        q.phys = clamp(Math.round(q.phys * 0.35 + 84 * 0.65 + R(-6, 7)), 55, 97);
+      }
       if (t.id === s.me || q.me) {
         recordPlayerSeasonProgress(q, s.season ?? 1, 0, q.me ? s.p : null, true);
         initPlayerSeasonMissions(q, s.season ?? 1, t.name, q.me ? s.p : null, s);
@@ -3307,6 +3419,11 @@ export function startSeason(s: GameState) {
         delete q.seasonProg;
       }
     });
+    if (!(s.mode === 'm' && t.id === s.me)) {
+      refreshAiTeamFavoritePlayer(t, s);
+    } else {
+      syncFavoritePlayerBoost(t, s, true);
+    }
   });
 
   ensureAiTeamPhilosophies(s, true);
@@ -4178,6 +4295,43 @@ export function runPlayerWeek(s: GameState) {
     } else if (trainMissionNotes.length) {
       m += ` · 🎯 ${trainMissionNotes[0]}`;
     }
+  }
+  if (meSq) {
+    const planIdx = p.plan ?? 1;
+    const prevM = p.mental ?? meSq.mental ?? 70;
+    const prevP = p.phys ?? meSq.phys ?? 80;
+    const mShift = planIdx === 2 ? 6 : planIdx === 3 ? 5 : planIdx === 4 ? 4 : planIdx === 0 || planIdx === 5 ? -2 : 1;
+    const pShift = planIdx === 2 ? 7 : planIdx === 0 || planIdx === 5 ? -4 : 1;
+    const mReason =
+      planIdx === 2
+        ? 'พักผ่อนเต็มที่ คลายความเครียด'
+        : planIdx === 3
+          ? 'ได้แรงใจจากกิจกรรมพบแฟนคลับ'
+          : planIdx === 4
+            ? 'ศึกษาแท็กติกเพิ่มความมั่นใจ'
+            : planIdx === 0 || planIdx === 5
+              ? 'ฝึกซ้อมเข้มข้นต่อเนื่อง'
+              : 'รักษาสมดุลการซ้อมประจำสัปดาห์';
+    const pReason =
+      planIdx === 2
+        ? 'พักฟื้นกล้ามเนื้อเต็มสัปดาห์'
+        : planIdx === 0 || planIdx === 5
+          ? 'ซ้อมหนักสะสมความล้าเล็กน้อย'
+          : 'ดูแลสภาพร่างกายตามโปรแกรม';
+    p.mental = clamp(prevM + mShift + R(-2, 3), 20, 99);
+    p.phys = clamp(prevP + pShift + R(-2, 3), (p.inj || 0) > 0 ? 20 : 25, (p.inj || 0) > 0 ? 48 : 99);
+    p.mentalFactors = [{ label: mReason, delta: p.mental - prevM }, ...(p.mentalFactors || [])].slice(0, 5);
+    p.physFactors = [{ label: pReason, delta: p.phys - prevP }, ...(p.physFactors || [])].slice(0, 5);
+    p.mentalNote = mReason;
+    p.physNote = pReason;
+    meSq.mental = p.mental;
+    meSq.phys = p.phys;
+    meSq.mentalFactors = p.mentalFactors;
+    meSq.physFactors = p.physFactors;
+    meSq.mentalNote = p.mentalNote;
+    meSq.physNote = p.physNote;
+    const meTeamObj = s.teams[s.me];
+    if (meTeamObj) syncFavoritePlayerBoost(meTeamObj, s, false);
   }
   p.last = m;
   s.news = (s.news ? s.news + ' · ' : '') + m;
@@ -6282,6 +6436,7 @@ export function afterMatchDay(
     teamIds?: number[];
     playerNames?: string[];
     subbedOutByTeam?: Record<number, Record<string, number>>;
+    wellbeingByTeam?: Record<number, MatchdayWellbeingCtx>;
   }
 ) {
   const me = s.teams[s.me];
@@ -6647,6 +6802,31 @@ export function afterMatchDay(
     });
   });
 
+  const prevFavBoost = me.favPlayer ? getActiveFavBoost(me.sq.find((q) => q.n === me.favPlayer) || me.sq[0], me, s.p) : 0;
+  s.teams.forEach((t) => {
+    const teamCtx = liveInjMeta?.wellbeingByTeam?.[t.id];
+    const lastResChar = (t.fm || '').slice(-1);
+    const inferredRes = lastResChar === 'W' || lastResChar === 'D' || lastResChar === 'L' ? lastResChar : undefined;
+    updateTeamWellbeingAfterMatchday(t, s, {
+      ...(teamCtx || {}),
+      matchPlayed: teamCtx?.matchPlayed ?? true,
+      matchResult: teamCtx?.matchResult ?? inferredRes,
+      subbedOut: teamCtx?.subbedOut ?? subbedOutByTeam[t.id],
+      isUserClub: t.id === s.me
+    });
+  });
+  if (me.favPlayer) {
+    const favPl = me.sq.find((q) => q.n === me.favPlayer);
+    if (favPl) {
+      const nextBoost = getActiveFavBoost(favPl, me, favPl.me ? s.p : null);
+      if (nextBoost > 0) {
+        pushFeed(s, 'ลูกรักโค้ช', `💖 ${favPl.n} สุขภาพใจ/กายดีเยี่ยม! รับพลังเสริมชั่วคราว +${nextBoost} OVR นัดถัดไป`, 'ok');
+      } else if (prevFavBoost > 0) {
+        pushFeed(s, 'ลูกรักโค้ช', `⚠️ ${favPl.n} สุขภาพจิตใจหรือร่างกายยังไม่ถึงเกณฑ์ โบนัสลูกรักชั่วคราวหมดลงแล้ว`, 'urg');
+      }
+    }
+  }
+
   me.sq.forEach((q) => {
     recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, q.me ? s.p : null);
   });
@@ -6654,7 +6834,26 @@ export function afterMatchDay(
 
   if (mg) {
     const l = (me.fm || '').slice(-1);
-    let d = l === 'W' ? 3 : l === 'L' ? -4 : 0;
+    const { targetRank, totalTeams } = getTeamSeasonObjectiveInfo(me, s);
+    const highPressure = targetRank <= Math.max(3, Math.round(totalTeams * 0.25));
+    const lowPressure = targetRank >= Math.round(totalTeams * 0.6);
+    let d = highPressure
+      ? l === 'W'
+        ? 2
+        : l === 'L'
+          ? -5
+          : -1
+      : lowPressure
+        ? l === 'W'
+          ? 4
+          : l === 'L'
+            ? -3
+            : 1
+        : l === 'W'
+          ? 3
+          : l === 'L'
+            ? -4
+            : 0;
     if (s.derby) {
       d *= 2;
       if (l === 'W') {

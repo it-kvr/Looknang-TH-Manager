@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeft, ChevronRight, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
-import { R, P, clamp } from '../utils/math';
+import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, SPW, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
-import { fmtFansShort } from '../engine/simulation';
+import { fmtFansShort, getClubLevelAndGrantMeta } from '../engine/simulation';
 import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
 import { ovColor, statBarColor, getPlayerTalent } from '../engine/missions';
@@ -727,10 +727,18 @@ export const MainMenu = React.memo<{
 
   if (step === 'ms' && previewClubs) {
     const clubMetaList = previewClubs.t0.map((t, idx) => {
-      const squadAvg = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / Math.max(1, t.sq.length));
-      const tierBucket: 'top' | 'mid' | 'underdog' = squadAvg >= 42 ? 'top' : squadAvg >= 39 ? 'mid' : 'underdog';
-      const tierTag = tierBucket === 'top' ? 'เต็งลีก' : tierBucket === 'mid' ? 'กลางตาราง' : 'ท้าทาย';
-      return { team: t, idx, squadAvg, tierBucket, tierTag };
+      const gm = getClubLevelAndGrantMeta(t);
+      return {
+        team: t,
+        idx,
+        squadAvg: gm.squadAvg,
+        tierBucket: gm.bucket,
+        tierTag: gm.levelLabel,
+        baseBudget: gm.baseBudget,
+        minBonus: gm.minBonus,
+        maxBonus: gm.maxBonus,
+        pressureLabel: gm.pressureLabel
+      };
     });
 
     const filteredClubs = clubMetaList.filter((item) => clubFilter === 'all' || item.tierBucket === clubFilter);
@@ -1034,6 +1042,26 @@ export const MainMenu = React.memo<{
                   <span className="text-[var(--mut)] shrink-0">ปรัชญาสโมสร</span>
                   <span className="font-semibold text-[var(--ink)] truncate text-right">
                     {selectedTeam.philosophy || 'สมดุล'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--mut)] shrink-0">งบบอร์ดแรกเข้า</span>
+                  <span className="font-bold text-[var(--g)] tabular text-right whitespace-nowrap">
+                    {fmtMoneyNum(selectedMeta.baseBudget)} + สุ่ม {fmtMoneyNum(selectedMeta.minBonus)}–{fmtMoneyNum(selectedMeta.maxBonus)} ฿
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--mut)] shrink-0">ความกดดันบอร์ด</span>
+                  <span
+                    className={`font-semibold text-right truncate ${
+                      selectedMeta.tierBucket === 'top'
+                        ? 'text-[var(--red)]'
+                        : selectedMeta.tierBucket === 'mid'
+                          ? 'text-[var(--ink)]'
+                          : 'text-[var(--g)]'
+                    }`}
+                  >
+                    {selectedMeta.pressureLabel}
                   </span>
                 </div>
               </div>
