@@ -888,6 +888,7 @@ export interface ArchivedMatchReport {
   timeline?: MatchTimelineItem[];
   logs?: ArchivedMatchLog[];
   varReplays?: VarReplayRecord[];
+  highlightClips?: MatchHighlightClip[];
 }
 
 export interface GameState {
@@ -1162,6 +1163,7 @@ export interface FinishedMatchPayload {
   timeline?: MatchTimelineItem[];
   logs?: ArchivedMatchLog[];
   varReplays?: VarReplayRecord[];
+  highlightClips?: MatchHighlightClip[];
 }
 
 export type PitchIntent =
@@ -1492,6 +1494,68 @@ export interface VarReplayRecord {
   verdictLabel: string;
   verdictTone: 'goal' | 'no_goal' | 'penalty' | 'freekick' | 'red' | 'yellow';
   varState: VarReviewState;
+}
+
+export type MatchHighlightKind =
+  | 'goal_screamer'
+  | 'goal_curler'
+  | 'goal_acrobat'
+  | 'goal_freekick'
+  | 'goal_penalty'
+  | 'goal_header'
+  | 'goal_deflect'
+  | 'goal_woodwork_in'
+  | 'goal_regular'
+  | 'goal_og'
+  | 'super_save'
+  | 'woodwork';
+
+export interface MatchHighlightActorMeta {
+  id: string;
+  sn: string;
+  s: 'H' | 'A';
+  no: number;
+  ro: SubRole;
+  gk?: 1;
+  vis?: number[];
+}
+
+export interface MatchHighlightFrame {
+  t: number;
+  bx: number;
+  by: number;
+  bz: number;
+  shot?: 1;
+  style?: string;
+  ripL?: number;
+  ripR?: number;
+  p: [number, number, number, number, number?, number?][];
+}
+
+export interface MatchHighlightClip {
+  id: string;
+  seq: number;
+  minute: number;
+  kind: MatchHighlightKind;
+  side: 'H' | 'A';
+  attRight: boolean;
+  title: string;
+  subtitle: string;
+  crewTag: string;
+  commentary: string;
+  actorName: string;
+  assisterName?: string;
+  victimName?: string;
+  scoreBefore: string;
+  scoreAfter: string;
+  dramaScore: number;
+  shotDistM?: number;
+  shotSpeedKmh?: number;
+  peakT: number;
+  secondHalf?: boolean;
+  matchEnv?: MatchEnvironment;
+  actors: MatchHighlightActorMeta[];
+  frames: MatchHighlightFrame[];
 }
 
 export interface ShootoutState {

@@ -13,7 +13,7 @@ import {
   Tag,
   Zap
 } from 'lucide-react';
-import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, TimelineKind, MatchTimelineItem, ArchivedStreamComment } from '../types/game';
+import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, TimelineKind, MatchTimelineItem, ArchivedStreamComment, MatchHighlightClip } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
@@ -35,8 +35,19 @@ import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { RatingBadge } from '../components/RatingBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
+import {
+  buildHighlightEditorial,
+  captureWorldSample,
+  curateMatchHighlights,
+  detectGoalHighlightKind,
+  finalizeHighlightClipFromSamples,
+  synthesizeHighlightClip,
+  type FinalizeClipParams,
+  type RollingHighlightSample
+} from '../engine/matchHighlights';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 import { VarReplayModal, type VarReplayRecord } from './VarReplayModal';
+import { MatchHighlightModal } from './MatchHighlightModal';
 import {
   buildMatchVisualIndex,
   FullTimeMatchStage,
@@ -409,6 +420,23 @@ export const MatchModal: React.FC<{
   const wasPausedBeforeVarRef = useRef(false);
   const lastLiveVarActiveRef = useRef(false);
 
+  const [highlightClips, setHighlightClips] = useState<MatchHighlightClip[]>([]);
+  const [highlightModalOpen, setHighlightModalOpen] = useState(false);
+  const [highlightInitialId, setHighlightInitialId] = useState<string | undefined>(undefined);
+  const rollingSamplesRef = useRef<RollingHighlightSample[]>([]);
+  const lastHighlightSampleClockRef = useRef(-1);
+  const highlightClockRef = useRef(0);
+  const varBuildupSamplesRef = useRef<RollingHighlightSample[] | null>(null);
+  const lastShotTelemetryRef = useRef<{ distM: number; speedKmh: number; style?: string; flightType?: string } | null>(null);
+  const activePostCapturesRef = useRef<
+    {
+      remainingSamples: number;
+      postSamples: RollingHighlightSample[];
+      preSamples: RollingHighlightSample[];
+      meta: Omit<FinalizeClipParams, 'preSamples' | 'postSamples'>;
+    }[]
+  >([]);
+
   const [penResult, setPenResult] = useState<{ winnerHome: boolean; text: string } | null>(null);
   const [done, setDone] = useState(false);
   const [broadcastFullscreen, setBroadcastFullscreen] = useState(false);
@@ -472,6 +500,8 @@ export const MatchModal: React.FC<{
     timelineSeq: 1,
     varHistory: [] as VarReplayRecord[],
     varSeq: 0,
+    highlightClips: [] as MatchHighlightClip[],
+    highlightSeq: 0,
     miracleUsedH: false,
     miracleUsedA: false,
     maxDeficitH: 0,
@@ -6464,6 +6494,94 @@ export const MatchModal: React.FC<{
       ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritName} (${ogCulpritTeam.name})!`
       : `⚽ ประตู!! ${scorerName} (${attTeam.name}) · ${pickedCeleb.label}`;
     w.phaseTone = 'goal';
+
+    // Record Match Highlight Clip (live post-event capture or instant skip synthesis)
+    const preOverride = varBuildupSamplesRef.current;
+    varBuildupSamplesRef.current = null;
+    const scoreBeforeStr = side === 'H' ? `${Math.max(0, sr.gh - 1)}-${sr.ga}` : `${sr.gh}-${Math.max(0, sr.ga - 1)}`;
+    const scoreAfterStr = `${sr.gh}-${sr.ga}`;
+    sr.highlightSeq += 1;
+    const hlId = `hl-${sr.highlightSeq}-${curMin}`;
+
+    if (isSkippingRef.current) {
+      const synth = synthesizeHighlightClip({
+        id: hlId,
+        seq: sr.highlightSeq,
+        minute: curMin,
+        side,
+        attRight,
+        secondHalf: w.secondHalf,
+        homeTeam: homeOrig,
+        awayTeam: awayOrig,
+        homeLu: sr.homeLu,
+        awayLu: sr.awayLu,
+        scorerName: isOwnGoal ? ogCulpritName : scorerName,
+        assisterName: isOwnGoal ? undefined : assisterName || undefined,
+        finishVerb,
+        isOwnGoal,
+        scoreBefore: scoreBeforeStr,
+        scoreAfter: scoreAfterStr,
+        scoreAfterGh: sr.gh,
+        scoreAfterGa: sr.ga,
+        isDerby,
+        careerP: state.p,
+        matchEnv
+      });
+      sr.highlightClips.push(synth);
+    } else {
+      const tel = lastShotTelemetryRef.current;
+      const hlKind = detectGoalHighlightKind({
+        finishVerb,
+        shotStyle: tel?.style || inferredStyle,
+        flightType: tel?.flightType,
+        isOwnGoal,
+        shotDistM: tel?.distM
+      });
+      const defGkAgent = w.agents.find((a) => !a.sentOff && a.side === defSide && a.pos === 'GK');
+      const actorFullName = isOwnGoal ? ogCulpritName : scorerName;
+      const ed = buildHighlightEditorial({
+        kind: hlKind,
+        minute: curMin,
+        teamName: attTeam.name,
+        oppTeamName: concTeam.name,
+        actorName: actorFullName,
+        assisterName: isOwnGoal ? undefined : assisterName || undefined,
+        victimName: defGkAgent?.id,
+        finishVerb,
+        shotDistM: tel?.distM,
+        shotSpeedKmh: tel?.speedKmh,
+        scoreAfterGh: sr.gh,
+        scoreAfterGa: sr.ga,
+        side,
+        isDerby
+      });
+      queueHighlightCapture(
+        w,
+        {
+          id: hlId,
+          seq: sr.highlightSeq,
+          minute: curMin,
+          kind: hlKind,
+          side,
+          attRight,
+          title: ed.title,
+          subtitle: ed.subtitle,
+          crewTag: ed.crewTag,
+          commentary: ed.commentary,
+          actorName: actorFullName,
+          assisterName: isOwnGoal ? undefined : assisterName || undefined,
+          victimName: defGkAgent?.id,
+          scoreBefore: scoreBeforeStr,
+          scoreAfter: scoreAfterStr,
+          dramaScore: ed.dramaScore,
+          shotDistM: tel?.distM,
+          shotSpeedKmh: tel?.speedKmh,
+          secondHalf: w.secondHalf,
+          matchEnv
+        },
+        preOverride || undefined
+      );
+    }
   };
 
   const buildVarRecord = (
@@ -6548,6 +6666,46 @@ export const MatchModal: React.FC<{
     }
   };
 
+  const openHighlightsModal = (clipId?: string) => {
+    const list = simRef.current.highlightClips.length ? curateMatchHighlights(simRef.current.highlightClips) : highlightClips;
+    if (!list.length) return;
+    SFX.tap();
+    setHighlightClips(list);
+    setHighlightInitialId(clipId);
+    setHighlightModalOpen(true);
+  };
+
+  const queueHighlightCapture = (
+    w: LiveMatchWorld,
+    meta: Omit<FinalizeClipParams, 'preSamples' | 'postSamples'>,
+    preOverride?: RollingHighlightSample[]
+  ) => {
+    const basePre = (preOverride && preOverride.length ? preOverride : rollingSamplesRef.current).slice(-26);
+    const climaxNow = captureWorldSample(w, highlightClockRef.current);
+    const preSamples = [...basePre, climaxNow];
+    activePostCapturesRef.current.push({
+      remainingSamples: 8,
+      postSamples: [],
+      preSamples,
+      meta
+    });
+  };
+
+  const flushHighlightCaptures = (w?: LiveMatchWorld | null) => {
+    if (!activePostCapturesRef.current.length) return;
+    const extraSample = w ? captureWorldSample(w, highlightClockRef.current + 0.14) : null;
+    const pending = activePostCapturesRef.current.splice(0);
+    pending.forEach((entry) => {
+      const postSamples = extraSample ? [...entry.postSamples, extraSample] : entry.postSamples;
+      const clip = finalizeHighlightClipFromSamples({
+        ...entry.meta,
+        preSamples: entry.preSamples,
+        postSamples
+      });
+      simRef.current.highlightClips.push(clip);
+    });
+  };
+
   const resolveVarReview = (w: LiveMatchWorld, curMin: number) => {
     const vr = w.varReview;
     if (!vr) return;
@@ -6575,6 +6733,7 @@ export const MatchModal: React.FC<{
     const sc = vr.replay?.scenario;
     if (vr.kind === 'goal') {
       if (vr.overturn) {
+        varBuildupSamplesRef.current = null;
         // Disallowed by VAR!
         const overturnShort =
           sc === 'goal_line_tech'
@@ -7043,6 +7202,12 @@ export const MatchModal: React.FC<{
       const defRightNow = isAttackRight(w, defSide);
       const dist = Math.hypot((attRightNow ? 100 : 0) - b.fromX, 50 - b.fromY);
       const plan = b.shotPlan;
+      lastShotTelemetryRef.current = {
+        distM: Math.round(clamp(dist * 0.95, 4, 38)),
+        speedKmh: Math.round(clamp((dist / Math.max(0.22, b.duration || 0.45)) * 2.15, 72, 128)),
+        style: b.shotStyle,
+        flightType: b.flightType
+      };
       // Shot Deflection ("ยิงแฉลบ") mid-flight!
       if (plan?.outcome === 'deflect') {
         const deflector = active.find((a) => a.id === (plan.deflectorId || plan.blockerId)) || defenders[0];
@@ -7333,6 +7498,48 @@ export const MatchModal: React.FC<{
           };
           w.phaseLabel = `🧱 ชนเสา/คานอย่างจัง!`;
           w.phaseTone = 'danger';
+          if (!isSkippingRef.current) {
+            const sr = simRef.current;
+            sr.highlightSeq += 1;
+            const tel = lastShotTelemetryRef.current;
+            const actorFullName = shooter?.id || attTeam.name;
+            const ed = buildHighlightEditorial({
+              kind: 'woodwork',
+              minute: curMin,
+              teamName: attTeam.name,
+              oppTeamName: defTeam.name,
+              actorName: actorFullName,
+              victimName: gk?.id,
+              finishVerb: plan.deflectedFrom ? `ยิงแฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง` : 'ซัดบอลพุ่งชนเสา/คานอย่างจัง',
+              shotDistM: tel?.distM,
+              shotSpeedKmh: tel?.speedKmh,
+              scoreAfterGh: sr.gh,
+              scoreAfterGa: sr.ga,
+              side,
+              isDerby
+            });
+            queueHighlightCapture(w, {
+              id: `hl-${sr.highlightSeq}-${curMin}`,
+              seq: sr.highlightSeq,
+              minute: curMin,
+              kind: 'woodwork',
+              side,
+              attRight: attRightNow,
+              title: ed.title,
+              subtitle: ed.subtitle,
+              crewTag: ed.crewTag,
+              commentary: ed.commentary,
+              actorName: actorFullName,
+              victimName: gk?.id,
+              scoreBefore: `${sr.gh}-${sr.ga}`,
+              scoreAfter: `${sr.gh}-${sr.ga}`,
+              dramaScore: ed.dramaScore,
+              shotDistM: tel?.distM,
+              shotSpeedKmh: tel?.speedKmh,
+              secondHalf: w.secondHalf,
+              matchEnv
+            });
+          }
           return;
         }
         if (plan.deflectedFrom) {
@@ -7630,6 +7837,7 @@ export const MatchModal: React.FC<{
                 ? `🖥 บอลเข้าประตูไปแล้ว แต่ VAR เรียกเช็กจังหวะปะทะก่อนยิงของ ${scorerName}!`
                 : `🖥 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`;
 
+          varBuildupSamplesRef.current = rollingSamplesRef.current.slice();
           w.varReview = {
             kind: 'goal',
             side,
@@ -7858,6 +8066,57 @@ export const MatchModal: React.FC<{
           w.dramaSlowSec = Math.max(w.dramaSlowSec, 0.95);
           w.phaseLabel = `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} ${saveTypeText}`;
           w.phaseTone = 'normal';
+        }
+        const shotFlightType = lastShotTelemetryRef.current?.flightType;
+        const highDramaSave =
+          !isSkippingRef.current &&
+          (shotFlightType === 'penalty' ||
+            Boolean(plan?.deflectedFrom) ||
+            ['bicycle', 'volley', 'diving_header', 'curler', 'trivela', 'knuckle', 'screamer'].includes(
+              lastShotTelemetryRef.current?.style || ''
+            ) ||
+            Math.random() < 0.45);
+        if (highDramaSave) {
+          const sr = simRef.current;
+          sr.highlightSeq += 1;
+          const tel = lastShotTelemetryRef.current;
+          const gkName = gk?.id || 'ผู้รักษาประตู';
+          const ed = buildHighlightEditorial({
+            kind: 'super_save',
+            minute: curMin,
+            teamName: defTeam.name,
+            oppTeamName: attTeam.name,
+            actorName: gkName,
+            victimName: shooter?.id,
+            finishVerb: shotFlightType === 'penalty' ? 'อ่านทางพุ่งปัดจุดโทษไว้ได้อย่างเหลือเชื่อ' : saveTypeText,
+            shotDistM: tel?.distM,
+            shotSpeedKmh: tel?.speedKmh,
+            scoreAfterGh: sr.gh,
+            scoreAfterGa: sr.ga,
+            side: defSide,
+            isDerby
+          });
+          queueHighlightCapture(w, {
+            id: `hl-${sr.highlightSeq}-${curMin}`,
+            seq: sr.highlightSeq,
+            minute: curMin,
+            kind: 'super_save',
+            side: defSide,
+            attRight: attRightNow,
+            title: ed.title,
+            subtitle: ed.subtitle,
+            crewTag: ed.crewTag,
+            commentary: ed.commentary,
+            actorName: gkName,
+            victimName: shooter?.id,
+            scoreBefore: `${sr.gh}-${sr.ga}`,
+            scoreAfter: `${sr.gh}-${sr.ga}`,
+            dramaScore: shotFlightType === 'penalty' ? Math.max(ed.dramaScore, 89) : ed.dramaScore,
+            shotDistM: tel?.distM,
+            shotSpeedKmh: tel?.speedKmh,
+            secondHalf: w.secondHalf,
+            matchEnv
+          });
         }
       }
       return;
@@ -9047,6 +9306,20 @@ export const MatchModal: React.FC<{
   };
 
   const buildBannerPayload = (w: LiveMatchWorld, slowMoOn: boolean) => {
+    const hasBlockingCanvasBanner = Boolean(
+      (w.goalBanner && w.goalBanner.ttl > 0) ||
+        (w.cardBanner && w.cardBanner.ttl > 0) ||
+        w.varReview
+    );
+    if (hasBlockingCanvasBanner) {
+      return {
+        label: '',
+        tone: w.phaseTone,
+        actors: [] as { id: string; shortName: string; side: 'H' | 'A' }[],
+        teamSide: w.ball.possessionSide,
+        sig: `suppressed|${w.phaseTone}|${w.ball.possessionSide}`
+      };
+    }
     const isSlowShot =
       w.ball.flightType === 'shot' ||
       w.ball.flightType === 'freekick' ||
@@ -9649,6 +9922,8 @@ export const MatchModal: React.FC<{
     setClockLabel("46'");
     setStoppageBadge(0);
     setLiveFitMap({ ...sr.liveFit });
+    rollingSamplesRef.current = [];
+    varBuildupSamplesRef.current = null;
     pushLog(46, `▶️ กรรมการเป่าเริ่มครึ่งหลัง!`, 'sys');
     pushTimeline(46, 'N', 'second_half', 'เริ่มครึ่งหลัง', 'ครึ่งหลัง');
   };
@@ -9659,6 +9934,10 @@ export const MatchModal: React.FC<{
     sr.done = true;
     setInjuryAlert(null);
     const w = worldRef.current!;
+    flushHighlightCaptures(w);
+    const curatedHl = curateMatchHighlights(sr.highlightClips);
+    sr.highlightClips = curatedHl;
+    setHighlightClips(curatedHl);
 
     // Ensure any injured players still on pitch without manual sub get auto-replaced if bench allows
     ([true, false] as const).forEach((isHomeSide) => {
@@ -10529,6 +10808,43 @@ export const MatchModal: React.FC<{
           uiSyncAccum = 0;
           syncUiStatsFromWorld(w, curIntMin);
         }
+
+        // Capture live rolling buffer & active post-climax frames for Pro-Crew Highlight Editor
+        highlightClockRef.current += rawDt;
+        if (!w.varReview && w.phase !== 'shootout' && highlightClockRef.current - lastHighlightSampleClockRef.current >= 0.14) {
+          lastHighlightSampleClockRef.current = highlightClockRef.current;
+          const isIdleKickoff = w.pendingSetPiece?.type === 'kickoff' && w.ball.x === 50 && w.ball.y === 50;
+          if (!isIdleKickoff) {
+            const smp = captureWorldSample(w, highlightClockRef.current);
+            rollingSamplesRef.current.push(smp);
+            if (rollingSamplesRef.current.length > 28) {
+              rollingSamplesRef.current.shift();
+            }
+            if (activePostCapturesRef.current.length > 0) {
+              const stillPending: typeof activePostCapturesRef.current = [];
+              let completedAny = false;
+              for (const entry of activePostCapturesRef.current) {
+                entry.postSamples.push(smp);
+                entry.remainingSamples -= 1;
+                if (entry.remainingSamples <= 0) {
+                  const finalizedClip = finalizeHighlightClipFromSamples({
+                    ...entry.meta,
+                    preSamples: entry.preSamples,
+                    postSamples: entry.postSamples
+                  });
+                  simRef.current.highlightClips.push(finalizedClip);
+                  completedAny = true;
+                } else {
+                  stillPending.push(entry);
+                }
+              }
+              activePostCapturesRef.current = stillPending;
+              if (completedAny) {
+                setHighlightClips(curateMatchHighlights(simRef.current.highlightClips));
+              }
+            }
+          }
+        }
       }
 
       if (canvas && w.phase !== 'halftime' && !simRef.current.done) {
@@ -10547,6 +10863,7 @@ export const MatchModal: React.FC<{
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
     const w = worldRef.current!;
+    flushHighlightCaptures(w);
     w.dramaSlowSec = 0;
     w.dramaLabel = null;
     clearWorldCelebration(w, 'SUPPORT');
@@ -11127,7 +11444,8 @@ export const MatchModal: React.FC<{
       timeline: srDone.timeline.slice(),
       playerActions,
       logs: compactLogs,
-      ...(srDone.varHistory.length ? { varReplays: srDone.varHistory.slice() } : {})
+      ...(srDone.varHistory.length ? { varReplays: srDone.varHistory.slice() } : {}),
+      ...(srDone.highlightClips.length ? { highlightClips: curateMatchHighlights(srDone.highlightClips) } : {})
     });
   };
 
@@ -11638,30 +11956,36 @@ export const MatchModal: React.FC<{
     return (
       <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
         {/* Stream Broadcast Info Header */}
-        <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/70 border-b border-[var(--line)] space-y-1.5 shrink-0">
-          <div className="flex items-center justify-between gap-2">
+        <div
+          className={`bg-[var(--surface-2)]/70 border-b border-[var(--line)] shrink-0 ${
+            isLivePitchFullscreen
+              ? 'px-2 py-1.5 mland:px-1.5 mland:py-1 space-y-1'
+              : 'px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1.5">
             <div className="flex items-center gap-1.5 min-w-0">
               <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
-              <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
+              <span className={`font-bold truncate text-[var(--ink)] ${isLivePitchFullscreen ? 'text-[11px] mland:text-[9.5px]' : 'text-xs mland:text-[10.5px]'}`}>
                 {broadcastChannel.name}
               </span>
             </div>
-            <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0">
+            <span className={`font-bold text-[var(--g)] shrink-0 ${isLivePitchFullscreen ? 'text-[9px] mland:text-[8px]' : 'text-[10px] mland:text-[8.5px]'}`}>
               {broadcastChannel.badge}
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
-            <span className="text-[var(--mut)]">
+          <div className={`flex flex-wrap items-center justify-between gap-1.5 tabular ${isLivePitchFullscreen ? 'text-[9.5px] mland:text-[8.5px]' : 'text-[10.5px] mland:text-[9px]'}`}>
+            <span className="text-[var(--mut)] truncate">
               กำลังดู <b className="text-[var(--ink)]">{liveViewers.toLocaleString()}</b> · สูงสุด <b className="text-[var(--ink)]">{peakViewers.toLocaleString()}</b>
             </span>
             {state.mode === 'm' && (
               streamProj.plan.id === 'off' ? (
                 <span className="text-[var(--mut)]">ช่องกลาง ({tierMeta.label})</span>
               ) : (
-                <span className="font-bold">
+                <span className="font-bold shrink-0">
                   <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
-                  <span className="text-[var(--mut)] mx-1">/</span>
+                  <span className="text-[var(--mut)] mx-0.5">/</span>
                   <span className="text-[var(--red)]">-{fmtMoneyNum(streamProj.plan.totalCost)}</span>
                 </span>
               )
@@ -11669,11 +11993,13 @@ export const MatchModal: React.FC<{
           </div>
 
           {!done && (
-            <div className="flex items-center justify-between gap-2 pt-0.5">
-              <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                {tierMeta.desc}
-              </span>
-              <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center justify-between gap-1.5 pt-0.5">
+              {!isLivePitchFullscreen && (
+                <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                  {tierMeta.desc}
+                </span>
+              )}
+              <div className={`flex items-center gap-1 shrink-0 ${isLivePitchFullscreen ? 'w-full justify-between' : ''}`}>
                 {matchPhaseUi !== 'halftime' && (
                   <button
                     type="button"
@@ -11684,7 +12010,7 @@ export const MatchModal: React.FC<{
                     title={isLivePitchFullscreen ? 'ย่อจอกลับสู่มุมมองปกติ' : 'ดูไลฟ์สดแบบเต็มจอพร้อมแชทข้างๆ'}
                     className={`btn btn-xs whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
                       isLivePitchFullscreen
-                        ? 'bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
+                        ? 'px-2 mland:px-1.5 bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
                         : 'btn-secondary'
                     }`}
                   >
@@ -11712,9 +12038,9 @@ export const MatchModal: React.FC<{
                       burst: 1
                     });
                   }}
-                  className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                  className={`btn btn-xs btn-secondary whitespace-nowrap shrink-0 ${isLivePitchFullscreen ? 'px-2 mland:px-1.5' : ''}`}
                 >
-                  {canClubShout ? '👋 ทักทายคนดู' : `รอสักครู่ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
+                  {canClubShout ? '👋 ทักทายคนดู' : `รอ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
                 </button>
               </div>
             </div>
@@ -11722,7 +12048,12 @@ export const MatchModal: React.FC<{
         </div>
 
         {/* Live Chat Messages Stream */}
-        <div ref={rightChatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
+        <div
+          ref={rightChatScrollRef}
+          className={`flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/45 ${
+            isLivePitchFullscreen ? 'p-2 mland:p-1.5' : 'p-2.5 mland:p-2'
+          }`}
+        >
           {liveComments.map((cm) => (
             <div
               key={cm.id}
@@ -11899,16 +12230,30 @@ export const MatchModal: React.FC<{
                 )}
               </>
             ) : (
-              <button
-                type="button"
-                title="จบเกมและดำเนินการต่อ"
-                aria-label="จบเกมและดำเนินการต่อ"
-                onClick={handleConfirmFinish}
-                className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-4 sm:px-5 mland:px-3.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
-              >
-                <Flag className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
-                <span>จบเกม</span>
-              </button>
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {highlightClips.length > 0 && (
+                  <button
+                    type="button"
+                    title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                    aria-label="ชมไฮไลท์การแข่งขัน"
+                    onClick={() => openHighlightsModal()}
+                    className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-extrabold border border-amber-200/70 shadow-sm hover:brightness-105 active:scale-[0.98]"
+                  >
+                    <Film className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                    <span>ไฮไลท์ ({highlightClips.length})</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  title="จบเกมและดำเนินการต่อ"
+                  aria-label="จบเกมและดำเนินการต่อ"
+                  onClick={handleConfirmFinish}
+                  className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-4 sm:px-5 mland:px-3.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
+                >
+                  <Flag className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
+                  <span>จบเกม</span>
+                </button>
+              </div>
             )
           }
         />
@@ -12097,12 +12442,14 @@ export const MatchModal: React.FC<{
               rightTab={mlandMatchTab === 'tactics' ? 'stats' : mlandMatchTab}
               onChangeRightTab={(t) => setMlandMatchTab(t)}
               onOpenVarReplay={openVarReplayById}
+              highlightClips={highlightClips}
+              onOpenHighlights={openHighlightsModal}
             />
           ) : (
             <div
               className={
                 isLivePitchFullscreen
-                  ? 'grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_300px] lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_370px] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[minmax(0,1fr)_240px] mland:grid-rows-[minmax(0,1fr)] gap-1.5 sm:gap-2 mland:gap-1.5 items-stretch flex-1 min-h-0 overflow-hidden'
+                  ? 'grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_225px] lg:grid-cols-[minmax(0,1fr)_245px] xl:grid-cols-[minmax(0,1fr)_265px] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[minmax(0,1fr)_180px] mland:grid-rows-[minmax(0,1fr)] gap-1.5 mland:gap-1 items-stretch flex-1 min-h-0 overflow-hidden'
                   : 'grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden'
               }
             >
@@ -13329,6 +13676,28 @@ export const MatchModal: React.FC<{
           awayGkKit={awayGkKit}
           homeTrim={homeTrim}
           awayTrim={awayTrim}
+        />
+      )}
+
+      {highlightModalOpen && highlightClips.length > 0 && (
+        <MatchHighlightModal
+          clips={highlightClips}
+          initialClipId={highlightInitialId}
+          homeOrig={homeOrig}
+          awayOrig={awayOrig}
+          state={state}
+          homeKit={homeKit}
+          awayKit={awayKit}
+          homeGkKit={homeGkKit}
+          awayGkKit={awayGkKit}
+          homeTrim={homeTrim}
+          awayTrim={awayTrim}
+          compTitle={compTitle}
+          scoreSummary={`${homeOrig.name} ${gh} - ${ga} ${awayOrig.name}${penResult ? ` (${penResult.text})` : ''}`}
+          onClose={() => {
+            setHighlightModalOpen(false);
+            setHighlightInitialId(undefined);
+          }}
         />
       )}
     </div>

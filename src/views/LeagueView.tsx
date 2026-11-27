@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Coins, Trophy, X } from 'lucide-react';
-import type { ArchivedMatchReport, MainTab, Player, Team, GameState, VarReplayRecord } from '../types/game';
+import type { ArchivedMatchReport, MainTab, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
@@ -23,9 +23,10 @@ export const LeagueView: React.FC<{
   onNavigate?: (tab: MainTab, sub?: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
+  onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
   onToast?: (msg: string) => void;
-}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenMatchReport, onToast }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
@@ -730,6 +731,24 @@ export const LeagueView: React.FC<{
                       <span className="min-w-0 truncate">{r}</span>
                     )}
                     <div className="flex items-center gap-1 shrink-0">
+                      {rec?.highlightClips?.length && onOpenHighlights && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onOpenHighlights(
+                              rec.h,
+                              rec.a,
+                              rec.highlightClips!,
+                              `${TN[vt]} · นัดที่ ${mdNumVal}`,
+                              `${state.teams[rec.h]?.name || ''} ${rec.gh} - ${rec.ga} ${state.teams[rec.a]?.name || ''}`
+                            )
+                          }
+                          className="px-1.5 py-[1px] rounded bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[9.5px] mland:text-[8.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                          title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                        >
+                          🎬 {rec.highlightClips.length}
+                        </button>
+                      )}
                       {vars && vars.length > 0 && rec && onOpenVarReplay && (
                         <button
                           type="button"
@@ -1419,6 +1438,7 @@ export const LeagueView: React.FC<{
           onInspectTeam={onInspectTeam}
           onOpenMarket={state.mode === 'm' && onNavigate ? () => onNavigate('k') : undefined}
           onOpenVarReplay={onOpenVarReplay}
+          onOpenHighlights={onOpenHighlights}
           onOpenMatchReport={onOpenMatchReport}
         />
       )}
@@ -1429,6 +1449,7 @@ export const LeagueView: React.FC<{
           onInspectTeam={onInspectTeam}
           onInspectPlayer={onInspectPlayer}
           onOpenVarReplay={onOpenVarReplay}
+          onOpenHighlights={onOpenHighlights}
           onOpenMatchReport={onOpenMatchReport}
           initialRightPane={cupInitialStats ? 'stats' : 'results'}
         />
@@ -1528,8 +1549,9 @@ export const ScheduleCalendarView: React.FC<{
   onPlayNext?: () => void;
   onOpenMarket?: () => void;
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
+  onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
-}> = ({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay, onOpenMatchReport }) => {
+}> = ({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay, onOpenHighlights, onOpenMatchReport }) => {
   const me = state.teams[state.me];
   const totalMd = state.fx.length || 30;
   const defaultMonth = state.md >= totalMd ? 4 : Math.min(4, Math.floor(state.md / 6));
@@ -1837,6 +1859,24 @@ export const ScheduleCalendarView: React.FC<{
                             {rec ? `${rec.gh}-${rec.ga}` : 'vs'}
                           </span>
                         )}
+                        {rec?.highlightClips?.length && onOpenHighlights ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenHighlights(
+                                rec.h,
+                                rec.a,
+                                rec.highlightClips!,
+                                `${TN[me.tier]} · นัดที่ ${roundPreview + 1}`,
+                                `${ht.name} ${rec.gh} - ${rec.ga} ${at.name}`
+                              )
+                            }
+                            className="px-1.5 py-0.5 rounded-md bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[9.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer"
+                            title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                          >
+                            🎬 {rec.highlightClips.length}
+                          </button>
+                        ) : null}
                         {rec?.varReplays?.length && onOpenVarReplay ? (
                           <button
                             type="button"
@@ -1905,6 +1945,24 @@ export const ScheduleCalendarView: React.FC<{
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
+                            {cl.highlightClips?.length && onOpenHighlights && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onOpenHighlights(
+                                    cl.h,
+                                    cl.a,
+                                    cl.highlightClips!,
+                                    cupTitle,
+                                    `${ht?.name || ''} ${cl.gh} - ${cl.ga} ${at?.name || ''}${cl.penText ? ` (${cl.penText})` : ''}`
+                                  )
+                                }
+                                className="px-1.5 py-0.5 rounded-md bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[10px] mland:text-[8.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer whitespace-nowrap"
+                                title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                              >
+                                🎬 {cl.highlightClips.length}
+                              </button>
+                            )}
                             {cl.varReplays?.length && onOpenVarReplay && (
                               <button
                                 type="button"
@@ -2144,6 +2202,24 @@ export const ScheduleCalendarView: React.FC<{
                       className="flex items-center gap-1 shrink-0"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {rec?.highlightClips?.length && onOpenHighlights ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onOpenHighlights(
+                              rec.h,
+                              rec.a,
+                              rec.highlightClips!,
+                              `${TN[me.tier]} · นัดที่ ${mdNum}`,
+                              `${state.teams[rec.h]?.name || ''} ${rec.gh} - ${rec.ga} ${state.teams[rec.a]?.name || ''}`
+                            )
+                          }
+                          title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                          className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[10px] mland:text-[8.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                        >
+                          🎬 {rec.highlightClips.length}
+                        </button>
+                      ) : null}
                       {rec?.varReplays?.length && onOpenVarReplay ? (
                         <button
                           type="button"

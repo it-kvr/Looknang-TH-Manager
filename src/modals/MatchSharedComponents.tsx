@@ -5,6 +5,7 @@ import type {
   MatchCardEvent,
   MatchEnvironment,
   MatchEvent,
+  MatchHighlightClip,
   MatchSubEvent,
   MatchTimelineItem,
   Player,
@@ -1367,40 +1368,6 @@ export const MatchBroadcastHeader: React.FC<{
                 </div>
               )}
             </div>
-
-            {goalFlashInfo && (
-              <div
-                key={`ribbon-${gh}-${ga}-${goalFlashInfo.minute}`}
-                className={`goal-ribbon-in pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 mland:py-0.5 rounded-full border shadow-lg whitespace-nowrap ${
-                  goalFlashInfo.isOwnGoal
-                    ? 'bg-[#2b0e16] border-rose-400/80 text-rose-100'
-                    : goalFlashInfo.isMeScorer
-                      ? 'bg-[#1f1603] border-[var(--lamp)] text-amber-100'
-                      : 'bg-[#0c1b13] border-[var(--lamp)]/75 text-white'
-                }`}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0 ring-1 ring-white/50"
-                  style={{ backgroundColor: goalFlashInfo.kit || '#facc15' }}
-                />
-                <span className={`text-[10px] sm:text-[11px] mland:text-[8.5px] font-black tracking-wide uppercase ${goalFlashInfo.isOwnGoal ? 'text-rose-300' : 'text-[var(--lamp)]'}`}>
-                  {goalFlashInfo.isOwnGoal ? 'OG' : 'GOAL'} {goalFlashInfo.minute}&apos;
-                </span>
-                <span className="text-[11px] sm:text-xs mland:text-[9px] font-extrabold text-white max-w-[140px] sm:max-w-[190px] truncate">
-                  {goalFlashInfo.scorer}
-                </span>
-                {goalFlashInfo.assister && !goalFlashInfo.isOwnGoal && (
-                  <span className="hidden sm:inline-flex mland:hidden items-center gap-0.5 text-[10px] text-white/70 font-semibold max-w-[115px] truncate">
-                    (<StatIconBadge kind="assist" size="xs" /><span className="truncate">{goalFlashInfo.assister.split(' ')[0]}</span>)
-                  </span>
-                )}
-                {goalFlashInfo.isMeScorer && (
-                  <span className="px-1.5 py-[1px] rounded-full bg-[var(--lamp)] text-[#261900] text-[9px] font-black shrink-0">
-                    ★ คุณยิง!
-                  </span>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
@@ -1508,6 +1475,8 @@ export const FullTimeMatchStage: React.FC<{
   rightTab: 'players' | 'stats' | 'chat';
   onChangeRightTab: (tab: 'players' | 'stats' | 'chat') => void;
   onOpenVarReplay?: (varId: string) => void;
+  highlightClips?: MatchHighlightClip[];
+  onOpenHighlights?: (clipId?: string) => void;
   onInspectPlayer?: (player: Player, team: Team) => void;
 }> = ({
   state,
@@ -1552,6 +1521,8 @@ export const FullTimeMatchStage: React.FC<{
   rightTab,
   onChangeRightTab,
   onOpenVarReplay,
+  highlightClips,
+  onOpenHighlights,
   onInspectPlayer
 }) => {
   const [ftPitchMode, setFtPitchMode] = useState<'all' | 'H' | 'A'>(() =>
@@ -2140,6 +2111,24 @@ export const FullTimeMatchStage: React.FC<{
                   {awayOrig.id === state.me && <MyTeamBadge size="2xs" className="absolute -top-0.5 -right-0.5 ring-1 ring-[#05180e]" />}
                 </button>
               </div>
+
+              {highlightClips && highlightClips.length > 0 && onOpenHighlights && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onOpenHighlights();
+                  }}
+                  title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                  className="absolute top-2 right-2 z-20 inline-flex items-center gap-1.5 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-amber-500/95 hover:bg-amber-400 text-slate-950 border border-amber-200/70 shadow-lg text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer transition-all"
+                >
+                  <span>🎬</span>
+                  <span>ไฮไลท์</span>
+                  <span className="px-1.5 py-[1px] rounded-md bg-slate-950/20 text-[10px] mland:text-[8.5px] font-black tabular">
+                    {highlightClips.length}
+                  </span>
+                </button>
+              )}
 
               {pickedInfo && (() => {
                 const pkPl = pickedInfo.pl;

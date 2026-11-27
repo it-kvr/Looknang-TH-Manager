@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronRight, Coins, Trophy } from 'lucide-react';
-import type { ArchivedMatchReport, Player, Team, GameState, VarReplayRecord } from '../types/game';
+import type { ArchivedMatchReport, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { RN, TN } from '../data/thaiFootballData';
 import { EXTRA_CUP_META, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
@@ -59,9 +59,10 @@ export const CupView: React.FC<{
   onInspectTeam: (id: number) => void;
   onInspectPlayer?: (p: Player, t: Team) => void;
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
+  onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
   initialRightPane?: 'results' | 'stats';
-}> = ({ state, onInspectTeam, onInspectPlayer, onOpenVarReplay, onOpenMatchReport, initialRightPane = 'results' }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, initialRightPane = 'results' }) => {
   const initialTab: CupTabId = state.pc
     ? 'fa'
     : state.plc
@@ -647,6 +648,24 @@ export const CupView: React.FC<{
                               <span className="font-semibold text-[#8a5b00] dark:text-[var(--lamp)] tabular">
                                 {p.penText}
                               </span>
+                            )}
+                            {matchedCupLog?.highlightClips?.length && onOpenHighlights && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onOpenHighlights(
+                                    matchedCupLog.h,
+                                    matchedCupLog.a,
+                                    matchedCupLog.highlightClips!,
+                                    `${activeComp.title} · ${p.roundLabel}`,
+                                    `${p.homeName} ${p.gh} - ${p.ga} ${p.awayName}${p.penText ? ` (${p.penText})` : ''}`
+                                  )
+                                }
+                                className="px-1.5 py-[1px] rounded bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[9.5px] mland:text-[8px] font-extrabold hover:bg-amber-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                                title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                              >
+                                🎬 {matchedCupLog.highlightClips.length}
+                              </button>
                             )}
                             {matchedCupLog?.varReplays?.length && onOpenVarReplay && (
                               <button

@@ -7,7 +7,7 @@ import {
   enterLandscapeFullscreen,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
-import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport } from './types/game';
+import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip } from './types/game';
 import { P, clamp, fmtMoney, capMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
@@ -41,6 +41,7 @@ import { SecretBoostModal } from './modals/SecretBoostModal';
 import { GodBlessingModal } from './modals/GodBlessingModal';
 import { SettingsModal } from './modals/SettingsModal';
 import { VarReplayModal } from './modals/VarReplayModal';
+import { MatchHighlightModal } from './modals/MatchHighlightModal';
 import { PostMatchReportModal } from './modals/PostMatchReportModal';
 
 export default function App() {
@@ -64,6 +65,14 @@ export default function App() {
     awayId: number;
     records: VarReplayRecord[];
     activeId: string;
+  } | null>(null);
+  const [historyHighlightModal, setHistoryHighlightModal] = useState<{
+    homeId: number;
+    awayId: number;
+    clips: MatchHighlightClip[];
+    activeId?: string;
+    title?: string;
+    scoreSummary?: string;
   } | null>(null);
   const [matchReportModal, setMatchReportModal] = useState<{
     report: ArchivedMatchReport;
@@ -463,7 +472,8 @@ export default function App() {
         ...(payload.matchEnv ? { matchEnv: payload.matchEnv } : {}),
         ...(payload.timeline?.length ? { timeline: payload.timeline } : {}),
         ...(payload.logs?.length ? { logs: payload.logs } : {}),
-        ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+        ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {}),
+        ...(payload.highlightClips?.length ? { highlightClips: payload.highlightClips } : {})
       });
 
       if (kind === 'cup') {
@@ -1434,6 +1444,11 @@ export default function App() {
                 SFX.tap();
                 setHistoryVarModal({ homeId, awayId, records, activeId: records[0].id });
               }}
+              onOpenHighlights={(homeId, awayId, clips, title, scoreSummary) => {
+                if (!clips.length) return;
+                SFX.tap();
+                setHistoryHighlightModal({ homeId, awayId, clips, title, scoreSummary });
+              }}
               onOpenMatchReport={(report, title) => {
                 SFX.tap();
                 setMatchReportModal({ report, title });
@@ -1614,6 +1629,10 @@ export default function App() {
               activeId: activeId || records[0].id
             });
           }}
+          onOpenHighlights={(homeId, awayId, clips, activeId, title, scoreSummary) => {
+            if (!clips.length) return;
+            setHistoryHighlightModal({ homeId, awayId, clips, activeId, title, scoreSummary });
+          }}
           onInspectTeam={(tid) => setInspectTeamId(tid)}
           onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
         />
@@ -1694,6 +1713,7 @@ export default function App() {
             setPreMatch(null);
             setActiveMatch(null);
             setHistoryVarModal(null);
+            setHistoryHighlightModal(null);
             setMatchReportModal(null);
             setShowSettings(false);
             setSeasonStatsTarget(null);
@@ -1761,6 +1781,33 @@ export default function App() {
             awayGkKit={awayGkKit}
             homeTrim={homeTrim}
             awayTrim={awayTrim}
+          />
+        );
+      })()}
+
+      {historyHighlightModal && (() => {
+        const hTeam = state.teams[historyHighlightModal.homeId];
+        const aTeam = state.teams[historyHighlightModal.awayId];
+        if (!hTeam || !aTeam || !historyHighlightModal.clips.length) return null;
+        const [homeKit, awayKit, homeTrim, awayTrim] = matchKits(hTeam, aTeam, state);
+        const homeGkKit = pickGK(homeKit, awayKit, homeTrim);
+        const awayGkKit = pickGK(awayKit, homeKit, homeGkKit);
+        return (
+          <MatchHighlightModal
+            clips={historyHighlightModal.clips}
+            initialClipId={historyHighlightModal.activeId}
+            homeOrig={hTeam}
+            awayOrig={aTeam}
+            state={state}
+            homeKit={homeKit}
+            awayKit={awayKit}
+            homeGkKit={homeGkKit}
+            awayGkKit={awayGkKit}
+            homeTrim={homeTrim}
+            awayTrim={awayTrim}
+            compTitle={historyHighlightModal.title}
+            scoreSummary={historyHighlightModal.scoreSummary}
+            onClose={() => setHistoryHighlightModal(null)}
           />
         );
       })()}

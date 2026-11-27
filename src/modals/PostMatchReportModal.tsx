@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { Film, X } from 'lucide-react';
 import type {
   ArchivedMatchReport,
   ArchivedStreamComment,
   GameState,
   MatchEnvironment,
+  MatchHighlightClip,
   MatchTimelineItem,
   Player,
   Team,
@@ -38,6 +39,7 @@ interface PostMatchReportModalProps {
   state: GameState;
   onClose: () => void;
   onOpenVarReplay: (homeId: number, awayId: number, records: VarReplayRecord[], activeId?: string) => void;
+  onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], activeId?: string, title?: string, scoreSummary?: string) => void;
   onInspectTeam?: (teamId: number) => void;
   onInspectPlayer?: (player: Player, team: Team) => void;
 }
@@ -48,6 +50,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
   state,
   onClose,
   onOpenVarReplay,
+  onOpenHighlights,
   onInspectTeam,
   onInspectPlayer
 }) => {
@@ -663,19 +666,42 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
           penText={report.penText}
           onInspectTeam={onInspectTeam}
           rightControls={
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                onClose();
-              }}
-              aria-label="ปิดหน้าต่าง"
-              title="ปิดหน้าต่าง"
-              className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-3 sm:px-4 mland:px-3 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--ink)]/40 text-[var(--ink)] shadow-2xs shrink-0"
-            >
-              <X className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-              <span className="hidden sm:inline mland:inline">ปิด</span>
-            </button>
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {report.highlightClips && report.highlightClips.length > 0 && onOpenHighlights && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onOpenHighlights(
+                      hTeam.id,
+                      aTeam.id,
+                      report.highlightClips!,
+                      undefined,
+                      title || report.roundLabel,
+                      `${hTeam.name} ${report.gh} - ${report.ga} ${aTeam.name}${report.penText ? ` (${report.penText})` : ''}`
+                    );
+                  }}
+                  title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                  className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-extrabold border border-amber-200/70 shadow-sm hover:brightness-105 shrink-0"
+                >
+                  <Film className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                  <span>ไฮไลท์ ({report.highlightClips.length})</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  onClose();
+                }}
+                aria-label="ปิดหน้าต่าง"
+                title="ปิดหน้าต่าง"
+                className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-3 sm:px-4 mland:px-3 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--ink)]/40 text-[var(--ink)] shadow-2xs shrink-0"
+              >
+                <X className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                <span className="hidden sm:inline mland:inline">ปิด</span>
+              </button>
+            </div>
           }
         />
 
@@ -726,6 +752,22 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
               SFX.tap();
               onOpenVarReplay(hTeam.id, aTeam.id, varReplays, varId);
             }}
+            highlightClips={report.highlightClips}
+            onOpenHighlights={
+              report.highlightClips?.length && onOpenHighlights
+                ? (clipId) => {
+                    SFX.tap();
+                    onOpenHighlights(
+                      hTeam.id,
+                      aTeam.id,
+                      report.highlightClips!,
+                      clipId,
+                      title || report.roundLabel,
+                      `${hTeam.name} ${report.gh} - ${report.ga} ${aTeam.name}${report.penText ? ` (${report.penText})` : ''}`
+                    );
+                  }
+                : undefined
+            }
             onInspectPlayer={onInspectPlayer}
           />
         </div>

@@ -1,8 +1,9 @@
-import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId, VarReviewState } from '../types/game';
+import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId, VarReviewState, MatchHighlightClip, MatchHighlightFrame } from '../types/game';
 import { COACH_OUTFITS } from '../data/thaiFootballData';
 import { getTurfGradeSpec } from '../data/crestAndKitData';
 import { clamp } from '../utils/math';
 import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
+import { HL_ACT } from '../engine/matchHighlights';
 import { faceBodySvg } from '../components/SvgVisuals';
 import { getClubCaptainPalette } from '../components/CaptainBadge';
 import { getPositionCanvasPalette } from '../components/PositionBadge';
@@ -5509,5 +5510,705 @@ export const drawLivePitchToCanvas = (
   }
 
 };
+
+export type HighlightCameraMode = 'broadcast' | 'wide';
+
+const interpolateAngle = (a0: number, a1: number, t: number): number => {
+  let diff = a1 - a0;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return a0 + diff * t;
+};
+
+const sampleHighlightFrameAt = (
+  frames: MatchHighlightFrame[],
+  t: number
+): {
+  bx: number;
+  by: number;
+  bz: number;
+  shot: boolean;
+  style?: string;
+  ripL: number;
+  ripR: number;
+  agents: { idx: number; x: number; y: number; facing: number; act: number; dd: number }[];
+} => {
+  if (!frames.length) {
+    return { bx: 50, by: 50, bz: 0, shot: false, ripL: 0, ripR: 0, agents: [] };
+  }
+  const ct = clamp(t, 0, 1);
+  let i0 = 0;
+  for (let i = 0; i < frames.length - 1; i++) {
+    if (ct >= frames[i].t) i0 = i;
+    else break;
+  }
+  const i1 = Math.min(frames.length - 1, i0 + 1);
+  const f0 = frames[i0];
+  const f1 = frames[i1];
+  const span = Math.max(0.0001, f1.t - f0.t);
+  const alpha = i0 === i1 ? 0 : clamp((ct - f0.t) / span, 0, 1);
+
+  const bx = f0.bx + (f1.bx - f0.bx) * alpha;
+  const by = f0.by + (f1.by - f0.by) * alpha;
+  const bz = f0.bz + (f1.bz - f0.bz) * alpha;
+  const ripL = (f0.ripL || 0) + ((f1.ripL || 0) - (f0.ripL || 0)) * alpha;
+  const ripR = (f0.ripR || 0) + ((f1.ripR || 0) - (f0.ripR || 0)) * alpha;
+  const shot = Boolean(f0.shot || f1.shot);
+  const style = f1.style || f0.style;
+
+  const p1Map = new Map<number, [number, number, number, number, number?, number?]>();
+  f1.p.forEach((row) => p1Map.set(row[0], row));
+
+  const agents = f0.p.map((r0) => {
+    const idx = r0[0];
+    const r1 = p1Map.get(idx);
+    if (!r1) {
+      return {
+        idx,
+        x: r0[1],
+        y: r0[2],
+        facing: r0[3],
+        act: r0[4] || 0,
+        dd: r0[5] || 1
+      };
+    }
+    const useNextAct = alpha >= 0.45 ? r1[4] || r0[4] || 0 : r0[4] || r1[4] || 0;
+    const useDd = r1[5] || r0[5] || 1;
+    return {
+      idx,
+      x: r0[1] + (r1[1] - r0[1]) * alpha,
+      y: r0[2] + (r1[2] - r0[2]) * alpha,
+      facing: interpolateAngle(r0[3], r1[3], alpha),
+      act: useNextAct,
+      dd: useDd
+    };
+  });
+
+  return { bx, by, bz, shot, style, ripL, ripR, agents };
+};
+
+export const drawHighlightClipToCanvas = (
+  canvas: HTMLCanvasElement,
+  clip: MatchHighlightClip,
+  pct: number,
+  opts: {
+    homeTeamName?: string;
+    awayTeamName?: string;
+    homeKit: string;
+    awayKit: string;
+    homeGkKit?: string;
+    awayGkKit?: string;
+    homeTrim?: string;
+    awayTrim?: string;
+    cameraMode?: HighlightCameraMode;
+    isSlowMo?: boolean;
+    showNames?: boolean;
+  }
+) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const cw = canvas.clientWidth;
+  const ch = canvas.clientHeight;
+  const rect = cw > 0 && ch > 0 ? null : canvas.getBoundingClientRect();
+  const cssW = Math.max(300, Math.round((cw > 0 ? cw : rect?.width) || 560));
+  const cssH = Math.max(180, Math.round((ch > 0 ? ch : rect?.height) || 320));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const pxW = Math.round(cssW * dpr);
+  const pxH = Math.round(cssH * dpr);
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW;
+    canvas.height = pxH;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const cPct = clamp(pct, 0, 1);
+  const homeKit = opts.homeKit;
+  const awayKit = opts.awayKit;
+  const homeGkKit = opts.homeGkKit || '#16a34a';
+  const awayGkKit = opts.awayGkKit || '#ea580c';
+  const homeTrim = opts.homeTrim || '#ffffff';
+  const awayTrim = opts.awayTrim || '#ffffff';
+  const cameraMode: HighlightCameraMode = opts.cameraMode || 'broadcast';
+
+  const cur = sampleHighlightFrameAt(clip.frames, cPct);
+
+  // Build smoothed ball trail over recent ~14% of clip
+  const trailPts: { x: number; y: number; z: number }[] = [];
+  if (clip.frames.length >= 2) {
+    const trailSteps = 10;
+    const lookback = cur.shot ? 0.14 : 0.08;
+    for (let s = trailSteps; s >= 0; s--) {
+      const tp = Math.max(0, cPct - (s / trailSteps) * lookback);
+      const sm = sampleHighlightFrameAt(clip.frames, tp);
+      trailPts.push({ x: sm.bx, y: sm.by, z: sm.bz });
+    }
+  }
+
+  // Camera framing
+  const basePadX = Math.max(24, cssW * 0.05);
+  const basePadTop = Math.max(36, cssH * 0.11);
+  const basePadBottom = Math.max(46, cssH * 0.145);
+  const basePw = cssW - basePadX * 2;
+  const basePh = cssH - basePadTop - basePadBottom;
+
+  let zoom = 1;
+  let camX = 50;
+  let camY = 50;
+
+  if (cameraMode === 'broadcast') {
+    const goalFocusX = clip.attRight ? 90 : 10;
+    const climaxProx = 1 - clamp(Math.abs(cPct - clip.peakT) / 0.34, 0, 1);
+    zoom = 1.48 + climaxProx * 0.34;
+
+    // Smooth camera pan toward ball and goal area
+    const rawCamX = cur.bx * (0.76 - climaxProx * 0.16) + goalFocusX * (0.24 + climaxProx * 0.16);
+    const rawCamY = cur.by * 0.72 + 50 * 0.28;
+    const halfViewX = 50 / zoom;
+    const halfViewY = 50 / zoom;
+    camX = clamp(rawCamX, halfViewX - 4, 100 - halfViewX + 4);
+    camY = clamp(rawCamY, halfViewY - 5, 100 - halfViewY + 5);
+  }
+
+  const pw = basePw * zoom;
+  const ph = basePh * zoom;
+  const centerScreenX = cssW * 0.5;
+  const centerScreenY = basePadTop + basePh * 0.5;
+  const px = (x: number) => centerScreenX + ((x - camX) / 100) * pw;
+  const py = (y: number) => centerScreenY + ((y - camY) / 100) * ph;
+
+  // 1. Stadium Background
+  const env = clip.matchEnv;
+  const isRainy = env?.season === 'rainy';
+  const isNight = env?.timeOfDay === 'night';
+  const turfSpec = getTurfGradeSpec(env?.turfGrade);
+  const [stripeEven, stripeOdd, apronFill] = isNight
+    ? isRainy
+      ? turfSpec.palette.nightRainy
+      : turfSpec.palette.night
+    : isRainy
+      ? turfSpec.palette.rainy
+      : turfSpec.palette.day;
+
+  ctx.fillStyle = apronFill;
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  // Pitch bounds in screen coords
+  const pLeft = px(0);
+  const pTop = py(0);
+  const pRight = px(100);
+  const pBot = py(100);
+  const pitchW = pRight - pLeft;
+  const pitchH = pBot - pTop;
+
+  // Apron border frame around pitch
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(pLeft - 6, pTop - 6, pitchW + 12, pitchH + 12);
+  ctx.restore();
+
+  // Mowed turf stripes
+  const stripes = 12;
+  const sw = pitchW / stripes;
+  for (let i = 0; i < stripes; i++) {
+    ctx.fillStyle = i % 2 === 0 ? stripeEven : stripeOdd;
+    ctx.fillRect(pLeft + i * sw, pTop, sw + 0.6, pitchH);
+  }
+  if (turfSpec.cutStyle === 'checker' || turfSpec.cutStyle === 'hybrid_pro') {
+    const rBands = 7;
+    const bh = pitchH / rBands;
+    for (let r = 0; r < rBands; r++) {
+      if (r % 2 === 0) {
+        ctx.fillStyle = 'rgba(6, 36, 20, 0.08)';
+        ctx.fillRect(pLeft, pTop + r * bh, pitchW, bh + 0.5);
+      }
+    }
+  }
+
+  // Subtle Floodlight / Daylight Sheen
+  if (isNight) {
+    const glow = ctx.createRadialGradient(cssW * 0.5, cssH * 0.45, 20, cssW * 0.5, cssH * 0.5, cssW * 0.72);
+    glow.addColorStop(0, 'rgba(255, 250, 220, 0.14)');
+    glow.addColorStop(1, 'rgba(2, 8, 18, 0.45)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
+
+  // 2. Crisp Chalk Pitch Lines
+  ctx.save();
+  ctx.strokeStyle = 'rgba(244, 250, 244, 0.9)';
+  ctx.lineWidth = Math.max(1.3, 1.5 * Math.sqrt(zoom));
+  ctx.strokeRect(pLeft, pTop, pitchW, pitchH);
+
+  // Halfway & Center Circle
+  ctx.beginPath();
+  ctx.moveTo(px(50), pTop);
+  ctx.lineTo(px(50), pBot);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(px(50), py(50), pitchH * 0.155, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(244, 250, 244, 0.92)';
+  ctx.beginPath();
+  ctx.arc(px(50), py(50), 2.5 * zoom, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Penalty Boxes & 6-Yard Boxes
+  const boxTop = py(21);
+  const boxH = pitchH * 0.58;
+  const boxW = pitchW * 0.165;
+  const sixTop = py(36.5);
+  const sixH = pitchH * 0.27;
+  const sixW = pitchW * 0.055;
+
+  ctx.strokeRect(pLeft, boxTop, boxW, boxH);
+  ctx.strokeRect(pRight - boxW, boxTop, boxW, boxH);
+  ctx.strokeRect(pLeft, sixTop, sixW, sixH);
+  ctx.strokeRect(pRight - sixW, sixTop, sixW, sixH);
+
+  // Spots & D-arcs
+  const leftSpotX = px(11);
+  const rightSpotX = px(89);
+  const spotY = py(50);
+  ctx.beginPath();
+  ctx.arc(leftSpotX, spotY, 2.1 * zoom, 0, Math.PI * 2);
+  ctx.arc(rightSpotX, spotY, 2.1 * zoom, 0, Math.PI * 2);
+  ctx.fill();
+
+  const spotToBoxDx = Math.max(4, pLeft + boxW - leftSpotX);
+  const penArcR = Math.max(spotToBoxDx * 1.44, pitchH * 0.145);
+  const penArcAng = Math.acos(clamp(spotToBoxDx / penArcR, -0.96, 0.96));
+  ctx.beginPath();
+  ctx.arc(leftSpotX, spotY, penArcR, -penArcAng, penArcAng);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(rightSpotX, spotY, penArcR, Math.PI - penArcAng, Math.PI + penArcAng);
+  ctx.stroke();
+
+  // Corner Arcs
+  const cr = Math.max(5, pitchH * 0.032);
+  [
+    [pLeft, pTop, 0, Math.PI / 2],
+    [pRight, pTop, Math.PI / 2, Math.PI],
+    [pRight, pBot, Math.PI, Math.PI * 1.5],
+    [pLeft, pBot, Math.PI * 1.5, Math.PI * 2]
+  ].forEach(([cx, cy, sa, ea]) => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, sa, ea);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  // 3. Goal Nets with Climax Net Ripple
+  const goalTop = py(42);
+  const goalBot = py(58);
+  const goalD = Math.max(10, pitchW * 0.022);
+  const drawHlGoal = (isLeft: boolean, ripple: number) => {
+    const gx = isLeft ? pLeft - goalD : pRight;
+    const bulge = ripple > 0 ? Math.sin(ripple * 24) * 4.5 * ripple : 0;
+    ctx.save();
+    ctx.fillStyle = ripple > 0 ? 'rgba(250, 204, 21, 0.28)' : 'rgba(255, 255, 255, 0.14)';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.8, 2 * Math.sqrt(zoom));
+    ctx.beginPath();
+    if (isLeft) {
+      ctx.moveTo(pLeft, goalTop);
+      ctx.lineTo(gx - bulge, goalTop + 2);
+      ctx.lineTo(gx - bulge, goalBot - 2);
+      ctx.lineTo(pLeft, goalBot);
+    } else {
+      ctx.moveTo(pRight, goalTop);
+      ctx.lineTo(gx + goalD + bulge, goalTop + 2);
+      ctx.lineTo(gx + goalD + bulge, goalBot - 2);
+      ctx.lineTo(pRight, goalBot);
+    }
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  };
+  drawHlGoal(true, cur.ripL);
+  drawHlGoal(false, cur.ripR);
+
+  // 4. Ball Motion Trail
+  const zScale = 0.78 * zoom;
+  if (trailPts.length > 1) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 1; i < trailPts.length; i++) {
+      const p0 = trailPts[i - 1];
+      const p1 = trailPts[i];
+      const ratio = i / trailPts.length;
+      const a = ratio * (cur.shot ? 0.78 : 0.45);
+      ctx.strokeStyle =
+        cur.style === 'curler'
+          ? `rgba(56, 189, 248, ${a})`
+          : cur.style === 'trivela' || cur.style === 'bicycle' || cur.style === 'volley' || cur.style === 'screamer'
+            ? `rgba(251, 146, 60, ${a})`
+            : cur.style === 'knuckle'
+              ? `rgba(216, 180, 254, ${a})`
+              : cur.shot
+                ? `rgba(250, 204, 21, ${a})`
+                : `rgba(255, 255, 255, ${a * 0.7})`;
+      ctx.lineWidth = Math.max(1.5, (cur.shot ? 3.8 : 2.1) * ratio * Math.sqrt(zoom));
+      ctx.beginPath();
+      ctx.moveTo(px(p0.x), py(p0.y) - p0.z * zScale);
+      ctx.lineTo(px(p1.x), py(p1.y) - p1.z * zScale);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 5. Render Players (y-sorted)
+  const playerRadius = clamp(cssW * 0.0175 * (zoom > 1 ? 1 + (zoom - 1) * 0.48 : 1), 9, 17);
+  const sortedAgents = cur.agents.slice().sort((a, b) => a.y - b.y);
+  const showNames = opts.showNames !== false;
+
+  sortedAgents.forEach((agPos) => {
+    const meta = clip.actors[agPos.idx];
+    if (!meta) return;
+    const cx = px(agPos.x);
+    const cy = py(agPos.y);
+    if (cx < -30 || cx > cssW + 30 || cy < -30 || cy > cssH + 30) return;
+
+    const isStarActor = meta.id === clip.actorName;
+    const isAssister = Boolean(clip.assisterName && meta.id === clip.assisterName);
+    const isVictim = Boolean(clip.victimName && meta.id === clip.victimName);
+    const kit = meta.gk ? (meta.s === 'H' ? homeGkKit : awayGkKit) : meta.s === 'H' ? homeKit : awayKit;
+    const trim = meta.gk ? '#ffffff' : meta.s === 'H' ? homeTrim : awayTrim;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Broadcast Spotlight Aura for Hero Actor / Assister
+    if (isStarActor || isAssister) {
+      const pulse = 0.72 + 0.28 * Math.sin(cPct * Math.PI * 10);
+      ctx.strokeStyle = isStarActor
+        ? `rgba(250, 204, 21, ${(0.95 * pulse).toFixed(2)})`
+        : `rgba(52, 211, 153, ${(0.82 * pulse).toFixed(2)})`;
+      ctx.lineWidth = isStarActor ? 2.4 : 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + (isStarActor ? 6 : 4.5), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+    ctx.beginPath();
+    ctx.ellipse(0, playerRadius * 0.84, playerRadius * 0.92, playerRadius * 0.36, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Action Flairs (Dive / SuperSave / Acrobat / Kick / Celebrate)
+    const cosF = Math.cos(agPos.facing);
+    const sinF = Math.sin(agPos.facing);
+    if (agPos.act === HL_ACT.GK_DIVE) {
+      ctx.translate(0, agPos.dd * playerRadius * 0.45);
+      ctx.rotate(agPos.dd * 0.62);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, agPos.dd * (playerRadius * 1.12), playerRadius * 0.36, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (agPos.act === HL_ACT.SUPERSAVE) {
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.92)';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 7, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 11, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (agPos.act === HL_ACT.BICYCLE) {
+      ctx.translate(0, -playerRadius * 0.55);
+      ctx.rotate(-1.05);
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.92)';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 6, -Math.PI * 0.85, Math.PI * 0.25);
+      ctx.stroke();
+    } else if (agPos.act === HL_ACT.VOLLEY || agPos.act === HL_ACT.KICK) {
+      ctx.strokeStyle = 'rgba(251, 146, 60, 0.9)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 5, agPos.facing - 0.85, agPos.facing + 0.85);
+      ctx.stroke();
+    } else if (agPos.act === HL_ACT.HEADER || agPos.act === HL_ACT.DIVING_HEADER) {
+      ctx.translate(0, -playerRadius * 0.45);
+      ctx.strokeStyle = 'rgba(253, 224, 71, 0.92)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 5.5, agPos.facing - 0.9, agPos.facing + 0.9);
+      ctx.stroke();
+    } else if (agPos.act === HL_ACT.CELEBRATE) {
+      ctx.strokeStyle = 'rgba(74, 222, 128, 0.85)';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 5.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // GK ready gloves
+    if (meta.gk && agPos.act !== HL_ACT.GK_DIVE) {
+      const perpX = -sinF;
+      const perpY = cosF;
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cosF * playerRadius * 0.72 + perpX * playerRadius * 0.65, sinF * playerRadius * 0.72 + perpY * playerRadius * 0.65, playerRadius * 0.25, 0, Math.PI * 2);
+      ctx.arc(cosF * playerRadius * 0.72 - perpX * playerRadius * 0.65, sinF * playerRadius * 0.72 - perpY * playerRadius * 0.65, playerRadius * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Direction dot
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(cosF * playerRadius * 0.82, sinF * playerRadius * 0.82, 2.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Jersey circle
+    ctx.fillStyle = kit;
+    ctx.beginPath();
+    ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Clipped player portrait
+    const faceCanvas = meta.vis ? getPitchFaceCanvas(meta.vis, kit, trim) : null;
+    if (faceCanvas) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(1, playerRadius - 0.8), 0, Math.PI * 2);
+      ctx.clip();
+      const fw = playerRadius * 2.06;
+      const fh = (fw * 68) / 64;
+      ctx.drawImage(faceCanvas, -fw / 2, -fh * 0.47, fw, fh);
+      ctx.restore();
+    }
+
+    ctx.strokeStyle = isStarActor ? '#facc15' : '#ffffff';
+    ctx.lineWidth = isStarActor ? 2.2 : 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Shirt number pill or centered fallback
+    if (!faceCanvas) {
+      ctx.fillStyle = colDist(kit, '#ffffff') < 110 ? '#111827' : '#ffffff';
+      ctx.font = `800 ${Math.round(playerRadius * 0.85)}px Sarabun, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(meta.no), 0, 0.5);
+    } else {
+      const noStr = String(meta.no);
+      const badgeW = Math.max(10, noStr.length * 4.5 + 3.5);
+      const badgeH = 9.5;
+      const bx0 = -playerRadius * 1.1;
+      const by0 = playerRadius * 0.25;
+      ctx.fillStyle = 'rgba(11, 32, 24, 0.92)';
+      ctx.strokeStyle = kit;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(bx0, by0, badgeW, badgeH, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffd75e';
+      ctx.font = '800 7px Sarabun, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(noStr, bx0 + badgeW / 2, by0 + badgeH / 2 + 0.3);
+    }
+
+    // Position badge for spotlighted players
+    if (isStarActor || isAssister || isVictim) {
+      const roleStr = String(meta.ro);
+      const posPal = getPositionCanvasPalette(meta.ro);
+      ctx.font = `800 ${Math.max(6.5, Math.round(playerRadius * 0.54))}px Sarabun, sans-serif`;
+      const rw = Math.max(19, measureTextCached(ctx, roleStr) + 6);
+      const rh = 10;
+      const ry = -playerRadius - rh * 0.72;
+      ctx.fillStyle = posPal.bg;
+      ctx.strokeStyle = isStarActor ? '#facc15' : 'rgba(6, 20, 13, 0.88)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(-rw / 2, ry, rw, rh, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = posPal.text;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(roleStr, 0, ry + rh / 2 + 0.3);
+    }
+
+    // Spotlight Name Label
+    if (showNames && (isStarActor || isAssister || (isVictim && clip.kind === 'super_save'))) {
+      const lbl = isStarActor ? `★ ${meta.sn}` : meta.sn;
+      ctx.font = `700 ${Math.max(9.5, Math.round(playerRadius * 0.78))}px "Noto Sans Thai", sans-serif`;
+      const tw = measureTextCached(ctx, lbl);
+      const bw = tw + 10;
+      const bh = 14;
+      const by = playerRadius + 10;
+      ctx.fillStyle = isStarActor ? 'rgba(250, 204, 21, 0.95)' : 'rgba(6, 18, 12, 0.88)';
+      ctx.strokeStyle = isStarActor ? '#fef08a' : 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.roundRect(-bw / 2, by - bh / 2, bw, bh, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = isStarActor ? '#1a1200' : '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, 0, by + 0.3);
+    }
+
+    ctx.restore();
+  });
+
+  // 6. 3D Ball
+  const bx = px(cur.bx);
+  const by = py(cur.by);
+  const ballScale = 1 + clamp(cur.bz / 22, 0, 0.72);
+  const ballR = clamp(cssW * 0.009 * (zoom > 1 ? 1 + (zoom - 1) * 0.45 : 1), 5, 8.2) * ballScale;
+  const drawBy = by - cur.bz * zScale;
+
+  // Ball shadow
+  ctx.fillStyle = `rgba(0, 0, 0, ${clamp(0.42 - cur.bz * 0.012, 0.14, 0.42)})`;
+  ctx.beginPath();
+  ctx.ellipse(bx + cur.bz * 0.22, by + 3.2 + cur.bz * 0.28, ballR * 0.94, ballR * 0.46, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(bx, drawBy);
+  if (cur.shot) {
+    ctx.fillStyle = cur.style === 'curler' ? 'rgba(56, 189, 248, 0.36)' : 'rgba(250, 204, 21, 0.36)';
+    ctx.beginPath();
+    ctx.arc(0, 0, ballR * 1.55, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, ballR, 0, Math.PI * 2);
+  ctx.clip();
+  const sphGrad = ctx.createRadialGradient(-ballR * 0.32, -ballR * 0.34, ballR * 0.1, 0, 0, ballR * 1.05);
+  sphGrad.addColorStop(0, '#ffffff');
+  sphGrad.addColorStop(0.55, '#f1f5f9');
+  sphGrad.addColorStop(1, '#94a3b8');
+  ctx.fillStyle = sphGrad;
+  ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+
+  const spinAng = cur.bx * 0.38 + cur.by * 0.27 + cPct * 12;
+  ctx.rotate(spinAng);
+  ctx.fillStyle = '#0f172a';
+  const pentR = ballR * 0.36;
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+    const vx = Math.cos(a) * pentR;
+    const vy = Math.sin(a) * pentR;
+    if (i === 0) ctx.moveTo(vx, vy);
+    else ctx.lineTo(vx, vy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(0, 0, ballR, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // 7. Broadcast Studio HUD Overlay (Top Bug + Bottom Lower-Third Graphic)
+  // Top-left TV Replay Scorebug
+  const activeScoreStr = clip.kind.startsWith('goal_')
+    ? cPct >= clip.peakT + 0.08
+      ? clip.scoreAfter
+      : clip.scoreBefore
+    : clip.scoreAfter;
+  const bugText = `PRO STUDIO · น.${clip.minute}' · สกอร์ ${activeScoreStr}`;
+  ctx.save();
+  ctx.font = '800 10px "Noto Sans Thai", sans-serif';
+  const bugW = Math.min(cssW * 0.58, measureTextCached(ctx, bugText) + 28);
+  const bugH = 22;
+  ctx.fillStyle = 'rgba(7, 13, 24, 0.88)';
+  ctx.strokeStyle = 'rgba(250, 204, 21, 0.55)';
+  ctx.lineWidth = 1.1;
+  ctx.beginPath();
+  ctx.roundRect(10, 8, bugW, bugH, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  // Red recording dot
+  const blink = 0.55 + 0.45 * Math.sin(cPct * Math.PI * 16);
+  ctx.fillStyle = `rgba(239, 68, 68, ${blink.toFixed(2)})`;
+  ctx.beginPath();
+  ctx.arc(21, 8 + bugH / 2, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#fef08a';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(fitCanvasText(ctx, bugText, bugW - 24), 29, 8 + bugH / 2 + 0.5);
+
+  // Top-right Camera & Slow-Mo indicator
+  const camBadgeText = opts.isSlowMo
+    ? '⏱️ SLOW-MO · ทีมงานมืออาชีพ'
+    : cameraMode === 'broadcast'
+      ? '🎥 CAM-1 PRO FOCUS'
+      : '🏟️ CAM-2 WIDE ANGLE';
+  const camW = measureTextCached(ctx, camBadgeText) + 16;
+  ctx.fillStyle = opts.isSlowMo ? 'rgba(217, 119, 6, 0.92)' : 'rgba(7, 13, 24, 0.84)';
+  ctx.strokeStyle = opts.isSlowMo ? '#fde047' : 'rgba(255, 255, 255, 0.26)';
+  ctx.beginPath();
+  ctx.roundRect(cssW - camW - 10, 8, camW, bugH, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.fillText(camBadgeText, cssW - camW / 2 - 10, 8 + bugH / 2 + 0.5);
+  ctx.restore();
+
+  // Bottom Lower-Third Broadcast Graphic (Goal / Save title & telemetry)
+  ctx.save();
+  const l3H = 38;
+  const l3W = Math.min(cssW - 20, 560);
+  const l3X = 10;
+  const l3Y = cssH - l3H - 8;
+  const accentKit = clip.side === 'H' ? homeKit : awayKit;
+
+  ctx.fillStyle = 'rgba(7, 14, 24, 0.9)';
+  ctx.strokeStyle = clip.kind === 'super_save' ? 'rgba(56, 189, 248, 0.55)' : 'rgba(250, 204, 21, 0.52)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.roundRect(l3X, l3Y, l3W, l3H, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  // Team color bar on left edge
+  ctx.fillStyle = accentKit;
+  ctx.beginPath();
+  ctx.roundRect(l3X + 4, l3Y + 5, 4, l3H - 10, 2);
+  ctx.fill();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fde047';
+  ctx.font = '800 11.5px "Noto Sans Thai", sans-serif';
+  ctx.fillText(fitCanvasText(ctx, clip.title, l3W - 22), l3X + 14, l3Y + 13);
+
+  ctx.fillStyle = 'rgba(226, 232, 240, 0.9)';
+  ctx.font = '600 9.5px "Noto Sans Thai", sans-serif';
+  ctx.fillText(fitCanvasText(ctx, `${clip.subtitle} · ${clip.crewTag}`, l3W - 22), l3X + 14, l3Y + 27.5);
+  ctx.restore();
+};
+
 
 
