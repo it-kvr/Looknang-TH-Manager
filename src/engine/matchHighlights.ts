@@ -35,6 +35,12 @@ export interface SampledAgentFrame {
   ro: SubRole;
   gk?: 1;
   vis?: number[];
+  ov?: number;
+  cap?: 1;
+  me?: 1;
+  yc?: 1;
+  sub?: 1;
+  fit?: number;
   x: number;
   y: number;
   f: number;
@@ -49,6 +55,7 @@ export interface RollingHighlightSample {
   bz: number;
   shot: boolean;
   style?: string;
+  carId?: string;
   ripL: number;
   ripR: number;
   agents: SampledAgentFrame[];
@@ -106,6 +113,7 @@ export const captureWorldSample = (w: LiveMatchWorld, tsSec: number): RollingHig
     bz: r1(b.z),
     shot: inShot,
     style: b.shotStyle || (b.flightType === 'freekick' ? 'freekick' : b.flightType === 'penalty' ? 'penalty' : undefined),
+    ...(b.carrierId ? { carId: b.carrierId } : {}),
     ripL: r2(w.goalNetRippleLeft || 0),
     ripR: r2(w.goalNetRippleRight || 0),
     agents: w.agents
@@ -120,6 +128,12 @@ export const captureWorldSample = (w: LiveMatchWorld, tsSec: number): RollingHig
           ro: ag.role,
           ...(ag.pos === 'GK' ? { gk: 1 as const } : {}),
           ...(ag.vis ? { vis: ag.vis } : {}),
+          ...(ag.ov ? { ov: Math.round(ag.ov) } : {}),
+          ...(ag.isCaptain ? { cap: 1 as const } : {}),
+          ...(ag.isMe ? { me: 1 as const } : {}),
+          ...(ag.hasYellow ? { yc: 1 as const } : {}),
+          ...(ag.subbedIn ? { sub: 1 as const } : {}),
+          ...(Number.isFinite(ag.fit) ? { fit: Math.round(ag.fit) } : {}),
           x: r1(ag.x),
           y: r1(ag.y),
           f: r2(ag.facing),
@@ -414,7 +428,13 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
       no: ag.no,
       ro: ag.ro,
       ...(ag.gk ? { gk: 1 } : {}),
-      ...(ag.vis ? { vis: ag.vis } : {})
+      ...(ag.vis ? { vis: ag.vis } : {}),
+      ...(ag.ov ? { ov: ag.ov } : {}),
+      ...(ag.cap ? { cap: 1 } : {}),
+      ...(ag.me ? { me: 1 } : {}),
+      ...(ag.yc ? { yc: 1 } : {}),
+      ...(ag.sub ? { sub: 1 } : {}),
+      ...(ag.fit !== undefined ? { fit: ag.fit } : {})
     });
     return idx;
   };
@@ -431,8 +451,10 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
         : tsSpan > 0.15
           ? r3((smp.ts - minTs) / tsSpan)
           : r3(i / (totalChosen - 1));
+    let carIdx: number | undefined;
     const p: [number, number, number, number, number?, number?][] = smp.agents.map((ag) => {
       const idx = getActorIdx(ag);
+      if (smp.carId && ag.id === smp.carId) carIdx = idx;
       if (ag.act && ag.dd) return [idx, ag.x, ag.y, ag.f, ag.act, ag.dd];
       if (ag.act) return [idx, ag.x, ag.y, ag.f, ag.act];
       return [idx, ag.x, ag.y, ag.f];
@@ -444,6 +466,7 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
       bz: smp.bz,
       ...(smp.shot ? { shot: 1 } : {}),
       ...(smp.style ? { style: smp.style } : {}),
+      ...(carIdx !== undefined ? { car: carIdx } : {}),
       ...(smp.ripL > 0.04 ? { ripL: smp.ripL } : {}),
       ...(smp.ripR > 0.04 ? { ripR: smp.ripR } : {}),
       p
@@ -585,6 +608,10 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
         ro: (slot.sp || pl?.ro || 'CM') as SubRole,
         gk: slot.pos === 'GK' || pl?.pos === 'GK' ? (1 as const) : undefined,
         vis: pl ? visOf(pl, inp.careerP) : [2, 0, 0, 0, 0, i + 1, 0],
+        ov: pl?.ov ? Math.round(pl.ov) : undefined,
+        cap: tm.cap && tm.cap === n ? (1 as const) : undefined,
+        me: pl?.me || (inp.careerP?.name && inp.careerP.name === n) ? (1 as const) : undefined,
+        fit: pl?.fit ? Math.round(pl.fit) : 92,
         x: shiftX,
         y: by
       };
@@ -594,14 +621,18 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
   const hActors = buildRoster(inp.homeTeam, 'H', inp.homeLu);
   const aActors = buildRoster(inp.awayTeam, 'A', inp.awayLu);
   const combined = [...hActors, ...aActors];
-  const actors: MatchHighlightActorMeta[] = combined.map(({ id, sn, s, no, ro, gk, vis }) => ({
+  const actors: MatchHighlightActorMeta[] = combined.map(({ id, sn, s, no, ro, gk, vis, ov, cap, me, fit }) => ({
     id,
     sn,
     s,
     no,
     ro,
     ...(gk ? { gk } : {}),
-    vis
+    vis,
+    ...(ov ? { ov } : {}),
+    ...(cap ? { cap } : {}),
+    ...(me ? { me } : {}),
+    ...(fit ? { fit } : {})
   }));
 
   const scorerIdx = Math.max(0, combined.findIndex((a) => a.id === inp.scorerName));
@@ -739,6 +770,13 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
       return [aIdx, r1(ax), r1(ay), r2(facing)];
     });
 
+    const synthCar =
+      kind !== 'goal_penalty' && kind !== 'goal_freekick' && fi < 4 && assisterIdx >= 0
+        ? assisterIdx
+        : fi === peakIdx - 1 || (fi <= peakIdx && (kind === 'goal_penalty' || kind === 'goal_freekick'))
+          ? scorerIdx
+          : undefined;
+
     frames.push({
       t,
       bx: r1(bx),
@@ -746,6 +784,7 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
       bz: r1(bz),
       ...(isShot ? { shot: 1 } : {}),
       ...(isShot ? { style: kind === 'goal_curler' ? 'curler' : kind === 'goal_acrobat' ? 'bicycle' : 'shot' } : {}),
+      ...(synthCar !== undefined ? { car: synthCar } : {}),
       ...(ripL > 0 ? { ripL } : {}),
       ...(ripR > 0 ? { ripR } : {}),
       p

@@ -68,22 +68,116 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
   );
   const activeClip = orderedClips[activeIdx] || orderedClips[0];
 
-  const [pct, setPct] = useState<number>(0);
   const [playing, setPlaying] = useState<boolean>(true);
   const [speed, setSpeed] = useState<0.5 | 1 | 1.5 | 2>(1);
   const [autoAdvance, setAutoAdvance] = useState<boolean>(true);
   const [slowMoFocus, setSlowMoFocus] = useState<boolean>(true);
   const [cameraMode, setCameraMode] = useState<HighlightCameraMode>('broadcast');
+  const [isEnded, setIsEnded] = useState<boolean>(false);
+  const [showStartSlate, setShowStartSlate] = useState<boolean>(true);
+
+  const pctRef = useRef<number>(0);
+  const slowMoRef = useRef<boolean>(false);
+  const showSlateRef = useRef<boolean>(true);
+  const endedRef = useRef<boolean>(false);
+  const scrubbingRef = useRef<boolean>(false);
+  const pendingNextTimerRef = useRef<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const fillBarRef = useRef<HTMLDivElement | null>(null);
+  const thumbRef = useRef<HTMLSpanElement | null>(null);
+  const pctLabelRef = useRef<HTMLSpanElement | null>(null);
+
+  const syncDomAndState = useRef<(nextPct: number, slowNow: boolean) => void>(() => {});
+  syncDomAndState.current = (nextPct: number, slowNow: boolean) => {
+    const p = Math.min(1, Math.max(0, nextPct));
+    pctRef.current = p;
+
+    if (fillBarRef.current) {
+      fillBarRef.current.style.transform = `scaleX(${p.toFixed(4)})`;
+    }
+    if (thumbRef.current) {
+      thumbRef.current.style.left = `${(p * 100).toFixed(2)}%`;
+    }
+    if (pctLabelRef.current) {
+      pctLabelRef.current.textContent = `${Math.round(p * 100)}%`;
+    }
+
+    const canvas = canvasRef.current;
+    if (canvas && activeClip) {
+      drawHighlightClipToCanvas(canvas, activeClip, p, {
+        homeTeamName: homeOrig.name,
+        awayTeamName: awayOrig.name,
+        homeKit,
+        awayKit,
+        homeGkKit,
+        awayGkKit,
+        homeTrim,
+        awayTrim,
+        cameraMode,
+        isSlowMo: slowNow,
+        showNames: true
+      });
+    }
+
+    const slateNow = p < 0.08;
+    if (slateNow !== showSlateRef.current) {
+      showSlateRef.current = slateNow;
+      setShowStartSlate(slateNow);
+    }
+    const endNow = p >= 0.995;
+    if (endNow !== endedRef.current) {
+      endedRef.current = endNow;
+      setIsEnded(endNow);
+    }
+  };
 
   useEffect(() => {
-    setPct(0);
+    if (pendingNextTimerRef.current !== null) {
+      window.clearTimeout(pendingNextTimerRef.current);
+      pendingNextTimerRef.current = null;
+    }
+    pctRef.current = 0;
+    slowMoRef.current = false;
+    showSlateRef.current = true;
+    endedRef.current = false;
+    setShowStartSlate(true);
+    setIsEnded(false);
     setPlaying(true);
+    syncDomAndState.current(0, false);
   }, [activeClip?.id]);
 
-  // Smooth RAF playback with automatic Slow-Mo around peakT
+  // Redraw immediately when static visual options change & observe stage resize ONCE (never recreated per frame!)
+  useEffect(() => {
+    if (!activeClip) return;
+    const isSlow = Boolean(slowMoFocus && playing && Math.abs(pctRef.current - activeClip.peakT) <= 0.12);
+    slowMoRef.current = isSlow;
+    syncDomAndState.current(pctRef.current, isSlow);
+
+    const target = stageRef.current;
+    if (!target || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      syncDomAndState.current(pctRef.current, slowMoRef.current);
+    });
+    ro.observe(target);
+    return () => ro.disconnect();
+  }, [
+    activeClip,
+    homeOrig.name,
+    awayOrig.name,
+    homeKit,
+    awayKit,
+    homeGkKit,
+    awayGkKit,
+    homeTrim,
+    awayTrim,
+    cameraMode,
+    playing,
+    slowMoFocus
+  ]);
+
+  // Smooth zero-React-rerender 60fps RAF playback with automatic Slow-Mo around peakT
   useEffect(() => {
     if (!playing || !activeClip) return;
     let rafId = 0;
@@ -94,84 +188,58 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
       const dt = Math.min(0.05, Math.max(0.001, (now - lastTs) / 1000));
       lastTs = now;
 
-      setPct((prev) => {
-        const nearClimax = slowMoFocus && Math.abs(prev - activeClip.peakT) <= 0.12;
-        const slowMul = nearClimax ? 0.42 : 1;
-        const next = prev + (dt * speed * slowMul) / baseDurationSec;
-        if (next >= 1) {
-          if (autoAdvance && orderedClips.length > 1 && activeIdx < orderedClips.length - 1) {
-            const nextClip = orderedClips[activeIdx + 1];
-            window.setTimeout(() => {
-              setActiveId(nextClip.id);
-              setPct(0);
-              setPlaying(true);
-            }, 350);
-          } else {
-            setPlaying(false);
-          }
-          return 1;
+      const prev = pctRef.current;
+      const nearClimax = slowMoFocus && Math.abs(prev - activeClip.peakT) <= 0.12;
+      slowMoRef.current = nearClimax;
+      const slowMul = nearClimax ? 0.42 : 1;
+      const next = Math.min(1, prev + (dt * speed * slowMul) / baseDurationSec);
+
+      syncDomAndState.current(next, nearClimax);
+
+      if (next >= 1) {
+        if (autoAdvance && orderedClips.length > 1 && activeIdx < orderedClips.length - 1) {
+          const nextClip = orderedClips[activeIdx + 1];
+          pendingNextTimerRef.current = window.setTimeout(() => {
+            pendingNextTimerRef.current = null;
+            setActiveId(nextClip.id);
+          }, 350);
+        } else {
+          setPlaying(false);
         }
-        return next;
-      });
+        return;
+      }
+
       rafId = window.requestAnimationFrame(tick);
     };
 
     rafId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(rafId);
-  }, [playing, speed, slowMoFocus, autoAdvance, activeClip, activeIdx, orderedClips]);
-
-  const isCurrentlySlowMo = Boolean(
-    activeClip && slowMoFocus && playing && Math.abs(pct - activeClip.peakT) <= 0.12
-  );
-
-  // Canvas draw & resize observer
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !activeClip) return;
-    const render = () => {
-      drawHighlightClipToCanvas(canvas, activeClip, pct, {
-        homeTeamName: homeOrig.name,
-        awayTeamName: awayOrig.name,
-        homeKit,
-        awayKit,
-        homeGkKit,
-        awayGkKit,
-        homeTrim,
-        awayTrim,
-        cameraMode,
-        isSlowMo: isCurrentlySlowMo,
-        showNames: true
-      });
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      if (pendingNextTimerRef.current !== null) {
+        window.clearTimeout(pendingNextTimerRef.current);
+        pendingNextTimerRef.current = null;
+      }
     };
-    render();
-    const target = stageRef.current;
-    if (!target || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => render());
-    ro.observe(target);
-    return () => ro.disconnect();
-  }, [
-    activeClip,
-    pct,
-    homeOrig.name,
-    awayOrig.name,
-    homeKit,
-    awayKit,
-    homeGkKit,
-    awayGkKit,
-    homeTrim,
-    awayTrim,
-    cameraMode,
-    isCurrentlySlowMo
-  ]);
+  }, [playing, speed, slowMoFocus, autoAdvance, activeClip, activeIdx, orderedClips]);
 
   if (!activeClip) return null;
 
   const badgeMeta = getHighlightKindBadge(activeClip.kind);
 
+  const seekToRatio = (ratio: number) => {
+    const r = Math.min(1, Math.max(0, ratio));
+    const isSlow = Boolean(slowMoFocus && playing && Math.abs(r - activeClip.peakT) <= 0.12);
+    slowMoRef.current = isSlow;
+    syncDomAndState.current(r, isSlow);
+  };
+
   const handleTogglePlay = () => {
     SFX.tap();
-    if (pct >= 0.995) {
-      setPct(0);
+    if (pctRef.current >= 0.995) {
+      pctRef.current = 0;
+      endedRef.current = false;
+      setIsEnded(false);
+      syncDomAndState.current(0, false);
       setPlaying(true);
       return;
     }
@@ -180,9 +248,15 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
 
   const handleSelectClip = (clipId: string) => {
     SFX.tap();
+    if (clipId === activeClip.id) {
+      pctRef.current = 0;
+      endedRef.current = false;
+      setIsEnded(false);
+      syncDomAndState.current(0, false);
+      setPlaying(true);
+      return;
+    }
     setActiveId(clipId);
-    setPct(0);
-    setPlaying(true);
   };
 
   const handlePrev = () => {
@@ -271,8 +345,8 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
               />
 
               {/* Brief Director Title Slate on Clip Start */}
-              {pct < 0.08 && (
-                <div className="pointer-events-none absolute top-11 left-4 right-4 sm:left-auto sm:max-w-sm px-3 py-2 rounded-xl bg-slate-950/90 border border-amber-400/55 shadow-xl backdrop-blur-xs">
+              {showStartSlate && (
+                <div className="pointer-events-none absolute top-11 left-4 right-4 sm:left-auto sm:max-w-sm px-3 py-2 rounded-xl bg-slate-950/90 border border-amber-400/55 shadow-xl">
                   <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-300">
                     <span>{badgeMeta.icon}</span>
                     <span>ช็อตที่ {activeIdx + 1} · นาที {activeClip.minute}&apos;</span>
@@ -291,17 +365,30 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                   น.{activeClip.minute}&apos;
                 </span>
                 <div
-                  className="relative flex-1 h-4 flex items-center cursor-pointer group"
-                  onClick={(e) => {
+                  className="relative flex-1 h-4 flex items-center cursor-pointer group touch-none select-none"
+                  onPointerDown={(e) => {
+                    scrubbingRef.current = true;
+                    e.currentTarget.setPointerCapture(e.pointerId);
                     const rect = e.currentTarget.getBoundingClientRect();
-                    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / Math.max(1, rect.width)));
-                    setPct(ratio);
+                    seekToRatio((e.clientX - rect.left) / Math.max(1, rect.width));
+                  }}
+                  onPointerMove={(e) => {
+                    if (!scrubbingRef.current) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    seekToRatio((e.clientX - rect.left) / Math.max(1, rect.width));
+                  }}
+                  onPointerUp={() => {
+                    scrubbingRef.current = false;
+                  }}
+                  onPointerCancel={() => {
+                    scrubbingRef.current = false;
                   }}
                 >
                   <div className="w-full h-1.5 rounded-full bg-white/15 overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-amber-400 via-yellow-300 to-emerald-400 transition-[width] duration-75"
-                      style={{ width: `${Math.round(pct * 100)}%` }}
+                      ref={fillBarRef}
+                      className="w-full h-full origin-left bg-gradient-to-r from-amber-400 via-yellow-300 to-emerald-400 will-change-transform"
+                      style={{ transform: 'scaleX(0)' }}
                     />
                   </div>
                   {/* Climax peakT marker */}
@@ -312,12 +399,16 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                   />
                   {/* Scrubber thumb */}
                   <span
+                    ref={thumbRef}
                     className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white border-2 border-amber-400 shadow-md pointer-events-none"
-                    style={{ left: `${Math.round(pct * 100)}%` }}
+                    style={{ left: '0%' }}
                   />
                 </div>
-                <span className="text-[10px] mland:text-[8.5px] font-bold tabular text-white/65 w-10 text-right shrink-0">
-                  {Math.round(pct * 100)}%
+                <span
+                  ref={pctLabelRef}
+                  className="text-[10px] mland:text-[8.5px] font-bold tabular text-white/65 w-10 text-right shrink-0"
+                >
+                  0%
                 </span>
               </div>
 
@@ -340,7 +431,7 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                 onClick={handleTogglePlay}
                 className="h-7 mland:h-6 px-2.5 rounded-md bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-[11px] mland:text-[9.5px] inline-flex items-center gap-1 cursor-pointer transition-colors shrink-0"
               >
-                {pct >= 0.995 ? (
+                {isEnded ? (
                   <>
                     <RotateCcw className="w-3 h-3" />
                     <span>ดูซ้ำ</span>

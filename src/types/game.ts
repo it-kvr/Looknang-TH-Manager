@@ -1518,6 +1518,12 @@ export interface MatchHighlightActorMeta {
   ro: SubRole;
   gk?: 1;
   vis?: number[];
+  ov?: number;
+  cap?: 1;
+  me?: 1;
+  yc?: 1;
+  sub?: 1;
+  fit?: number;
 }
 
 export interface MatchHighlightFrame {
@@ -1529,6 +1535,7 @@ export interface MatchHighlightFrame {
   style?: string;
   ripL?: number;
   ripR?: number;
+  car?: number;
   p: [number, number, number, number, number?, number?][];
 }
 
