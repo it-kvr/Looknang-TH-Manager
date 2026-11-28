@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronUp, Globe, Lock, RefreshCw, Search, SlidersHorizontal, Star, Trash2, Unlock, Users, X } from 'lucide-react';
 import type { SubRole, MainTab, NavIntent, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
-import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
+import { NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, BASE, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS, CONFED_META, COUNTRY_META_BY_CODE, getCountryMetaByCode, getForeignTeamCountryMeta, getCountriesOrderedByFootballPopularity, type ForeignConfed } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -211,7 +211,7 @@ export const MarketView = React.memo<{
   onToast: (msg: string) => void;
   navIntent?: NavIntent | null;
 }>(({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
-  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'k');
+  const { isFocused } = useNavFocus(navIntent, 'k');
   const me = state.teams[state.me];
   const tx = getLeagueTransferContext(state, me);
   const clubK = ensureClubIdentity(state);
@@ -2057,8 +2057,6 @@ export const MarketView = React.memo<{
           );
         })}
       </div>
-
-      <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
 
       {/* SECTION 1: BUY & LOAN PLAYERS */}
       {activeTab === 'buy' && (
@@ -4298,13 +4296,13 @@ export const MarketView = React.memo<{
           <section
             data-focus-id="scout-report"
             className={`rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden ${
-              isFocused('scout-report') ? 'task-focus-spotlight' : ''
+              isFocused('scout-report') ? 'task-focus-spotlight task-focus-spotlight-emerald' : ''
             }`}
           >
             <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
               <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate flex items-center gap-1.5">
                 <span>{state.scout?.results ? `📋 รายงาน: ${state.scout.label}` : '📋 รายงานผลการส่อง'}</span>
-                {isFocused('scout-report') && <NavFocusBadge />}
+                {isFocused('scout-report') && <NavFocusBadge tone="emerald" />}
               </h3>
               {state.scout?.results && (
                 <button

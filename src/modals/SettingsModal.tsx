@@ -30,7 +30,6 @@ import {
   exitFullscreenSafe,
   getFullscreenElement,
   isMobileDevice,
-  isVirtualLandscapeActive,
   onFullscreenChange,
 } from '../utils/fullscreen';
 import { exportSaveCode, cleanImportJson, readSaveFileText } from '../engine/saveCodec';
@@ -143,17 +142,14 @@ export const SettingsModal: React.FC<{
   const [folderInitialTab, setFolderInitialTab] = useState<'folder' | 'code'>('folder');
   const [savingToFolder, setSavingToFolder] = useState(false);
   const [fsActive, setFsActive] = useState<boolean>(() => Boolean(getFullscreenElement()));
-  const [vLandActive, setVLandActive] = useState<boolean>(() => isVirtualLandscapeActive());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const syncFsState = () => {
       setFsActive(Boolean(getFullscreenElement()));
-      setVLandActive(isVirtualLandscapeActive());
     };
     const offFs = onFullscreenChange((active) => {
       setFsActive(active);
-      setVLandActive(isVirtualLandscapeActive());
     });
     window.addEventListener('resize', syncFsState);
     window.addEventListener('orientationchange', syncFsState);
@@ -234,7 +230,7 @@ export const SettingsModal: React.FC<{
 
   const curMatchSpeed = getDefaultMatchSpeed(st);
   const curSpeedLabel = MATCH_SPEED_OPTIONS.find((opt) => opt.value === curMatchSpeed)?.label ?? 'ปกติ';
-  const isCurrentlyFs = fsActive || vLandActive;
+  const isCurrentlyFs = fsActive;
   const onMobile = isMobileDevice();
   const activeSaveTitle =
     state.mode === 'm'
@@ -499,16 +495,14 @@ export const SettingsModal: React.FC<{
                     exitFullscreenSafe()
                       .then(() => {
                         setFsActive(Boolean(getFullscreenElement()));
-                        setVLandActive(isVirtualLandscapeActive());
                       })
                       .catch(() => undefined);
                     onToast('ออกจากโหมดเต็มจอแล้ว');
                   } else {
                     update({ preferFullscreen: true });
-                    enterLandscapeFullscreen(true, { allowVirtualFallback: true })
+                    enterLandscapeFullscreen(true)
                       .then(() => {
                         setFsActive(Boolean(getFullscreenElement()));
-                        setVLandActive(isVirtualLandscapeActive());
                       })
                       .catch(() => undefined);
                     onToast(onMobile ? 'เข้าสู่โหมดเต็มจอแนวนอนแล้ว' : 'เข้าสู่โหมดเต็มจอแล้ว');

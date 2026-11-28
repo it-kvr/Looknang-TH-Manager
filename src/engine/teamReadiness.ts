@@ -125,16 +125,19 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
     );
 
     if (state.dilemma) {
+      const isPressDilemma = Boolean(
+        state.dilemma.isPress || state.dilemma.id === 'media_interview' || state.dilemma.id.startsWith('press_')
+      );
       tasks.push({
         id: 'active-dilemma',
         kind: 'alert',
         tone: 'urg',
-        icon: '📌',
-        shortLabel: 'เหตุการณ์ใหม่',
-        tag: `เหตุการณ์ · ${state.dilemma.category}`,
+        icon: isPressDilemma ? '🎙️' : '📌',
+        shortLabel: isPressDilemma ? 'สัมภาษณ์สื่อ' : 'เหตุการณ์ใหม่',
+        tag: isPressDilemma ? `สัมภาษณ์ · ${state.dilemma.outlet || 'สื่อกีฬา'}` : `เหตุการณ์ · ${state.dilemma.category}`,
         title: state.dilemma.title,
-        detail: 'กดเปิดดูและตัดสินใจภายหลังได้',
-        actionLabel: 'เปิดดู',
+        detail: isPressDilemma ? 'รอตอบคำถามสื่อมวลชน' : 'กดเปิดดูและตัดสินใจภายหลังได้',
+        actionLabel: isPressDilemma ? 'ให้สัมภาษณ์' : 'เปิดดู',
         quickAction: { type: 'open_dilemma' }
       });
     }
@@ -532,16 +535,19 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
     avgXiFit = Math.round(p.en ?? 100);
 
     if (state.dilemma) {
+      const isPressDilemma = Boolean(
+        state.dilemma.isPress || state.dilemma.id === 'media_interview' || state.dilemma.id.startsWith('press_')
+      );
       tasks.push({
         id: 'active-dilemma',
         kind: 'alert',
         tone: 'urg',
-        icon: '📌',
-        shortLabel: 'เหตุการณ์ใหม่',
-        tag: `เหตุการณ์ · ${state.dilemma.category}`,
+        icon: isPressDilemma ? '🎙️' : '📌',
+        shortLabel: isPressDilemma ? 'สัมภาษณ์สื่อ' : 'เหตุการณ์ใหม่',
+        tag: isPressDilemma ? `สัมภาษณ์ · ${state.dilemma.outlet || 'สื่อกีฬา'}` : `เหตุการณ์ · ${state.dilemma.category}`,
         title: state.dilemma.title,
-        detail: 'กดเปิดดูและตัดสินใจภายหลังได้',
-        actionLabel: 'เปิดดู',
+        detail: isPressDilemma ? 'รอตอบคำถามสื่อมวลชน' : 'กดเปิดดูและตัดสินใจภายหลังได้',
+        actionLabel: isPressDilemma ? 'ให้สัมภาษณ์' : 'เปิดดู',
         quickAction: { type: 'open_dilemma' }
       });
     }

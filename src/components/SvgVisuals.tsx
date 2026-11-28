@@ -430,7 +430,15 @@ export const KitJersey: React.FC<{
   const gkBase = isGK ? pickGK(club.c1, club.c2) : null;
   const c = gkBase || (away ? club.c2 : club.c1);
   const d = gkBase ? (colDist(gkBase, '#111827') > 160 ? '#111827' : '#ffffff') : (away ? club.c1 : club.c2);
-  const accent = gkBase ? '#ffffff' : (club.c3 || (colDist(d, '#ffffff') < 100 ? '#f4c63d' : '#ffffff'));
+  const accent = gkBase
+    ? (colLum(gkBase) > 0.58 ? '#111827' : '#ffffff')
+    : (club.c3 && colDist(c, club.c3) >= 110
+        ? club.c3
+        : colDist(c, '#ffffff') < 140
+          ? d
+          : colDist(d, '#ffffff') < 100
+            ? '#f4c63d'
+            : '#ffffff');
   const gkPatterns = [0, 4, 6, 10, 12, 13];
   const rawPat = ((away && club.awayKit != null ? club.awayKit : club.kit) || 0) % KIT_PATTERNS.length;
   const p = isGK ? gkPatterns[(rawPat + 2) % gkPatterns.length] : rawPat;

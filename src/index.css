@@ -4,9 +4,6 @@
   @media (orientation: landscape) and (max-height: 540px) {
     @slot;
   }
-  &:where(html.is-virtual-landscape *) {
-    @slot;
-  }
 }
 
 :root {
@@ -90,13 +87,13 @@ body {
 :-webkit-full-screen,
 html.is-fullscreen,
 html.is-fullscreen body,
-html.is-fullscreen:not(.is-virtual-landscape) #root,
+html.is-fullscreen #root,
 html.is-standalone,
 html.is-standalone body,
-html.is-standalone:not(.is-virtual-landscape) #root,
+html.is-standalone #root,
 html.is-fs-peek,
 html.is-fs-peek body,
-html.is-fs-peek:not(.is-virtual-landscape) #root {
+html.is-fs-peek #root {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -106,10 +103,10 @@ html.is-fs-peek:not(.is-virtual-landscape) #root {
   background-color: var(--bg);
 }
 
-html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape),
-html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape) body,
-html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape) #root,
-html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape) .fixed.inset-0 {
+html.is-fs-peek:not(.kb-open),
+html.is-fs-peek:not(.kb-open) body,
+html.is-fs-peek:not(.kb-open) #root,
+html.is-fs-peek:not(.kb-open) .fixed.inset-0 {
   top: 0;
   left: 0;
   right: auto;
@@ -118,55 +115,28 @@ html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape) .fixed.inset-0 {
   height: var(--app-h, 100%);
 }
 
-html.is-fullscreen:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape),
-html.is-standalone:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape),
-html.is-fullscreen:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) body,
-html.is-standalone:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) body,
-html.is-fullscreen:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) #root,
-html.is-standalone:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) #root {
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open),
+html.is-standalone:not(.is-fs-peek):not(.kb-open),
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open) body,
+html.is-standalone:not(.is-fs-peek):not(.kb-open) body,
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open) #root,
+html.is-standalone:not(.is-fs-peek):not(.kb-open) #root {
   inset: 0;
   width: 100%;
   height: 100%;
   margin: 0;
 }
 
-html.kb-open:not(.is-virtual-landscape),
-html.kb-open:not(.is-virtual-landscape) body,
-html.kb-open:not(.is-virtual-landscape) #root {
+html.kb-open,
+html.kb-open body,
+html.kb-open #root {
   height: var(--kb-vh, 100dvh);
   max-height: var(--kb-vh, 100dvh);
 }
 
-html.kb-open:not(.is-virtual-landscape) .fixed.inset-0 {
+html.kb-open .fixed.inset-0 {
   height: var(--kb-vh, 100dvh);
   max-height: var(--kb-vh, 100dvh);
-}
-
-html.is-virtual-landscape,
-html.is-virtual-landscape body {
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  overscroll-behavior: none;
-  background-color: var(--bg);
-}
-
-html.is-virtual-landscape #root {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: auto;
-  bottom: auto;
-  width: var(--vland-w, 100dvh);
-  height: var(--vland-h, 100vw);
-  max-height: none;
-  margin: 0;
-  transform-origin: 0 0;
-  transform: rotate(90deg) translateY(-100%);
-  overflow: hidden;
 }
 
 html:fullscreen::backdrop,
@@ -222,11 +192,6 @@ html:-webkit-full-screen::backdrop {
     --stage-px: 0.5rem;
     --stage-py: 0.5rem;
   }
-}
-
-html.is-virtual-landscape .stage-viewport {
-  --stage-px: 0.5rem;
-  --stage-py: 0.5rem;
 }
 
 html,
@@ -329,10 +294,6 @@ button:not(:disabled):active {
   }
 }
 
-html.is-virtual-landscape {
-  font-size: clamp(11.5px, calc(var(--app-dvh, 1dvh) * 3.05), 13.5px);
-}
-
 .font-display {
   font-family: 'Chakra Petch', 'Noto Sans Thai', system-ui, sans-serif;
 }
@@ -356,10 +317,6 @@ html.is-virtual-landscape {
   .game-card {
     border-radius: 0.75rem;
   }
-}
-
-html.is-virtual-landscape .game-card {
-  border-radius: 0.75rem;
 }
 
 .dark .game-card {
@@ -896,20 +853,42 @@ html.is-virtual-landscape .game-card {
 }
 
 .task-focus-spotlight {
+  --spot-ring: rgba(245, 158, 11, 0.9);
+  --spot-soft: rgba(245, 158, 11, 0.45);
+  --spot-glow: rgba(245, 158, 11, 0.16);
   position: relative;
-  border-color: var(--lamp) !important;
-  box-shadow: 0 0 0 1.5px rgba(245, 194, 66, 0.65);
+  border-color: var(--spot-ring) !important;
+  box-shadow: inset 0 0 0 1px var(--spot-soft), inset 0 0 12px var(--spot-glow);
+}
+
+.task-focus-spotlight-rose {
+  --spot-ring: rgba(244, 63, 94, 0.92);
+  --spot-soft: rgba(244, 63, 94, 0.45);
+  --spot-glow: rgba(244, 63, 94, 0.16);
+}
+
+.task-focus-spotlight-sky {
+  --spot-ring: rgba(14, 165, 233, 0.92);
+  --spot-soft: rgba(14, 165, 233, 0.45);
+  --spot-glow: rgba(14, 165, 233, 0.16);
+}
+
+.task-focus-spotlight-emerald {
+  --spot-ring: rgba(16, 185, 129, 0.92);
+  --spot-soft: rgba(16, 185, 129, 0.45);
+  --spot-glow: rgba(16, 185, 129, 0.16);
 }
 
 .task-focus-spotlight::after {
   content: '';
   position: absolute;
-  inset: -1px;
+  inset: 0;
+  z-index: 20;
   border-radius: inherit;
   pointer-events: none;
-  box-shadow: 0 0 0 2px rgba(245, 194, 66, 0.9), 0 0 18px rgba(245, 194, 66, 0.4);
+  box-shadow: inset 0 0 0 2px var(--spot-ring), inset 0 0 14px var(--spot-glow);
   will-change: opacity;
-  animation: task-focus-opacity 1.6s ease-in-out infinite;
+  animation: task-focus-opacity 1.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

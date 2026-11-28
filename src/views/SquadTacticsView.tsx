@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MainTab, NavIntent, Position, SubRole, Mentality, Player, CustomSlot, Team, GameState, PitchDragPreview } from '../types/game';
-import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
+import { NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
@@ -45,7 +45,7 @@ export const SquadTacticsView = React.memo<{
   onToast: (msg: string) => void;
   navIntent?: NavIntent | null;
 }>(({ state, onUpdateState, onShallowPatch, onInspectPlayer, onNavigate, onToast, navIntent }) => {
-  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'q');
+  const { clearFocus, isFocused } = useNavFocus(navIntent, 'q');
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = (state.sub ?? 0) > 3 ? 0 : (state.sub ?? 0);
@@ -1299,14 +1299,6 @@ export const SquadTacticsView = React.memo<{
                   {subTabBar}
                 </div>
 
-                {activeHint && (
-                  <NavFocusBanner
-                    hint={activeHint}
-                    onJumpToTarget={scrollToFocused}
-                    onDismiss={clearFocus}
-                  />
-                )}
-
                 {/* Squad Panel */}
                 <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
                   <SquadListHeaderBar
@@ -1327,11 +1319,11 @@ export const SquadTacticsView = React.memo<{
                     <div
                       data-focus-id="xi-unready"
                       className={`shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 border-b border-rose-500/40 bg-rose-500/10 flex items-center justify-between gap-2 ${
-                        isFocused('xi-unready') ? 'task-focus-spotlight' : ''
+                        isFocused('xi-unready') ? 'task-focus-spotlight task-focus-spotlight-rose' : ''
                       }`}
                     >
                       <div className="min-w-0 flex items-center gap-1.5 text-[10.5px] mland:text-[9px]">
-                        {isFocused('xi-unready') && <NavFocusBadge label="แก้ตรงนี้" />}
+                        {isFocused('xi-unready') && <NavFocusBadge tone="rose" />}
                         <span className="font-bold text-rose-700 dark:text-rose-300 truncate">
                           ⚠️ ตัวจริงเจ็บ/แบน {unreadyStarters.length} คน: {unreadyStarters.map((q) => q.n.split(' ')[0]).join(', ')}
                         </span>

@@ -4,7 +4,7 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { AnimatedMoney } from '../components/AnimatedMoney';
 import { EffectText } from '../components/DeltaText';
-import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
+import { NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -49,7 +49,6 @@ import {
   getTeamSeasonObjectiveInfo,
   getActiveBoardEffects,
   getBoardDirectiveProgress,
-  issueBoardDirective,
   getClubFinanceChartData,
   MAX_FACILITY_LV,
   MAX_STAFF_LV,
@@ -159,7 +158,7 @@ export const FinanceClubView = React.memo<{
   onOpenManagerCareer?: (initialTab?: 'career' | 'nt') => void;
   navIntent?: NavIntent | null;
 }>(({ tab, state, onUpdateState, onNavigate, onToast, onInspectPlayer, onOpenSeasonStats, onOpenManagerCareer, navIntent }) => {
-  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, ['f', 'u']);
+  const { isFocused } = useNavFocus(navIntent, ['f', 'u']);
   const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'megastore' | 'ledger'>('overview');
   const [merchPeriod, setMerchPeriod] = useState<'season' | 'alltime' | 'seasons'>('season');
   const [partnerFilter, setPartnerFilter] = useState<'all' | 'ready' | 'merch'>('all');
@@ -778,8 +777,6 @@ export const FinanceClubView = React.memo<{
             </button>
           ))}
         </div>
-
-        <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
 
         {/* Sub-tab 1: Cashflow Comparison Table, FFP Health, Trend Chart & Next-Match Boosters */}
         {finTab === 'overview' && (
@@ -3477,8 +3474,6 @@ export const FinanceClubView = React.memo<{
         ))}
       </div>
 
-      <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
-
       {/* Club Tab 1: Basic Info + Board Confidence & Dressing Room */}
       {clubTab === 'info' && (() => {
         const coachVis = k.managerVis && k.managerVis.length >= 8 ? k.managerVis : getDefaultCoachVis(k.managerName || k.name || 'coach');
@@ -4053,25 +4048,10 @@ export const FinanceClubView = React.memo<{
                         </div>
                       );
                     })() : (
-                      <div className="flex items-center justify-between gap-2 text-[10.5px]">
-                        <span className="text-[var(--mut)] truncate">
-                          ภารกิจเสริมจากบอร์ด: ว่างอยู่ (รับเพื่อลุ้นความเชื่อมั่น เครดิต &amp; ขวัญทีม)
-                        </span>
-                        {(state.md ?? 0) < (state.fx?.length || 30) - 2 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              onUpdateState((d) => {
-                                issueBoardDirective(d);
-                              });
-                              onToast('รับภารกิจเสริมจากบอร์ดแล้ว');
-                            }}
-                            className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
-                          >
-                            + รับภารกิจ
-                          </button>
-                        )}
+                      <div className="text-[10.5px] text-[var(--mut)]">
+                        {(state.md ?? 0) >= (state.fx?.length || 30) - 2
+                          ? 'ภารกิจจากบอร์ด: ช่วงโค้งสุดท้ายปิดฤดูกาล (บอร์ดจะมอบหมายภารกิจใหม่อัตโนมัติต้นฤดูกาลหน้า)'
+                          : 'ภารกิจจากบอร์ด: บอร์ดกำลังเตรียมมอบหมายภารกิจรอบถัดไปให้อัตโนมัติหลังจบแมตช์'}
                       </div>
                     )}
 

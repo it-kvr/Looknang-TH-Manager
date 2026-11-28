@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Scissors } from 'lucide-react';
 import type { NavIntent, Player, GameState } from '../types/game';
-import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
+import { NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { EffectText } from '../components/DeltaText';
 import { clamp } from '../utils/math';
 import { PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, SPN, ATT } from '../data/thaiFootballData';
@@ -56,7 +56,7 @@ export const PlayerCareerView = React.memo<{
   const [skillSubTab, setSkillSubTab] = useState<'perks' | 'traits' | 'roles' | 'sig'>('perks');
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [showAppearanceModal, setShowAppearanceModal] = useState(false);
-  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'p');
+  const { isFocused } = useNavFocus(navIntent, 'p');
 
   useEffect(() => {
     if (navIntent?.tab === 'p') {
@@ -256,8 +256,6 @@ export const PlayerCareerView = React.memo<{
           ))}
         </div>
 
-        <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
-
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {careerTab === 'plan' && (
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col justify-between gap-2 mland:gap-1.5 overflow-y-auto">
@@ -361,7 +359,7 @@ export const PlayerCareerView = React.memo<{
               >
                 {isFocused('wellbeing') && (
                   <div className="px-2 pb-1 flex items-center justify-between gap-2">
-                    <NavFocusBadge label="ดูแลสภาพใจ/กายตรงนี้" />
+                    <NavFocusBadge />
                     <span className="text-[10px] text-[var(--mut)]">กดปุ่มฟื้นฟูหรือคุยปรับใจด้านล่าง</span>
                   </div>
                 )}

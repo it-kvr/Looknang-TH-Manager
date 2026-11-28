@@ -86,6 +86,7 @@ export const packSavePlayer = (q: Player): unknown[] => {
   if (q.altRoles && q.altRoles.length) ex.ar = q.altRoles;
   if (q.roleExp && Object.keys(q.roleExp).length) ex.re = q.roleExp;
   if (q.customPers !== undefined) ex.cp = q.customPers;
+  if (q.persCd !== undefined) ex.pcd = q.persCd;
   if (q.history && q.history.length) {
     ex.hi = q.history.map((h) => {
       const hasCupHist = Boolean(h.cupSp || h.cupSg || h.cupSa || h.cupCs || h.cupMotm || h.cupAvgRating);
@@ -251,6 +252,7 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   if (Array.isArray(ex.ar)) p.altRoles = ex.ar.map((x) => String(x) as SubRole);
   if (ex.re && typeof ex.re === 'object') p.roleExp = ex.re as Record<string, number>;
   if (ex.cp !== undefined) p.customPers = Number(ex.cp);
+  if (ex.pcd !== undefined) p.persCd = Number(ex.pcd);
   if (Array.isArray(ex.hi)) {
     p.history = (ex.hi as unknown[]).map((item): PlayerSeasonHistoryRecord => {
       if (!Array.isArray(item)) return item as PlayerSeasonHistoryRecord;

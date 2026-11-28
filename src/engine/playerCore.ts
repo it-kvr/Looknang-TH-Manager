@@ -1,7 +1,7 @@
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, PlayerSeasonHistoryRecord, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate, PreferredFoot } from '../types/game';
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp, capMoney } from '../utils/math';
-import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
+import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, AWAY_KIT_PAIRINGS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
 import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, COUNTRY_META_BY_CODE, LEGACY_FOREIGN_CLUB_RENAMES, LEGACY_THAI_CLUB_PREFIX_RENAMES, LEGACY_THAI_STANDALONE_RENAMES, getForeignClubStadiumName, getForeignTeamCountryMeta, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
 import { ensureTeamWellbeing, getActiveFavBoost, getWellbeingOvrAdjustment, initPlayerWellbeing } from './wellbeing';
 
@@ -2798,15 +2798,30 @@ export const colDist = (a: string, b: string) => {
 };
 
 export const awayOf = (c1: string) => {
-  const pool = ['#ffffff', '#f4c63d', '#111827', '#2f6fd6', '#c0392b', '#38bdf8', '#7c3aed', '#e67e22'];
-  return pool.slice().sort((x, y) => colDist(c1, y) - colDist(c1, x))[0];
+  const l1 = colLum(c1);
+  const pool =
+    l1 < 0.48
+      ? ['#ffffff', '#fef08a', '#bae6fd', '#a7f3d0', '#fed7aa', '#f8fafc']
+      : ['#0f172a', '#1e3a8a', '#7f1d1d', '#064e3b', '#4c1d95', '#111827'];
+  return pool
+    .slice()
+    .sort((x, y) => {
+      const sy = colDist(c1, y) + Math.abs(l1 - colLum(y)) * 220;
+      const sx = colDist(c1, x) + Math.abs(l1 - colLum(x)) * 220;
+      return sy - sx;
+    })[0];
 };
 
 export function teamKits(t: Team, s?: GameState | null): [string, string] {
+  const hasOppositeContrast = (a: string, b: string) =>
+    colDist(a, b) >= 200 && Math.abs(colLum(a) - colLum(b)) >= 0.25;
   if (s?.mode === 'm' && s.club && t.id === s.me) {
-    return [s.club.c1, colDist(s.club.c1, s.club.c2) >= 150 ? s.club.c2 : awayOf(s.club.c1)];
+    return [s.club.c1, hasOppositeContrast(s.club.c1, s.club.c2) ? s.club.c2 : awayOf(s.club.c1)];
   }
-  if (t.kc && t.kc.length >= 2 && colDist(t.kc[0], t.kc[1]) >= 180) return t.kc;
+  if (t.kc && t.kc.length >= 2) {
+    if (hasOppositeContrast(t.kc[0], t.kc[1])) return t.kc;
+    return [t.kc[0], awayOf(t.kc[0])];
+  }
   const kp = KIT_P[t.id % KIT_P.length];
   return [kp[0], kp[1]];
 }
@@ -2846,6 +2861,9 @@ export function getTeamClubIdentity(t: Team, s?: GameState | null): ClubIdentity
   const icKeys = Object.keys(CREST_IC);
   const [c1, c2] = teamKits(t, s);
   const isForeignClub = t.tier >= 3 || t.foreign === 1 || Boolean(getForeignTeamCountryMeta(t.name));
+  const homePat = (h >> 3) % KIT_PATTERNS.length;
+  const awayPairPool = AWAY_KIT_PAIRINGS[homePat] || [0, 5, 4, 12];
+  const awayPat = awayPairPool[(h >> 7) % awayPairPool.length];
   return {
     name: t.name,
     nick: '',
@@ -2857,7 +2875,8 @@ export function getTeamClubIdentity(t: Team, s?: GameState | null): ClubIdentity
     icon: icKeys[h % icKeys.length] || '⚽',
     iconColor: '',
     crestBorder: (h >> 6) % 4,
-    kit: (h >> 3) % KIT_PATTERNS.length,
+    kit: homePat,
+    awayKit: awayPat,
     stadiumStyle: getAiTeamStadiumStyleId(t.id, t.name, t.tier)
   };
 }
@@ -2886,18 +2905,22 @@ export function ensureClubIdentity(s: GameState): ClubIdentity {
     const t = s.teams[s.me];
     const h = ([...(t.name || 'T')].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
     const icKeys = Object.keys(CREST_IC);
+    const [c1, c2] = teamKits(t);
+    const homePat = (h >> 3) % KIT_PATTERNS.length;
+    const awayPairPool = AWAY_KIT_PAIRINGS[homePat] || [0, 5, 4, 12];
     s.club = {
       name: t.name,
       nick: '',
       std: 'สนาม' + t.name,
-      c1: t.kc?.[0] || '#c0392b',
-      c2: t.kc?.[1] || '#f4c63d',
+      c1,
+      c2,
       shape: h % CREST_SHAPES.length,
       pat: (h >> 4) % CREST_PATTERNS.length,
       icon: icKeys[h % icKeys.length] || '⚽',
       iconColor: '',
       crestBorder: (h >> 6) % 4,
-      kit: (h >> 3) % KIT_PATTERNS.length,
+      kit: homePat,
+      awayKit: awayPairPool[(h >> 7) % awayPairPool.length],
       stadiumStyle: 'open_track',
       builtStadiumStyles: ['open_track'],
       managerName: 'หัวหน้าผู้ฝึกสอน',

@@ -7,7 +7,7 @@ import type {
   GameState,
   TrainingProgramMeta
 } from '../types/game';
-import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
+import { NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { EffectText } from '../components/DeltaText';
 import { clamp, fmtMoney } from '../utils/math';
 import {
@@ -60,7 +60,7 @@ export const TeamTrainingView = React.memo<{
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>('all');
   const [rosterSort, setRosterSort] = useState<RosterSort>('care');
   const [rosterQuery, setRosterQuery] = useState('');
-  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'r');
+  const { clearFocus, isFocused } = useNavFocus(navIntent, 'r');
 
   const me = state.teams[state.me];
   const [selectedMissionPlayer, setSelectedMissionPlayer] = useState<string>(() => me.sq[0]?.n || '');
@@ -289,8 +289,6 @@ export const TeamTrainingView = React.memo<{
           )}
         </div>
       </div>
-
-      <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
 
       {/* ==================== TAB 3: TALK ROOMS ==================== */}
       {trainingMode === 'rooms' ? (
@@ -620,13 +618,13 @@ export const TeamTrainingView = React.memo<{
                     onToast(`✚ กายภาพกลุ่มสำเร็จ! ลดวันเจ็บ ${reduced} คน (หายเร็วขึ้น -1 นัด) · ฟิต +8%`);
                   }}
                   className={`px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl bg-sky-500/10 border border-sky-500/35 text-left cursor-pointer disabled:opacity-45 hover:border-sky-500 space-y-0.5 ${
-                    isFocused('rehab') ? 'task-focus-spotlight' : ''
+                    isFocused('rehab') ? 'task-focus-spotlight task-focus-spotlight-sky' : ''
                   }`}
                 >
                   <div className="font-bold text-[11px] mland:text-[9.5px] text-sky-700 dark:text-sky-300 flex items-center gap-1 min-w-0">
                     <StatIconBadge kind="injury" size="xs" />
                     <span className="truncate">กายภาพ ({injuredSq.length})</span>
-                    {isFocused('rehab') && <NavFocusBadge />}
+                    {isFocused('rehab') && <NavFocusBadge tone="sky" />}
                   </div>
                   <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular truncate">
                     {injuredSq.length === 0 ? (

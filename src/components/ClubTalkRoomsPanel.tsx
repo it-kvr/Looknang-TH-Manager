@@ -868,14 +868,14 @@ export const ClubTalkRoomsPanel: React.FC<{
         </div>
       ) : (
         /* ==================== ROOM 2: TEAM MEETING ROOM (OWN CLUB ONLY) ==================== */
-        <div
-          data-focus-id="team-talk"
-          className={`flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden ${
-            isFocused('team-talk') ? 'task-focus-spotlight' : ''
-          }`}
-        >
+        <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
           {/* All-Hands Club Meeting Header & Agenda Selector */}
-          <div className="shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 space-y-2 mland:space-y-1">
+          <div
+            data-focus-id="team-talk"
+            className={`shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 space-y-2 mland:space-y-1 ${
+              isFocused('team-talk') ? 'task-focus-spotlight' : ''
+            }`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="shrink-0 w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-center [&>svg]:w-6 [&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">

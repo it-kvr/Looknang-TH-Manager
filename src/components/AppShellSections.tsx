@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Settings } from 'lucide-react';
+import { FastForward, RotateCw, Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from '../pwa.tsx';
 import type { GameMode, GameState, MainTab, Player, Team } from '../types/game';
 import { TN } from '../data/thaiFootballData';
@@ -433,31 +433,40 @@ export const AppTopHud = React.memo<{
                 nextMatchInfo || state.dilemma ? '!rounded-l-none' : ''
               }`}
             >
-            {nextMatchInfo
-              ? autoSkipMatch
-                ? nextMatchInfo.kind === 'asia'
-                  ? '⏭️ ข้ามถ้วยทวีป'
-                  : nextMatchInfo.kind === 'sc'
-                    ? '⏭️ ข้ามแชมเปี้ยนส์คัพ'
-                    : nextMatchInfo.kind === 'lc'
-                      ? '⏭️ ข้ามลีกคัพ'
-                      : nextMatchInfo.kind === 'dc'
-                        ? '⏭️ ข้ามถ้วยดิวิชั่น'
-                        : nextMatchInfo.kind === 'cup'
-                          ? '⏭️ ข้ามถ้วยปชช.'
-                          : `⏭️ ข้ามนัดที่ ${state.md + 1}`
-                : nextMatchInfo.kind === 'asia'
-                  ? '🌏 แข่งถ้วยทวีป'
-                  : nextMatchInfo.kind === 'sc'
-                    ? '🏅 แข่งแชมเปี้ยนส์คัพ'
-                    : nextMatchInfo.kind === 'lc'
-                      ? '🥇 แข่งลีกคัพ'
-                      : nextMatchInfo.kind === 'dc'
-                        ? '🛡️ แข่งถ้วยดิวิชั่น'
-                        : nextMatchInfo.kind === 'cup'
-                          ? '🏆 แข่งถ้วยปชช.'
-                          : `▶ แข่งนัดที่ ${state.md + 1}`
-              : '🏁 สรุปจบฤดูกาล'}
+            {nextMatchInfo ? (
+              autoSkipMatch ? (
+                <>
+                  <FastForward className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" aria-hidden="true" />
+                  <span>
+                    {nextMatchInfo.kind === 'asia'
+                      ? 'ข้ามถ้วยทวีป'
+                      : nextMatchInfo.kind === 'sc'
+                        ? 'ข้ามแชมเปี้ยนส์คัพ'
+                        : nextMatchInfo.kind === 'lc'
+                          ? 'ข้ามลีกคัพ'
+                          : nextMatchInfo.kind === 'dc'
+                            ? 'ข้ามถ้วยดิวิชั่น'
+                            : nextMatchInfo.kind === 'cup'
+                              ? 'ข้ามถ้วยปชช.'
+                              : `ข้ามนัดที่ ${state.md + 1}`}
+                  </span>
+                </>
+              ) : nextMatchInfo.kind === 'asia' ? (
+                '🌏 แข่งถ้วยทวีป'
+              ) : nextMatchInfo.kind === 'sc' ? (
+                '🏅 แข่งแชมเปี้ยนส์คัพ'
+              ) : nextMatchInfo.kind === 'lc' ? (
+                '🥇 แข่งลีกคัพ'
+              ) : nextMatchInfo.kind === 'dc' ? (
+                '🛡️ แข่งถ้วยดิวิชั่น'
+              ) : nextMatchInfo.kind === 'cup' ? (
+                '🏆 แข่งถ้วยปชช.'
+              ) : (
+                `▶ แข่งนัดที่ ${state.md + 1}`
+              )
+            ) : (
+              '🏁 สรุปจบฤดูกาล'
+            )}
             </button>
           </div>
           <button
@@ -535,3 +544,99 @@ export const AppNavDock = React.memo<{
     </nav>
   );
 });
+
+export const PortraitRotateNotice = React.memo<{
+  open: boolean;
+  canAutoSwitch?: boolean;
+  switchFailed?: boolean;
+  onSwitchLandscape: () => void;
+}>(({ open, canAutoSwitch = true, switchFailed = false, onSwitchLandscape }) => {
+  if (!open) return null;
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="portrait-rotate-title"
+      className="fixed inset-0 z-[85] bg-[#06100b] flex items-center justify-center p-5"
+    >
+      <div className="w-full max-w-sm rounded-2xl border border-[var(--line)] bg-[var(--surface)] shadow-2xl px-6 py-7 flex flex-col items-center text-center gap-4">
+        <div className="w-16 h-16 rounded-2xl bg-[var(--g-soft)] border border-[var(--g)]/30 flex items-center justify-center relative">
+          <svg viewBox="0 0 48 48" className="w-11 h-11 text-[var(--g)]" aria-hidden="true">
+            <rect
+              x="16"
+              y="7"
+              width="16"
+              height="28"
+              rx="3"
+              fill="none"
+              stroke="currentColor"
+              strokeOpacity="0.35"
+              strokeWidth="2"
+              strokeDasharray="3 2"
+            />
+            <rect
+              x="10"
+              y="18"
+              width="28"
+              height="16"
+              rx="3"
+              fill="currentColor"
+              fillOpacity="0.14"
+              stroke="currentColor"
+              strokeWidth="2.4"
+            />
+            <circle cx="34.5" cy="26" r="1.4" fill="currentColor" />
+            <path
+              d="M36 10a13 13 0 0 1 6 11"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            />
+            <path
+              d="M39.5 18.5L42 21.5l2.5-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+
+        <div className="space-y-1.5">
+          <h2 id="portrait-rotate-title" className="text-lg font-extrabold font-display text-[var(--ink)] leading-tight">
+            กรุณาหมุนเครื่องเป็นแนวนอน
+          </h2>
+          <p className="text-xs leading-relaxed text-[var(--mut)]">
+            เกมนี้เล่นในหน้าจอแนวนอนเท่านั้น กรุณาตะแคงเครื่องเป็นแนวนอน (และเปิดการหมุนจออัตโนมัติหากล็อกไว้) ระบบจะเข้าเกมให้อัตโนมัติทันที
+          </p>
+        </div>
+
+        {switchFailed && (
+          <div className="w-full rounded-xl border border-amber-500/45 bg-amber-500/12 px-3 py-2 text-[11px] leading-relaxed font-semibold text-amber-800 dark:text-amber-200">
+            เบราว์เซอร์หรือเครื่องนี้ไม่อนุญาตให้สั่งหมุนขณะถือแนวตั้ง กรุณาตะแคงเครื่องเป็นแนวนอนด้วยตัวเองครับ
+          </div>
+        )}
+
+        {canAutoSwitch && (
+          <div className="w-full pt-1">
+            <button
+              type="button"
+              data-no-auto-fs="1"
+              onClick={() => {
+                SFX.tap();
+                onSwitchLandscape();
+              }}
+              className="btn btn-gold btn-lg w-full min-h-[46px] font-extrabold text-sm"
+            >
+              <RotateCw className="w-4 h-4 shrink-0" />
+              <span>{switchFailed ? 'ลองสลับแนวนอนอีกครั้ง' : 'สลับเป็นจอแนวนอน'}</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+

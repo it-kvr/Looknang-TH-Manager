@@ -114,6 +114,7 @@ export interface Player {
   altRoles?: SubRole[];
   roleExp?: Record<string, number>;
   customPers?: number;
+  persCd?: number;
   fit: number;
   inj: number;
   sus?: number;
@@ -595,6 +596,10 @@ export interface ActiveDilemma {
   title: string;
   desc: string;
   category: string;
+  speaker?: string;
+  outlet?: string;
+  quote?: string;
+  isPress?: boolean;
   options: { label: string; hint: string }[];
 }
 
@@ -1293,6 +1298,10 @@ export interface DilemmaTemplate {
   mode: GameMode | 'both';
   category: string;
   title: string;
+  speaker?: string | ((s: GameState) => string);
+  outlet?: string;
+  isPress?: boolean;
+  quote?: (s: GameState) => string;
   desc: (s: GameState) => string;
   options: {
     label: string;

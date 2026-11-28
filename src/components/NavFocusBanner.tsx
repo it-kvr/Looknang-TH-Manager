@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Crosshair, X } from 'lucide-react';
+import { Pin } from 'lucide-react';
 import type { MainTab, NavIntent } from '../types/game';
-import { SFX } from '../utils/audioTheme';
-import { EffectText } from './DeltaText';
 
 export function useNavFocus(
   navIntent: NavIntent | null | undefined,
@@ -74,57 +72,24 @@ export const NavFocusBanner: React.FC<{
   hint: string | null;
   onJumpToTarget?: () => void;
   onDismiss: () => void;
-}> = ({ hint, onJumpToTarget, onDismiss }) => {
-  if (!hint) return null;
-  return (
-    <div
-      role="status"
-      className="relative shrink-0 overflow-hidden rounded-xl border border-amber-500/75 dark:border-[var(--lamp)]/80 bg-amber-500/12 dark:bg-amber-400/14 px-2.5 py-1.5 mland:px-2 mland:py-1 flex items-center justify-between gap-2 shadow-[0_0_14px_rgba(245,194,66,0.22)]"
-    >
-      <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
-        <span className="absolute inset-y-0 w-1/2 task-sweep-beam bg-gradient-to-r from-transparent via-amber-400/25 to-transparent" />
-      </span>
-      <div className="relative flex items-center gap-2 min-w-0 flex-1">
-        <span className="w-5 h-5 mland:w-4 mland:h-4 rounded-lg bg-amber-500 text-[#261900] flex items-center justify-center shrink-0 shadow-2xs">
-          <Crosshair className="w-3 h-3 mland:w-2.5 mland:h-2.5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 text-[11px] mland:text-[9.5px] leading-snug text-[var(--ink)] font-semibold break-words">
-          <span className="font-extrabold text-amber-800 dark:text-[var(--lamp)] mr-1">ต้องทำตรงนี้:</span>
-          <EffectText text={hint} />
-        </div>
-      </div>
-      <div className="relative flex items-center gap-1 shrink-0">
-        {onJumpToTarget && (
-          <button
-            type="button"
-            onClick={() => {
-              SFX.tap();
-              onJumpToTarget();
-            }}
-            className="btn btn-xs btn-gold whitespace-nowrap"
-          >
-            ชี้จุด
-          </button>
-        )}
-        <button
-          type="button"
-          aria-label="ปิดคำแนะนำ"
-          onClick={() => {
-            SFX.tap();
-            onDismiss();
-          }}
-          className="w-6 h-6 mland:w-5 mland:h-5 rounded-lg border border-amber-500/40 bg-[var(--surface)]/80 hover:bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--ink)] flex items-center justify-center cursor-pointer"
-        >
-          <X className="w-3 h-3" aria-hidden="true" />
-        </button>
-      </div>
-    </div>
-  );
-};
+}> = () => null;
 
-export const NavFocusBadge: React.FC<{ label?: string }> = ({ label = 'ทำตรงนี้' }) => (
-  <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-amber-500 text-[#261900] text-[9.5px] mland:text-[8px] font-black leading-tight shrink-0 shadow-2xs">
-    <Crosshair className="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
-    <span>{label}</span>
+const FOCUS_BADGE_TONE = {
+  amber: 'bg-amber-500/18 dark:bg-amber-400/20 border-amber-500/75 text-amber-600 dark:text-amber-300',
+  rose: 'bg-rose-500/18 dark:bg-rose-400/20 border-rose-500/75 text-rose-600 dark:text-rose-300',
+  sky: 'bg-sky-500/18 dark:bg-sky-400/20 border-sky-500/75 text-sky-600 dark:text-sky-300',
+  emerald: 'bg-emerald-500/18 dark:bg-emerald-400/20 border-emerald-500/75 text-[var(--g)]'
+} as const;
+
+export const NavFocusBadge: React.FC<{
+  label?: string;
+  tone?: keyof typeof FOCUS_BADGE_TONE;
+}> = ({ label = 'จำเป็นต้องจัดการ', tone = 'amber' }) => (
+  <span
+    title={label}
+    aria-label={label}
+    className={`inline-flex items-center justify-center w-5 h-5 mland:w-4 mland:h-4 rounded-md border shrink-0 shadow-2xs ${FOCUS_BADGE_TONE[tone]}`}
+  >
+    <Pin className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" aria-hidden="true" />
   </span>
 );

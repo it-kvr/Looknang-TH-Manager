@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OfflineIndicator, PWAUpdateBanner } from './pwa.tsx';
 import {
   bindAutoLandscapeFullscreen,
+  canLockLandscapeOrientation,
   enterAutoMobileFullscreen,
   enterLandscapeFullscreen,
   isMobileDevice,
@@ -18,8 +19,8 @@ import { resolveStateSponsorBrand } from './data/sponsorBrands';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
-import { getActiveFavBoost, getTeamFavoritePlayers, updateTeamWellbeingAfterMatchday, type MatchdayWellbeingCtx } from './engine/wellbeing';
-import { AppEntrySplash, AppToast, AppTopHud, AppNavDock, type NextMatchDescriptor } from './components/AppShellSections';
+import { formatPersonalityShiftFeed, getActiveFavBoost, getTeamFavoritePlayers, updateTeamWellbeingAfterMatchday, type MatchdayWellbeingCtx } from './engine/wellbeing';
+import { AppEntrySplash, AppToast, AppTopHud, AppNavDock, PortraitRotateNotice, type NextMatchDescriptor } from './components/AppShellSections';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
 import { SquadTacticsView } from './views/SquadTacticsView';
@@ -45,6 +46,10 @@ import { ManagerCareerModal } from './modals/ManagerCareerModal';
 
 export default function App() {
   const [enteredGame, setEnteredGame] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(() => isPortraitViewport());
+  const [portraitSwitchFailed, setPortraitSwitchFailed] = useState(false);
+  const enteringLandscapeRef = useRef(false);
+  const canAutoSwitchLandscape = useMemo(() => canLockLandscapeOrientation(), []);
   const [state, setState] = useState<GameState | null>(null);
   const [slot, setSlot] = useState<number>(1);
   const [saveEpoch, setSaveEpoch] = useState<number>(0);
@@ -120,7 +125,22 @@ export default function App() {
 
   useEffect(() => {
     const unbindFs = bindAutoLandscapeFullscreen();
+    const syncOrientationState = () => {
+      const portrait = isPortraitViewport();
+      setIsPortrait(portrait);
+      if (!portrait) {
+        setPortraitSwitchFailed(false);
+      }
+    };
+    const scrOri = (screen as Screen & { orientation?: EventTarget }).orientation;
+    window.addEventListener('resize', syncOrientationState, { passive: true });
+    window.addEventListener('orientationchange', syncOrientationState, { passive: true });
+    scrOri?.addEventListener?.('change', syncOrientationState);
+    syncOrientationState();
     return () => {
+      window.removeEventListener('resize', syncOrientationState);
+      window.removeEventListener('orientationchange', syncOrientationState);
+      scrOri?.removeEventListener?.('change', syncOrientationState);
       unbindFs();
     };
   }, []);
@@ -394,11 +414,12 @@ export default function App() {
     d: GameState,
     matchInfo: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean },
     payload: FinishedMatchPayload
-  ): { shouldConfetti: boolean; missionToast: string | null; talentToast: string | null } => {
+  ): { shouldConfetti: boolean; missionToast: string | null; talentToast: string | null; personalityToast: string | null } => {
     const { kind, homeId, awayId, isDerby } = matchInfo;
     let shouldConfetti = false;
     let missionToast: string | null = null;
     let talentToast: string | null = null;
+    let personalityToast: string | null = null;
 
     const me = d.teams[d.me];
     if (d.mode === 'm') {
@@ -490,7 +511,14 @@ export default function App() {
         getTeamFavoritePlayers(me).map((fp) => [fp.n, getActiveFavBoost(fp, me, fp.me ? d.p : null)])
       );
       participants.forEach(({ team, ctx }) => {
-        updateTeamWellbeingAfterMatchday(team, d, ctx);
+        const shifts = updateTeamWellbeingAfterMatchday(team, d, ctx);
+        shifts.forEach((ev) => {
+          if (ev.isUserClub || ev.isMe) {
+            const msg = formatPersonalityShiftFeed(ev);
+            pushFeed(d, 'พัฒนาบุคลิก', msg, ev.isPositive ? 'ok' : 'urg');
+            if (!personalityToast) personalityToast = msg;
+          }
+        });
       });
       const curFavs = getTeamFavoritePlayers(me);
       if (curFavs.length > 0) {
@@ -760,7 +788,7 @@ export default function App() {
         }
         syncCupParticipantWellbeing(cupWellbeing);
         recordMatchMissions();
-        return { shouldConfetti, missionToast, talentToast };
+        return { shouldConfetti, missionToast, talentToast, personalityToast };
       }
 
       if (kind === 'lc' || kind === 'sc' || kind === 'dc') {
@@ -884,7 +912,7 @@ export default function App() {
         }
         syncCupParticipantWellbeing(extraWellbeing);
         recordMatchMissions();
-        return { shouldConfetti, missionToast, talentToast };
+        return { shouldConfetti, missionToast, talentToast, personalityToast };
       }
 
       if (kind === 'asia' && d.ac) {
@@ -1001,7 +1029,7 @@ export default function App() {
         }
         syncCupParticipantWellbeing(asiaWellbeing);
         recordMatchMissions();
-        return { shouldConfetti, missionToast, talentToast };
+        return { shouldConfetti, missionToast, talentToast, personalityToast };
       }
 
       // League Matchday
@@ -1154,12 +1182,16 @@ export default function App() {
       }
 
       applyLiveInjuries();
-      afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam, wellbeingByTeam });
+      const afterOut = afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam, wellbeingByTeam });
+      const userPersShift = afterOut?.personalityShifts.find((ev) => ev.isUserClub || ev.isMe);
+      if (userPersShift && !personalityToast) {
+        personalityToast = formatPersonalityShiftFeed(userPersShift);
+      }
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
       recordMatchMissions();
       d.money = capMoney(d.money);
       recordFinanceSnapshot(d);
-      return { shouldConfetti, missionToast, talentToast };
+      return { shouldConfetti, missionToast, talentToast, personalityToast };
   };
 
   const navigateDraftToLeague = (d: GameState) => {
@@ -1201,10 +1233,16 @@ export default function App() {
     skipNextSaveRef.current = false;
     setState(clone);
     if (outcome.shouldConfetti) triggerConfetti();
+    const newDilemmaIsPress = Boolean(
+      clone.dilemma &&
+        (clone.dilemma.isPress || clone.dilemma.id === 'media_interview' || clone.dilemma.id.startsWith('press_'))
+    );
     const newDilemmaNote = !hadDilemmaBefore && clone.dilemma
-      ? `📌 มีเหตุการณ์ใหม่: ${clone.dilemma.title} (กดดูได้ที่รายการสิ่งที่ต้องทำ)`
+      ? newDilemmaIsPress
+        ? `🎙️ มีคำขอสัมภาษณ์ใหม่: ${clone.dilemma.title} (ตอบได้ที่กล่องข้อความหน้าหลัก)`
+        : `📌 มีผู้ติดต่อใหม่: ${clone.dilemma.title} (กดดูได้ที่กล่องข้อความหน้าหลัก)`
       : null;
-    const parts = [outcome.talentToast, outcome.missionToast, newDilemmaNote].filter(Boolean);
+    const parts = [outcome.talentToast, outcome.missionToast, outcome.personalityToast, newDilemmaNote].filter(Boolean);
     if (parts.length > 0) {
       showToast(parts.join(' · '));
     }
@@ -1234,10 +1272,16 @@ export default function App() {
     if (myGf > myGa) SFX.win();
     else SFX.confirm();
     const scoreMsg = `⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`;
+    const newDilemmaIsPress = Boolean(
+      clone.dilemma &&
+        (clone.dilemma.isPress || clone.dilemma.id === 'media_interview' || clone.dilemma.id.startsWith('press_'))
+    );
     const newDilemmaNote = !hadDilemmaBefore && clone.dilemma
-      ? `📌 เหตุการณ์ใหม่: ${clone.dilemma.title}`
+      ? newDilemmaIsPress
+        ? `🎙️ มีคำขอสัมภาษณ์ใหม่: ${clone.dilemma.title}`
+        : `📌 เหตุการณ์ใหม่: ${clone.dilemma.title}`
       : null;
-    const parts = [scoreMsg, outcome.talentToast, outcome.missionToast, newDilemmaNote].filter(Boolean);
+    const parts = [scoreMsg, outcome.talentToast, outcome.missionToast, outcome.personalityToast, newDilemmaNote].filter(Boolean);
     showToast(parts.join(' · '));
   }, [showToast]);
 
@@ -1383,19 +1427,59 @@ export default function App() {
   }, [flushPendingSave, showToast, updateState]);
 
   const handleEnterGame = useCallback(() => {
+    if (enteringLandscapeRef.current) return;
     const cur = getSettings();
-    const shouldLandscape = cur.preferFullscreen !== false || (isMobileDevice() && isPortraitViewport());
-    const portraitMobile = isMobileDevice() && isPortraitViewport();
-    if (shouldLandscape) {
-      enterLandscapeFullscreen(true, { allowVirtualFallback: true }).catch(() => undefined);
-    }
+    const currentlyPortrait = isPortraitViewport();
+    const shouldLandscape = cur.preferFullscreen !== false || (isMobileDevice() && currentlyPortrait);
     unlockAudio();
     SFX.tap();
-    if (portraitMobile && shouldLandscape) {
-      window.requestAnimationFrame(() => setEnteredGame(true));
-    } else {
+
+    const finishEnter = () => {
+      enteringLandscapeRef.current = false;
+      setIsPortrait(isPortraitViewport());
       setEnteredGame(true);
+    };
+
+    if (shouldLandscape && currentlyPortrait) {
+      enteringLandscapeRef.current = true;
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        finishEnter();
+      };
+      const safetyTimer = window.setTimeout(done, 420);
+      enterLandscapeFullscreen(true)
+        .catch(() => ({ fullscreen: false, landscape: false }))
+        .finally(() => {
+          window.clearTimeout(safetyTimer);
+          window.requestAnimationFrame(done);
+        });
+      return;
     }
+
+    if (shouldLandscape) {
+      void enterLandscapeFullscreen(true).catch(() => undefined);
+    }
+    finishEnter();
+  }, []);
+
+  const handleRetryLandscapeFromNotice = useCallback(() => {
+    enterLandscapeFullscreen(true)
+      .then((res) => {
+        window.setTimeout(() => {
+          const stillPortrait = isPortraitViewport();
+          setIsPortrait(stillPortrait);
+          if (!stillPortrait) {
+            setPortraitSwitchFailed(false);
+          } else if (!res.landscape) {
+            setPortraitSwitchFailed(true);
+          }
+        }, 260);
+      })
+      .catch(() => {
+        setPortraitSwitchFailed(true);
+      });
   }, []);
 
   const handleSelectDockTab = useCallback((key: MainTab) => {
@@ -1480,6 +1564,21 @@ export default function App() {
   }
 
   if (!state) {
+    if (isPortrait) {
+      return (
+        <>
+          <PortraitRotateNotice
+            open
+            canAutoSwitch={canAutoSwitchLandscape}
+            switchFailed={portraitSwitchFailed}
+            onSwitchLandscape={handleRetryLandscapeFromNotice}
+          />
+          <AppToast message={toast} variant="menu" />
+          <OfflineIndicator />
+          <PWAUpdateBanner />
+        </>
+      );
+    }
     return (
       <>
         <MainMenu
@@ -2062,6 +2161,12 @@ export default function App() {
         />
       )}
 
+      <PortraitRotateNotice
+        open={isPortrait}
+        canAutoSwitch={canAutoSwitchLandscape}
+        switchFailed={portraitSwitchFailed}
+        onSwitchLandscape={handleRetryLandscapeFromNotice}
+      />
       <AppToast message={toast} variant="game" />
       <OfflineIndicator />
       <PWAUpdateBanner />

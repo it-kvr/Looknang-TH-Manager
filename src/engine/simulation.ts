@@ -8,6 +8,8 @@ import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeaso
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
 import {
+  evolveSeasonPersonalities,
+  formatPersonalityShiftFeed,
   getActiveFavBoost,
   getTeamFavoritePlayers,
   initPlayerWellbeing,
@@ -15,7 +17,8 @@ import {
   runAiTeamTalkAndCare,
   syncFavoritePlayerBoost,
   updateTeamWellbeingAfterMatchday,
-  type MatchdayWellbeingCtx
+  type MatchdayWellbeingCtx,
+  type PersonalityShiftEvent
 } from './wellbeing';
 
 export function rate(
@@ -3768,7 +3771,7 @@ export function startSeason(s: GameState) {
     });
 
     s.boardDirective = null;
-    s.boardDirectiveCd = 1;
+    s.boardDirectiveCd = 0;
     s.boardEffects = [];
     s.boardFeedbackLog = s.boardFeedbackLog || [];
     const targetRank = s.obj || 8;
@@ -3779,6 +3782,7 @@ export function startSeason(s: GameState) {
       msg: `บอร์ดบริหารตั้งเป้าหมายฤดูกาลที่ ${s.season}: จบอย่างน้อยอันดับ ${targetRank} พร้อมรักษาเสถียรภาพการเงิน`
     });
     if (s.boardFeedbackLog.length > 8) s.boardFeedbackLog.length = 8;
+    issueBoardDirective(s);
     s.clubDemands = [];
     syncAndEvaluateClubDemands(s, { seasonReset: true });
     syncOffersField(s, []);
@@ -4774,28 +4778,42 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
   });
 }
 
+const getNextLeagueOppName = (s: GameState): string => {
+  const pair = s.fx?.[s.md]?.find((p) => p.includes(s.me));
+  if (!pair) return 'คู่แข่งร่วมลีก';
+  const oppId = pair[0] === s.me ? pair[1] : pair[0];
+  return s.teams[oppId]?.name || 'คู่แข่งร่วมลีก';
+};
+
 export const DILEMMAS: DilemmaTemplate[] = [
   {
     id: 'bench_unhappy',
     mode: 'm',
     category: 'ห้องแต่งตัว',
-    title: '🗣️ นักเตะสำรองขอลงตัวจริง',
+    title: 'นักเตะสำรองขอโอกาสลงตัวจริง',
+    outlet: 'ห้องทำงานผู้จัดการทีม',
+    speaker: (s) => {
+      const me = s.teams[s.me];
+      const bn = me.sq.filter((q) => !xi(me).includes(q)).sort((a, b) => b.ov - a.ov)[0];
+      return bn ? `${bn.n} (${bn.pos})` : 'ตัวแทนนักเตะสำรอง';
+    },
+    quote: () => 'โค้ชครับ ช่วงนี้ผมซ้อมเต็มที่ทุกวัน อยากขอโอกาสลงช่วยทีมเป็นตัวจริงบ้างครับ',
     desc: (s) => {
       const me = s.teams[s.me];
       const bn = me.sq.filter((q) => !xi(me).includes(q)).sort((a, b) => b.ov - a.ov)[0];
-      return `${bn ? bn.n : 'นักเตะสำรอง'} เข้ามาคุยกับคุณว่าอยากได้โอกาสลงสนามมากขึ้นในสัปดาห์นี้`;
+      return `${bn ? bn.n : 'นักเตะสำรอง'} เข้ามาพูดคุยหลังซ้อมเสร็จเกี่ยวกับบทบาทในทีมสัปดาห์นี้`;
     },
     options: [
       {
-        label: 'ให้คำมั่นว่าจะโรเตชั่นนัดหน้า',
+        label: 'ให้คำมั่นว่าจะโรเตชั่นลงสนามนัดหน้า',
         hint: 'ขวัญทีม +6%',
         apply: (s) => {
           s.mor = clamp((s.mor ?? 50) + 6, 0, 100);
-          return 'ทีมมีกำลังใจดีขึ้น (ขวัญทีม +6%)';
+          return 'ให้โอกาสโรเตชั่น ทีมมีกำลังใจดีขึ้น (ขวัญทีม +6%)';
         }
       },
       {
-        label: 'บอกให้พิสูจน์ตัวเองในการซ้อม',
+        label: 'ท้าให้พิสูจน์ฝีเท้าในการฝึกซ้อมหนัก',
         hint: 'นักเตะสำรองพลัง +1',
         apply: (s) => {
           const me = s.teams[s.me];
@@ -4808,7 +4826,7 @@ export const DILEMMAS: DilemmaTemplate[] = [
         }
       },
       {
-        label: 'จัดซ้อมพิเศษปรับความเข้าใจ',
+        label: 'จัดเซสชั่นซ้อมพิเศษปรับความเข้าใจแท็กติก',
         hint: 'งบ -10k · ความคุ้นเคยแผน +8%',
         apply: (s) => {
           s.money -= 10;
@@ -4823,8 +4841,11 @@ export const DILEMMAS: DilemmaTemplate[] = [
     id: 'local_sponsor',
     mode: 'm',
     category: 'ธุรกิจสโมสร',
-    title: '🏪 ธุรกิจท้องถิ่นชวนออกงาน',
-    desc: () => 'ห้างร้านในจังหวัดติดต่อขอให้นักเตะไปร่วมกิจกรรมเปิดสาขา แลกค่าตอบแทนพิเศษ',
+    title: 'ธุรกิจท้องถิ่นชวนนักเตะออกงาน',
+    outlet: 'ฝ่ายการตลาดสโมสร',
+    speaker: 'ห้างร้านพันธมิตรท้องถิ่น',
+    quote: () => 'อยากเชิญนักเตะตัวหลักของสโมสรมาร่วมงานเปิดสาขาใหม่สุดสัปดาห์นี้ครับ',
+    desc: () => 'กิจกรรมประชาสัมพันธ์ใช้เวลาช่วงบ่าย แลกค่าตอบแทนพิเศษเข้าสู่คลังสโมสร',
     options: [
       {
         label: 'ส่งนักเตะไปร่วมงานรับเงินก้อน',
@@ -4835,11 +4856,11 @@ export const DILEMMAS: DilemmaTemplate[] = [
           xi(s.teams[s.me]).forEach((q) => {
             q.fit = clamp((q.fit ?? 100) - 5, 30, 100);
           });
-          return 'รับเงินสนับสนุน +40k ฿ (นักเตะล้าลงเล็กน้อย)';
+          return 'รับเงินสนับสนุน +40k ฿ (ตัวจริงล้าลงเล็กน้อย)';
         }
       },
       {
-        label: 'ปฏิเสธเพื่อโฟกัสการฝึกซ้อม',
+        label: 'ปฏิเสธเพื่อเก็บตัวโฟกัสการฝึกซ้อม',
         hint: 'ฟิต +4% · บอร์ด +3%',
         apply: (s) => {
           s.teams[s.me].sq.forEach((q) => {
@@ -4855,11 +4876,14 @@ export const DILEMMAS: DilemmaTemplate[] = [
     id: 'youth_trial',
     mode: 'm',
     category: 'อะคาเดมี่',
-    title: '🌟 พบเพชรเม็ดงามจากบอลนักเรียน',
-    desc: () => 'แมวมองท้องถิ่นแจ้งว่ามีเด็กหนุ่มฝีเท้าจัดจ้านอยากมาทดสอบฝีเท้ากับสโมสร (ค่าดำเนินการ 25k)',
+    title: 'พบเพชรเม็ดงามจากฟุตบอลนักเรียน',
+    outlet: 'รายงานแมวมองเยาวชน',
+    speaker: 'หัวหน้าแมวมองท้องถิ่น',
+    quote: () => 'เด็กคนนี้เซนส์บอลดีมาก ถ้าได้เข้าแคมป์เราตอนนี้มีลุ้นโตเป็นกำลังหลักในอนาคตครับ',
+    desc: () => 'มีเยาวชนฝีเท้าจัดจ้านสนใจเข้ามาทดสอบฝีเท้ากับสโมสร (ค่าดำเนินการ 25k)',
     options: [
       {
-        label: 'รับเข้าสู่ชุดสำรองทันที (-25k)',
+        label: 'เซ็นเข้าสู่ชุดสำรองทันที (-25k)',
         hint: 'ได้ดาวรุ่งศักยภาพสูงเข้าทีม',
         apply: (s) => {
           const me = s.teams[s.me];
@@ -4874,7 +4898,7 @@ export const DILEMMAS: DilemmaTemplate[] = [
         }
       },
       {
-        label: 'ส่งเข้าลิสต์เยาวชนรอเซ็นฟรี',
+        label: 'ส่งเข้าลิสต์เยาวชนอะคาเดมี่รอปั้นต่อ',
         hint: 'เพิ่มในรายชื่อเยาวชนอะคาเดมี่',
         apply: (s) => {
           const me = s.teams[s.me];
@@ -4889,28 +4913,212 @@ export const DILEMMAS: DilemmaTemplate[] = [
     id: 'media_interview',
     mode: 'both',
     category: 'สื่อมวลชน',
-    title: '🎙️ นักข่าวขอสัมภาษณ์ก่อนเกม',
-    desc: () => 'สื่อกีฬาเจ้าใหญ่ถามถึงเป้าหมายของทีมในฤดูกาลนี้ คุณจะตอบอย่างไร?',
+    isPress: true,
+    outlet: 'ห้องแถลงข่าวก่อนเกม',
+    speaker: 'ผู้สื่อข่าวสายฟุตบอลไทย',
+    title: 'แถลงข่าวความพร้อมก่อนลงสนาม',
+    quote: (s) => {
+      const me = s.teams[s.me];
+      const opp = getNextLeagueOppName(s);
+      return `เกมกับ ${opp} ที่กำลังจะมาถึง ${me.name} วางเป้าหมายและแนวทางรับมือไว้อย่างไรครับ?`;
+    },
+    desc: (s) => `บรรยากาศห้องแถลงข่าวก่อนเกมนัดที่ ${(s.md ?? 0) + 1} มีสื่อมวลชนรอฟังคำตอบอย่างใกล้ชิด`,
     options: [
       {
-        label: 'ประกาศกร้าวว่าพร้อมลุ้นแชมป์!',
-        hint: 'ผู้ติดตามเพิ่มขึ้น · ขวัญ +4%',
+        label: 'ประกาศมั่นใจ พร้อมบุกคว้าชัยเพื่อลุ้นอันดับสูงสุด',
+        hint: 'แฟนบอลเพิ่มขึ้น · ขวัญทีม +4%',
         apply: (s) => {
           s.fan = clamp((s.fan ?? 50) + 5, 5, 100);
           s.mor = clamp((s.mor ?? 50) + 4, 0, 100);
           const meTm = s.teams[s.me];
           const fAdd = Math.max(400, Math.round(ensureTeamFans(meTm) * 0.025));
           adjustTeamFans(meTm, fAdd);
-          return `แฟนบอลคึกคักสุดขีด! (ผู้ติดตาม +${fmtFans(fAdd)}, ขวัญ +4%)`;
+          return `แฟนบอลฮึกเหิมสุดขีด! (ผู้ติดตาม +${fmtFans(fAdd)}, ขวัญ +4%)`;
         }
       },
       {
-        label: 'ถ่อมตัว เน้นทำผลงานทีละนัด',
-        hint: 'บอร์ด +3% · ลดความกดดันทีม',
+        label: 'ให้เกียรติคู่แข่ง เน้นสมาธิและเล่นตามแผนทีละนัด',
+        hint: 'บอร์ด +3% · จิตใจทีมนิ่งขึ้น',
         apply: (s) => {
           s.bd = clamp((s.bd ?? 50) + 3, 0, 100);
           if (s.p) s.p.en = clamp((s.p.en ?? 100) + 4, 20, 100);
-          return 'คำตอบสุขุมได้รับคำชม (ความเชื่อมั่น +3%)';
+          s.teams[s.me]?.sq.slice(0, 11).forEach((q) => {
+            if (q.mental != null) q.mental = clamp(q.mental + 2, 18, 99);
+          });
+          return 'สื่อชื่นชมความสุขุมรอบคอบ (บอร์ด +3% · จิตใจทีม +2)';
+        }
+      },
+      {
+        label: 'ชวนแฟนบอลเข้ามาส่งเสียงเชียร์เต็มสนามเพื่อทีม',
+        hint: 'แฟนบอลเพิ่มขึ้น · ขวัญทีม +2% · ความฟิตฟื้นตัวเล็กน้อย',
+        apply: (s) => {
+          const meTm = s.teams[s.me];
+          const fAdd = Math.max(320, Math.round(ensureTeamFans(meTm) * 0.02));
+          adjustTeamFans(meTm, fAdd);
+          s.mor = clamp((s.mor ?? 50) + 2, 0, 100);
+          meTm?.sq.forEach((q) => {
+            q.fit = clamp((q.fit ?? 100) + 2, 30, 100);
+          });
+          return `กระแสเชียร์คึกคัก (แฟนบอล +${fmtFans(fAdd)} · ขวัญ +2%)`;
+        }
+      }
+    ]
+  },
+  {
+    id: 'press_form_streak',
+    mode: 'm',
+    category: 'สื่อมวลชน',
+    isPress: true,
+    outlet: 'สัมภาษณ์พิเศษสื่อกีฬา',
+    speaker: 'บรรณาธิการข่าวฟุตบอลไทย',
+    title: 'สื่อจี้ถามถึงผลงานและโมเมนตัมทีม',
+    quote: (s) => {
+      const fm = s.teams[s.me]?.fm || '';
+      if (fm.endsWith('WW')) return 'ทีมกำลังชนะต่อเนื่องอะไรคือจุดเปลี่ยนสำคัญ และจะรักษามาตรฐานนี้ได้นานแค่ไหนครับ?';
+      if (fm.endsWith('LL')) return 'ผลงานช่วงหลังสะดุดติดกัน คุณมองปัญหาอยู่ที่แท็กติกหรือสภาพจิตใจของนักเตะครับ?';
+      return 'ฟอร์มช่วงหลังขึ้นๆ ลงๆ ทีมวางแผนปรับจูนความสม่ำเสมอสำหรับโปรแกรมถัดไปอย่างไรครับ?';
+    },
+    desc: (s) => `สโมสร ${s.teams[s.me]?.name || ''} ลงเล่นไปแล้ว ${s.teams[s.me]?.p || 0} นัด (ฟอร์มล่าสุด: ${s.teams[s.me]?.fm?.slice(-5) || 'เปิดซีซั่น'})`,
+    options: [
+      {
+        label: 'ยกเครดิตให้สปิริตนักเตะและความมุ่งมั่นของทุกคนในทีม',
+        hint: 'ขวัญทีม +5% · จิตใจนักเตะ +2',
+        apply: (s) => {
+          s.mor = clamp((s.mor ?? 50) + 5, 0, 100);
+          s.teams[s.me]?.sq.forEach((q) => {
+            if (q.mental != null) q.mental = clamp(q.mental + 2, 18, 99);
+          });
+          return 'ห้องแต่งตัวอบอุ่นและมั่นใจขึ้น (ขวัญทีม +5% · จิตใจ +2)';
+        }
+      },
+      {
+        label: 'รับผิดชอบเต็มตัว พร้อมปรับจูนแท็กติกให้เฉียบคมขึ้น',
+        hint: 'เข้าใจแผน +4% · บอร์ด +3%',
+        apply: (s) => {
+          const me = s.teams[s.me];
+          if (me) me.tacFam = clamp((me.tacFam ?? 65) + 4, 30, 100);
+          s.bd = clamp((s.bd ?? 50) + 3, 0, 100);
+          return 'บอร์ดเชื่อมั่นความรับผิดชอบของโค้ช (เข้าใจแผน +4% · บอร์ด +3%)';
+        }
+      },
+      {
+        label: 'ปกป้องลูกทีม ขอให้สื่อมองถึงความทุ่มเทระยะยาว',
+        hint: 'จิตใจตัวจริง +4 · ลดแรงกดดันทีม',
+        apply: (s) => {
+          const me = s.teams[s.me];
+          if (me) {
+            xi(me).forEach((q) => {
+              if (q.mental != null) q.mental = clamp(q.mental + 4, 18, 99);
+            });
+          }
+          s.mor = clamp((s.mor ?? 50) + 2, 0, 100);
+          return 'นักเตะรู้สึกโล่งใจที่โค้ชออกรับแทน (จิตใจตัวจริง +4)';
+        }
+      }
+    ]
+  },
+  {
+    id: 'press_star_spotlight',
+    mode: 'm',
+    category: 'สื่อมวลชน',
+    isPress: true,
+    outlet: 'ไมค์ข้างสนาม & ห้องข่าว',
+    speaker: 'นักข่าวสายสโมสร',
+    title: 'สื่อโฟกัสบทบาทแข้งกำลังหลักของทีม',
+    quote: (s) => {
+      const me = s.teams[s.me];
+      const star = me.sq.slice().sort((a, b) => ((b.sg || 0) * 3 + (b.sa || 0) * 2 + b.ov) - ((a.sg || 0) * 3 + (a.sa || 0) * 2 + a.ov))[0];
+      return `หลายคนจับตามองฟอร์มของ ${star?.n || 'นักเตะตัวหลัก'} เป็นพิเศษ คุณมองบทบาทของเขาในระบบทีมอย่างไรครับ?`;
+    },
+    desc: () => 'คำตอบของคุณจะส่งผลโดยตรงต่อสภาพจิตใจของนักเตะคนสำคัญและความสามัคคีในทีม',
+    options: [
+      {
+        label: 'ชื่นชมฟอร์มการเล่นและยกให้เป็นหัวใจสำคัญของทีม',
+        hint: 'จิตใจแข้งหลัก +6 · แฟนบอลคึกคัก',
+        apply: (s) => {
+          const me = s.teams[s.me];
+          const star = me?.sq.slice().sort((a, b) => ((b.sg || 0) * 3 + (b.sa || 0) * 2 + b.ov) - ((a.sg || 0) * 3 + (a.sa || 0) * 2 + a.ov))[0];
+          if (star) {
+            star.mental = clamp((star.mental ?? 70) + 6, 18, 99);
+          }
+          const fAdd = Math.max(250, Math.round(ensureTeamFans(me) * 0.015));
+          adjustTeamFans(me, fAdd);
+          return `${star?.n || 'แข้งหลัก'} มั่นใจเต็มเปี่ยม (จิตใจ +6 · แฟนบอล +${fmtFans(fAdd)})`;
+        }
+      },
+      {
+        label: 'ย้ำว่าความสำเร็จเกิดจากเพื่อนร่วมทีมทุกคนช่วยกัน',
+        hint: 'ขวัญทีม +4% · เข้าใจแผน +3%',
+        apply: (s) => {
+          const me = s.teams[s.me];
+          s.mor = clamp((s.mor ?? 50) + 4, 0, 100);
+          if (me) me.tacFam = clamp((me.tacFam ?? 65) + 3, 30, 100);
+          return 'ทั้งทีมรู้สึกเป็นอันหนึ่งอันเดียวกัน (ขวัญทีม +4% · เข้าใจแผน +3%)';
+        }
+      },
+      {
+        label: 'กระตุ้นให้รักษาความฟิตและถ่อมตัวเพื่อเกมใหญ่ข้างหน้า',
+        hint: 'ฟิตแข้งหลัก +4% · บอร์ด +2%',
+        apply: (s) => {
+          const me = s.teams[s.me];
+          const star = me?.sq.slice().sort((a, b) => ((b.sg || 0) * 3 + (b.sa || 0) * 2 + b.ov) - ((a.sg || 0) * 3 + (a.sa || 0) * 2 + a.ov))[0];
+          if (star) {
+            star.fit = clamp((star.fit ?? 100) + 4, 30, 100);
+          }
+          s.bd = clamp((s.bd ?? 50) + 2, 0, 100);
+          return `${star?.n || 'แข้งหลัก'} โฟกัสการซ้อมและฟื้นตัวได้ดี (ฟิต +4% · บอร์ด +2%)`;
+        }
+      }
+    ]
+  },
+  {
+    id: 'press_player_breakout',
+    mode: 'p',
+    category: 'สื่อมวลชน',
+    isPress: true,
+    outlet: 'สัมภาษณ์พิเศษนักเตะอาชีพ',
+    speaker: 'พิธีกรรายการฟุตบอลไทย',
+    title: 'รายการกีฬาเชิญสัมภาษณ์เส้นทางค้าแข้ง',
+    quote: (s) => `ช่วงนี้แฟนบอลพูดถึงฟอร์มของคุณกับ ${s.teams[s.me]?.name || 'สโมสร'} เยอะมาก อะไรคือเป้าหมายต่อไปในฤดูกาลนี้ครับ?`,
+    desc: (s) => {
+      const p = s.p;
+      return p
+        ? `ผลงานซีซั่นนี้: ลงเล่น ${p.ap - (p.s0?.ap || 0)} นัด · ${p.gl - (p.s0?.gl || 0)} ประตู · ${p.as - (p.s0?.as || 0)} แอสซิสต์`
+        : 'บทสัมภาษณ์ออกอากาศสดหลังซ้อม';
+    },
+    options: [
+      {
+        label: 'ขอบคุณโค้ชและเพื่อนร่วมทีมที่คอยสนับสนุนตลอดมา',
+        hint: 'ชื่อเสียง +4 · จิตใจ +6',
+        apply: (s) => {
+          if (s.p) {
+            s.p.rep = (s.p.rep || 0) + 4;
+            s.p.mental = clamp((s.p.mental ?? 70) + 6, 18, 99);
+          }
+          return 'ได้รับคำชื่นชมเรื่องความเป็นมืออาชีพ (ชื่อเสียง +4 · จิตใจ +6)';
+        }
+      },
+      {
+        label: 'ตั้งเป้าซ้อมหนักยกระดับฝีเท้าให้เก่งขึ้นทุกสัปดาห์',
+        hint: 'พัฒนาค่าพลัง +1 · จิตใจ +3',
+        apply: (s) => {
+          const meSqPot = s.teams[s.me]?.sq.find((q) => q.me)?.pot;
+          const g = s.p ? autoGrow(s.p, 1, meSqPot) : '';
+          if (s.p) s.p.mental = clamp((s.p.mental ?? 70) + 3, 18, 99);
+          syncMe(s);
+          return g ? `แรงผลักดันส่งผลในสนามซ้อม! (${g})` : 'ตั้งใจซ้อมเข้มข้นและจิตใจนิ่งขึ้น (+3)';
+        }
+      },
+      {
+        label: 'ส่งข้อความขอบคุณแฟนบอลที่ตามเชียร์ทุกนัด',
+        hint: 'ชื่อเสียง +5 · แฟนสโมสรเพิ่มขึ้น',
+        apply: (s) => {
+          if (s.p) s.p.rep = (s.p.rep || 0) + 5;
+          const meTm = s.teams[s.me];
+          const fAdd = Math.max(450, Math.round(ensureTeamFans(meTm) * 0.025));
+          adjustTeamFans(meTm, fAdd);
+          s.fan = clamp((s.fan ?? 50) + 4, 5, 100);
+          return `แฟนบอลปลื้มสุดๆ! (ชื่อเสียง +5 · แฟนบอล +${fmtFans(fAdd)})`;
         }
       }
     ]
@@ -4919,16 +5127,20 @@ export const DILEMMAS: DilemmaTemplate[] = [
     id: 'player_charity',
     mode: 'p',
     category: 'นอกสนาม',
-    title: '🤝 คลินิกฟุตบอลเยาวชนท้องถิ่น',
-    desc: () => 'โรงเรียนใกล้สนามชวนคุณไปสอนทักษะฟุตบอลให้น้องๆ ในวันหยุด',
+    title: 'คลินิกฟุตบอลเยาวชนท้องถิ่น',
+    outlet: 'กิจกรรมเพื่อสังคม',
+    speaker: 'ผู้อำนวยการโรงเรียนใกล้สนาม',
+    quote: () => 'น้องๆ นักเรียนตื่นเต้นมาก อยากชวนคุณมาสอนทักษะฟุตบอลช่วงวันหยุดครับ',
+    desc: () => 'กิจกรรมอาสาใช้เวลาครึ่งวัน ช่วยสร้างภาพลักษณ์ที่ดีต่อชุมชนและแฟนบอล',
     options: [
       {
-        label: 'ไปร่วมกิจกรรมอย่างเต็มใจ',
+        label: 'ไปร่วมกิจกรรมสอนน้องๆ อย่างเต็มใจ',
         hint: 'ชื่อเสียง +5 · แฟนบอลเพิ่มขึ้น · ความฟิต -6%',
         apply: (s) => {
           if (s.p) {
             s.p.rep = (s.p.rep || 0) + 5;
             s.p.en = clamp((s.p.en ?? 100) - 6, 20, 100);
+            s.p.mental = clamp((s.p.mental ?? 70) + 4, 18, 99);
           }
           s.fan = clamp((s.fan ?? 50) + 6, 5, 100);
           const meTm = s.teams[s.me];
@@ -4938,7 +5150,7 @@ export const DILEMMAS: DilemmaTemplate[] = [
         }
       },
       {
-        label: 'ขอตัวฝึกซ้อมเสริมคนเดียว',
+        label: 'ขอตัวฝึกซ้อมเสริมรักษาความฟิตคนเดียว',
         hint: 'พัฒนาค่าพลัง +1',
         apply: (s) => {
           const meSqPot = s.teams[s.me]?.sq.find((q) => q.me)?.pot;
@@ -4957,14 +5169,19 @@ export function maybeTriggerDilemma(s: GameState) {
     s.dilemmaCd = (s.dilemmaCd || 1) - 1;
     return;
   }
-  if (Math.random() < 0.22) {
+  if (Math.random() < 0.24) {
     const pool = DILEMMAS.filter((d) => d.mode === 'both' || d.mode === s.mode);
     const pick = P(pool);
+    const resolvedSpeaker = typeof pick.speaker === 'function' ? pick.speaker(s) : pick.speaker;
     s.dilemma = {
       id: pick.id,
       title: pick.title,
       desc: pick.desc(s),
       category: pick.category,
+      ...(resolvedSpeaker ? { speaker: resolvedSpeaker } : {}),
+      ...(pick.outlet ? { outlet: pick.outlet } : {}),
+      ...(pick.quote ? { quote: pick.quote(s) } : {}),
+      ...(pick.isPress ? { isPress: true } : {}),
       options: pick.options.map((o) => ({ label: o.label, hint: o.hint }))
     };
     s.dilemmaCd = 4;
@@ -4973,6 +5190,7 @@ export function maybeTriggerDilemma(s: GameState) {
 
 export function applyDilemmaChoice(s: GameState, optIndex: number): string {
   if (!s.dilemma) return '';
+  const isPress = Boolean(s.dilemma.isPress || s.dilemma.id === 'media_interview' || s.dilemma.id.startsWith('press_'));
   const tmpl = DILEMMAS.find((d) => d.id === s.dilemma!.id);
   const opt = tmpl?.options[optIndex];
   const msg = opt ? opt.apply(s) : '';
@@ -4980,7 +5198,7 @@ export function applyDilemmaChoice(s: GameState, optIndex: number): string {
   s.teams[s.me]?.sq.forEach((q) => {
     recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, q.me ? s.p : null);
   });
-  if (msg) pushFeed(s, 'เหตุการณ์', msg, 'ok');
+  if (msg) pushFeed(s, isPress ? 'สัมภาษณ์สื่อ' : 'เหตุการณ์', msg, 'ok');
   return msg;
 }
 
@@ -7270,17 +7488,26 @@ export function afterMatchDay(
   const prevFavBoostMap = new Map(
     getTeamFavoritePlayers(me).map((fp) => [fp.n, getActiveFavBoost(fp, me, fp.me ? s.p : null)])
   );
+  const personalityShifts: PersonalityShiftEvent[] = [];
   s.teams.forEach((t) => {
     const teamCtx = liveInjMeta?.wellbeingByTeam?.[t.id];
     const lastResChar = (t.fm || '').slice(-1);
     const inferredRes = lastResChar === 'W' || lastResChar === 'D' || lastResChar === 'L' ? lastResChar : undefined;
-    updateTeamWellbeingAfterMatchday(t, s, {
+    const shifts = updateTeamWellbeingAfterMatchday(t, s, {
       ...(teamCtx || {}),
       matchPlayed: teamCtx?.matchPlayed ?? true,
       matchResult: teamCtx?.matchResult ?? inferredRes,
       subbedOut: teamCtx?.subbedOut ?? subbedOutByTeam[t.id],
       isUserClub: t.id === s.me
     });
+    if (shifts.length > 0) {
+      shifts.forEach((ev) => {
+        personalityShifts.push(ev);
+        if (ev.isUserClub || ev.isMe) {
+          pushFeed(s, 'พัฒนาบุคลิก', formatPersonalityShiftFeed(ev), ev.isPositive ? 'ok' : 'urg');
+        }
+      });
+    }
     if (!(mg && t.id === s.me)) {
       runAiTeamTalkAndCare(t, s);
       // Mirror board confidence & matchday operating cash flow for AI clubs
@@ -7498,6 +7725,7 @@ export function afterMatchDay(
     syncAndEvaluateClubDemands(s);
   }
   s.money = capMoney(s.money);
+  return { personalityShifts };
 }
 
 export function getActiveBoardEffects(s: Pick<GameState, 'boardEffects' | 'season' | 'md'>): BoardTempEffect[] {
@@ -7810,7 +8038,7 @@ export function evaluateAndIssueBoardDirectives(s: GameState) {
       s.bd = clamp((s.bd ?? 50) + 8, 0, 100);
       const repGain = activeDir.kind === 'youth_focus' || activeDir.kind === 'win_form' ? 6 : 5;
       s.mgrRep = (s.mgrRep ?? 50) + repGain;
-      s.boardDirectiveCd = curMd + 3;
+      s.boardDirectiveCd = curMd + 2;
 
       if (activeDir.kind === 'reduce_wages') {
         addBoardTempEffect(s, 'โบนัสบอร์ด: วินัยการเงินเยี่ยม (+6 ขวัญทีม)', 'bonus', 'mor', 6, 5);
@@ -7834,7 +8062,7 @@ export function evaluateAndIssueBoardDirectives(s: GameState) {
       activeDir.status = 'failed';
       activeDir.evaluatedMd = curMd;
       s.bd = clamp((s.bd ?? 50) - 6, 0, 100);
-      s.boardDirectiveCd = curMd + 3;
+      s.boardDirectiveCd = curMd + 2;
 
       if (activeDir.kind === 'reduce_wages' || activeDir.kind === 'tighten_defense') {
         addBoardTempEffect(s, 'แรงกดดันบอร์ด: บรรยากาศทีมตึง (-4 ขวัญทีม)', 'penalty', 'mor', -4, 4);
@@ -7854,13 +8082,10 @@ export function evaluateAndIssueBoardDirectives(s: GameState) {
     s.boardDirective = null;
   }
 
-  // Clear finished directive before issuing a fresh one if cooldown passed
-  if (!s.boardDirective && curMd >= 2 && curMd <= (s.fx?.length || 30) - 3 && curMd >= (s.boardDirectiveCd ?? 0)) {
-    const shouldIssue = curMd === 2 || Math.random() < 0.42;
-    if (shouldIssue) {
-      issueBoardDirective(s);
-      return;
-    }
+  // Auto-issue next directive once cooldown passes (no manual acceptance needed)
+  if (!s.boardDirective && curMd >= 1 && curMd <= (s.fx?.length || 30) - 3 && curMd >= (s.boardDirectiveCd ?? 0)) {
+    issueBoardDirective(s);
+    return;
   }
 
   // Occasional ambient board feedback on streaks / finances
@@ -8196,6 +8421,13 @@ export function growPlayers(s: GameState) {
       }
     })
   );
+
+  const seasonShifts = evolveSeasonPersonalities(s);
+  seasonShifts.forEach((ev) => {
+    if (ev.isUserClub || ev.isMe) {
+      pushFeed(s, 'พัฒนาบุคลิก', formatPersonalityShiftFeed(ev), ev.isPositive ? 'ok' : 'urg');
+    }
+  });
 }
 
 export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {

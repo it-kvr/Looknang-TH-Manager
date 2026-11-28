@@ -4167,9 +4167,10 @@ export const MatchPitchOverlays = React.memo<{
           <button
             type="button"
             onClick={onSkipLiveVar}
-            className="px-2 py-1 rounded-md bg-white/12 hover:bg-white/22 text-white/90 text-[10px] sm:text-[11px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+            className="px-2 py-1 rounded-md bg-white/12 hover:bg-white/22 text-white/90 text-[10px] sm:text-[11px] mland:text-[9px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap"
           >
-            ⏭ ข้าม
+            <FastForward className="w-3 h-3 shrink-0" aria-hidden="true" />
+            <span>ข้าม</span>
           </button>
         </div>
       )}

@@ -1,5 +1,30 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Coins, Trophy, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  BatteryLow,
+  Briefcase,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardList,
+  Coins,
+  FileText,
+  Handshake,
+  Heart,
+  HeartPulse,
+  Landmark,
+  Mail,
+  Megaphone,
+  MessageSquare,
+  Mic,
+  Newspaper,
+  Search,
+  Sparkles,
+  Trophy,
+  Users,
+  X
+} from 'lucide-react';
 import type { ArchivedMatchReport, MainTab, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, CONFED_META, getForeignTeamCountryMeta, getTeamTrainingPlan, syncTrainingFocusToPlan, type ForeignConfed } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -59,7 +84,7 @@ export const LeagueView = React.memo<{
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
   const sub = rawSub === 5 ? 2 : rawSub;
-  const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'req' | 'feed'>('all');
+  const [newsFilter, setNewsFilter] = useState<'all' | 'staff' | 'club' | 'feed'>('all');
   const [prizeModalTier, setPrizeModalTier] = useState<number | null>(null);
   const [cupInitialStats, setCupInitialStats] = useState(false);
   const [worldConfed, setWorldConfed] = useState<'all' | ForeignConfed>('all');
@@ -237,8 +262,10 @@ export const LeagueView = React.memo<{
     interface InboxItem {
       id: string;
       kind: 'alert' | 'req' | 'feed';
+      group: 'staff' | 'club' | 'feed';
       tone: NewsTone;
       icon: React.ReactNode;
+      sender: string;
       tag: string;
       title: React.ReactNode;
       detail: string;
@@ -272,16 +299,39 @@ export const LeagueView = React.memo<{
       );
 
       if (state.dilemma) {
+        const dilemmaObj = state.dilemma;
+        const isPressDilemma = Boolean(
+          dilemmaObj.isPress || dilemmaObj.id === 'media_interview' || dilemmaObj.id.startsWith('press_')
+        );
+        const matchedBenchPlayer =
+          dilemmaObj.id === 'bench_unhappy'
+            ? me.sq.find((q) => dilemmaObj.desc.startsWith(q.n))?.n
+            : undefined;
+        const dilemmaSender =
+          dilemmaObj.speaker ||
+          (dilemmaObj.id === 'bench_unhappy'
+            ? `${matchedBenchPlayer || 'นักเตะสำรอง'}`
+            : dilemmaObj.id === 'local_sponsor'
+              ? 'สปอนเซอร์ท้องถิ่น'
+              : dilemmaObj.id === 'youth_trial'
+                ? 'แมวมองท้องถิ่น'
+                : isPressDilemma
+                  ? 'ผู้สื่อข่าวกีฬา'
+                  : dilemmaObj.category);
         items.push({
           id: 'active-dilemma',
           kind: 'alert',
+          group: dilemmaObj.id === 'youth_trial' ? 'staff' : 'club',
           tone: 'urg',
           urgent: true,
-          icon: '📌',
-          tag: `เหตุการณ์ · ${state.dilemma.category}`,
-          title: state.dilemma.title,
-          detail: 'รอคุณเปิดอ่านและตัดสินใจ',
-          actionLabel: 'เปิดดู',
+          icon: isPressDilemma
+            ? <Mic className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+            : <Mail className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: dilemmaSender,
+          tag: dilemmaObj.outlet || dilemmaObj.category,
+          title: dilemmaObj.title,
+          detail: isPressDilemma ? 'รอให้สัมภาษณ์' : 'รอเปิดอ่านและตัดสินใจ',
+          actionLabel: isPressDilemma ? 'ให้สัมภาษณ์' : 'เปิดดู',
           onAction: () => {
             SFX.tap();
             onOpenDilemma?.();
@@ -294,9 +344,11 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'club-alert-fin-bd',
           kind: 'alert',
+          group: 'club',
           tone: 'urg',
           urgent: true,
-          icon: '⚠️',
+          icon: <AlertTriangle className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: isMoneyNeg ? 'ฝ่ายการเงิน' : 'บอร์ดบริหาร',
           tag: isMoneyNeg ? 'การเงิน' : 'บอร์ดบริหาร',
           title: isMoneyNeg ? `งบติดลบ ${fmtMoney(state.money)}` : `บอร์ดกังวล (${Math.round(state.bd ?? 55)}%)`,
           detail: isMoneyNeg ? 'ตลาดถูกระงับชั่วคราว' : 'เร่งเก็บแต้มเรียกความเชื่อมั่น',
@@ -313,10 +365,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'xi-unready',
           kind: 'alert',
+          group: 'staff',
           tone: 'urg',
           urgent: true,
-          icon: '⚠️',
-          tag: 'จัดทัพ 11 ตัวจริง',
+          icon: <Users className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'ผู้ช่วยโค้ช',
+          tag: 'จัดทัพ',
           title: `ตัวจริงไม่พร้อม ${unreadyXi.length} คน`,
           detail: unreadyXi
             .slice(0, 2)
@@ -443,10 +497,15 @@ export const LeagueView = React.memo<{
         items.push({
           id: `demand-${req.id}`,
           kind: 'req',
+          group: 'club',
           tone: remMd <= 1 ? 'urg' : 'warn',
           urgent: true,
-          icon: req.source === 'player' ? '🗣️' : '📣',
-          tag: `${srcBadge} · อีก ${remMd} นัด`,
+          icon:
+            req.source === 'player'
+              ? <MessageSquare className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+              : <Megaphone className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: req.source === 'player' ? (me.cap ? `${me.cap.split(' ')[0]} (กัปตัน)` : 'ตัวแทนนักเตะ') : 'ตัวแทนแฟนบอล',
+          tag: `อีก ${remMd} นัด`,
           title: req.title,
           detail: detailText,
           actionLabel,
@@ -461,10 +520,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'board-directive-active',
           kind: 'alert',
+          group: 'club',
           tone: prog.isComplete ? 'ok' : remMd <= 1 ? 'urg' : 'warn',
           urgent: true,
-          icon: '📋',
-          tag: `คำสั่งบอร์ด · อีก ${remMd} นัด`,
+          icon: <ClipboardList className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'ประธานสโมสร',
+          tag: `อีก ${remMd} นัด`,
           title: dir.title,
           detail: `${prog.progressText} (${Math.round(prog.ratio * 100)}%)`,
           actionLabel: 'ดูเป้า',
@@ -483,9 +544,14 @@ export const LeagueView = React.memo<{
           items.push({
             id: 'board-effect-active',
             kind: 'alert',
+            group: 'club',
             tone: topFx.tone === 'bonus' ? 'ok' : 'urg',
             urgent: false,
-            icon: topFx.tone === 'bonus' ? '✨' : '📢',
+            icon:
+              topFx.tone === 'bonus'
+                ? <Sparkles className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+                : <AlertTriangle className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+            sender: 'บอร์ดบริหาร',
             tag: 'ผลบอร์ด',
             title: topFx.label,
             detail: `อีก ${Math.max(1, topFx.expiresMd - (state.md ?? 0))} นัด`,
@@ -502,12 +568,17 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'transfer-offers',
           kind: 'alert',
+          group: 'club',
           tone: 'warn',
           urgent: true,
-          icon: isLoan ? '🤝' : '💼',
-          tag: 'ข้อเสนอซื้อ-ยืม',
+          icon:
+            isLoan
+              ? <ArrowLeftRight className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+              : <Briefcase className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: incomingOffers.length > 1 ? `${topOff.t} (+${incomingOffers.length - 1})` : topOff.t,
+          tag: 'ซื้อ-ยืม',
           title: `${incomingOffers.length} ข้อเสนอรอตอบ`,
-          detail: `${topOff.t} ${isLoan ? 'ยืม' : 'ซื้อ'} ${topOff.n} (+${fmtMoney(topOff.p)})`,
+          detail: `${isLoan ? 'ขอยืม' : 'ขอซื้อ'} ${topOff.n} (+${fmtMoney(topOff.p)})`,
           actionLabel: 'เปิดดู',
           onAction: () =>
             onNavigate?.(
@@ -523,9 +594,11 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'scout-ready',
           kind: 'alert',
+          group: 'staff',
           tone: 'ok',
           urgent: true,
-          icon: '🔍',
+          icon: <Search className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'หัวหน้าแมวมอง',
           tag: 'แมวมอง',
           title: `พบนักเตะ ${state.scout.results.length} ราย`,
           detail: state.scout.label,
@@ -546,10 +619,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'contracts-expiring',
           kind: 'alert',
+          group: 'club',
           tone: expiredCon.length > 0 ? 'urg' : 'warn',
           urgent: true,
-          icon: '📄',
-          tag: 'สัญญานักเตะ',
+          icon: <FileText className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'เลขาฯ สโมสร & เอเย่นต์',
+          tag: 'สัญญา',
           title: expiredCon.length > 0 ? `หมดสัญญา ${expiredCon.length} คน` : `สัญญาเหลือ 1 ปี (${expiringSoon.length} คน)`,
           detail: `${namesPreview}${totalNeed > 2 ? ` +${totalNeed - 2}` : ''}`,
           actionLabel: 'ต่อสัญญา',
@@ -568,10 +643,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'rest-needed',
           kind: 'alert',
+          group: 'staff',
           tone: avgXiFit < 68 || lowFitAll.length >= 3 ? 'urg' : 'warn',
           urgent: true,
-          icon: '😴',
-          tag: 'ความฟิตทีม',
+          icon: <BatteryLow className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'โค้ชฟิตเนส',
+          tag: 'ความฟิต',
           title: `ตัวจริงล้า (ฟิต ${avgXiFit}%)`,
           detail: `ล้า ${tiredStarters.length} คน · แนะนำพักฟื้น`,
           actionLabel: 'พักฟื้น',
@@ -587,10 +664,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'club-injured-rehab',
           kind: 'alert',
+          group: 'staff',
           tone: 'urg',
           urgent: true,
-          icon: <StatIconBadge kind="injury" size="xs" />,
-          tag: 'ห้องพยาบาล',
+          icon: <HeartPulse className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'หัวหน้าทีมแพทย์',
+          tag: 'พยาบาล',
           title: `บาดเจ็บ ${injuredList.length} คน`,
           detail: injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj} นัด)`).join(', '),
           actionLabel: 'ฟื้นฟู',
@@ -612,10 +691,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'fav-needs-care',
           kind: 'alert',
+          group: 'staff',
           tone: 'warn',
           urgent: true,
-          icon: '💖',
-          tag: 'ลูกรัก & จิตใจ',
+          icon: <Heart className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'ผู้ช่วยโค้ช',
+          tag: 'ปลุกพลัง',
           title:
             unboostedFavs.length === 1
               ? `ลูกรักรอปลุกพลัง (${favShort})`
@@ -634,13 +715,15 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'team-morale-low',
           kind: 'alert',
+          group: 'staff',
           tone: 'warn',
           urgent: true,
-          icon: '🏛️',
-          tag: 'ห้องประชุม',
+          icon: <Users className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: me.cap ? `${me.cap.split(' ')[0]} (กัปตัน)` : 'ผู้ช่วยโค้ช',
+          tag: 'ขวัญทีม',
           title: `ขวัญทีมต่ำ (${avgMental}/100)`,
           detail: `เหลือโควตาออฟฟิศ ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
-          actionLabel: 'เข้าห้องประชุม',
+          actionLabel: 'ประชุมทีม',
           onAction: () =>
             onNavigate?.(
               'r',
@@ -656,9 +739,11 @@ export const LeagueView = React.memo<{
         items.push({
           id: `sponsor-expiring-${expiringDeal.id}`,
           kind: 'alert',
+          group: 'club',
           tone: 'warn',
           urgent: true,
-          icon: '🤝',
+          icon: <Handshake className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'ฝ่ายการตลาด',
           tag: 'พาร์ทเนอร์',
           title: `ดีล ${expiringDeal.name} เหลือ ${expiringDeal.left} นัด`,
           detail: 'ใกล้ครบสัญญา เตรียมเลือกดีลใหม่',
@@ -679,9 +764,11 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'fin-debt-watch',
           kind: 'alert',
+          group: 'club',
           tone: payDue > 0 ? 'warn' : 'urg',
           urgent: true,
-          icon: '🏦',
+          icon: <Landmark className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'ฝ่ายการเงิน',
           tag: 'ภาระหนี้',
           title: `หนี้คงค้าง ${fmtMoney(bankRemain + payDue)}`,
           detail: payDue > 0 ? `ผ่อนปลายปี ${fmtMoneyNum(payDue)}` : 'ค่างวดใกล้ถึงกำหนด',
@@ -700,10 +787,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'fin-ffp-wage',
           kind: 'alert',
+          group: 'club',
           tone: 'urg',
           urgent: true,
-          icon: '📊',
-          tag: 'เพดานค่าเหนื่อย',
+          icon: <Coins className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'ฝ่ายบัญชี & FFP',
+          tag: 'ค่าเหนื่อย',
           title: `ค่าเหนื่อยใกล้เต็ม (${tx.wagePct}%)`,
           detail: `${fmtMoneyNum(tx.curWage)} / ${fmtMoneyNum(tx.wageCap)}`,
           actionLabel: 'ดูงบ',
@@ -720,16 +809,31 @@ export const LeagueView = React.memo<{
       const p = state.p;
       const mePl = me.sq.find((q) => q.me || q.n === p.name) || null;
       if (state.dilemma) {
+        const dilemmaObj = state.dilemma;
+        const isPressDilemma = Boolean(
+          dilemmaObj.isPress || dilemmaObj.id === 'media_interview' || dilemmaObj.id.startsWith('press_')
+        );
+        const dilemmaSender =
+          dilemmaObj.speaker ||
+          (isPressDilemma
+            ? 'ผู้สื่อข่าวกีฬา'
+            : dilemmaObj.id === 'player_charity'
+              ? 'โรงเรียนท้องถิ่น'
+              : dilemmaObj.category);
         items.push({
           id: 'active-dilemma',
           kind: 'alert',
+          group: 'club',
           tone: 'urg',
           urgent: true,
-          icon: '📌',
-          tag: `เหตุการณ์ · ${state.dilemma.category}`,
-          title: state.dilemma.title,
-          detail: 'รอคุณเปิดอ่านและตัดสินใจ',
-          actionLabel: 'เปิดดู',
+          icon: isPressDilemma
+            ? <Mic className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+            : <Mail className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: dilemmaSender,
+          tag: dilemmaObj.outlet || dilemmaObj.category,
+          title: dilemmaObj.title,
+          detail: isPressDilemma ? 'รอให้สัมภาษณ์' : 'รอเปิดอ่านและตัดสินใจ',
+          actionLabel: isPressDilemma ? 'ให้สัมภาษณ์' : 'เปิดดู',
           onAction: () => {
             SFX.tap();
             onOpenDilemma?.();
@@ -740,9 +844,11 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'player-rest-warn',
           kind: 'alert',
+          group: 'staff',
           tone: p.en < 52 ? 'urg' : 'warn',
           urgent: true,
-          icon: '😴',
+          icon: <BatteryLow className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'โค้ชฟิตเนส',
           tag: 'ความฟิต',
           title: `ความฟิตเหลือ ${p.en}%`,
           detail: 'ต่ำกว่า 58% เสี่ยงหลุดตัวจริง',
@@ -758,9 +864,11 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'player-inj-warn',
           kind: 'alert',
+          group: 'staff',
           tone: 'urg',
           urgent: true,
-          icon: <StatIconBadge kind="injury" size="xs" />,
+          icon: <HeartPulse className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'แพทย์สโมสร',
           tag: 'อาการเจ็บ',
           title: `บาดเจ็บพัก ${p.inj} นัด`,
           detail: 'ฟื้นฟูร่างกายได้ที่หน้าอาชีพ',
@@ -778,9 +886,18 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'player-card-warn',
           kind: 'alert',
+          group: 'staff',
           tone: (p.sus || 0) > 0 ? 'urg' : 'warn',
           urgent: true,
-          icon: (p.sus || 0) > 0 ? '🟥' : '🟨',
+          icon: (
+            <span
+              aria-hidden="true"
+              className={`w-2.5 h-3.5 mland:w-2 mland:h-3 rounded-[2px] shadow-2xs ${
+                (p.sus || 0) > 0 ? 'bg-rose-500' : 'bg-amber-400 border border-amber-600/40'
+              }`}
+            />
+          ),
+          sender: 'ผู้จัดการทีม',
           tag: 'วินัยสนาม',
           title: (p.sus || 0) > 0 ? `ติดโทษแบน ${p.sus} นัด` : `ใบเหลือง ${p.yc}/3 ใบ`,
           detail: (p.sus || 0) > 0 ? 'รอพ้นโทษแบน' : 'อีก 1 เหลืองโดนแบน 1 นัด'
@@ -790,10 +907,12 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'player-wellbeing-low',
           kind: 'alert',
+          group: 'club',
           tone: 'warn',
           urgent: true,
-          icon: '💬',
-          tag: 'สุขภาพใจ/กาย',
+          icon: <MessageSquare className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'นักจิตวิทยา',
+          tag: 'ใจ/กาย',
           title: `ใจ ${p.mental ?? 70} · กาย ${p.phys ?? 70} ค่อนข้างต่ำ`,
           detail: 'คุยปรับใจหรือฟื้นฟูกล้ามเนื้อ',
           actionLabel: 'ดูแลตัวเอง',
@@ -809,9 +928,11 @@ export const LeagueView = React.memo<{
         items.push({
           id: 'player-fav-boost-wait',
           kind: 'alert',
+          group: 'club',
           tone: 'ok',
           urgent: true,
-          icon: '💖',
+          icon: <Heart className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+          sender: 'ผู้จัดการทีม',
           tag: 'ลูกรักทีม',
           title: 'ลูกรักรอปลุกพลัง (+5~10)',
           detail: `ทำใจ ${p.mental ?? 70} และกาย ${p.phys ?? 70} ให้ถึง 72`,
@@ -827,14 +948,39 @@ export const LeagueView = React.memo<{
       }
     }
 
+    const resolveFeedSender = (cat: string) => {
+      if (cat.includes('สัมภาษณ์') || cat.includes('สื่อ')) return 'สื่อมวลชน';
+      if (cat.includes('บอร์ด')) return 'บอร์ดบริหาร';
+      if (cat.includes('แมวมอง')) return 'หัวหน้าแมวมอง';
+      if (cat.includes('ตลาด') || cat.includes('ย้าย') || cat.includes('สัญญา') || cat.includes('ดีล')) {
+        return 'ฝ่ายซื้อขาย & เอเย่นต์';
+      }
+      if (cat.includes('บุคลิก')) return 'ทีมสตาฟฟ์ & จิตวิทยา';
+      if (cat.includes('แพทย์') || cat.includes('เจ็บ') || cat.includes('ฟิต')) return 'ทีมแพทย์';
+      if (cat.includes('แฟน')) return 'แฟนบอล';
+      if (cat.includes('เงิน') || cat.includes('สปอนเซอร์') || cat.includes('ธุรกิจ')) return 'ฝ่ายการเงิน';
+      if (cat.includes('ทีมชาติ')) return 'สมาคมฟุตบอล';
+      if (cat.includes('เหตุการณ์')) return 'สำนักงานสโมสร';
+      return 'ผู้สื่อข่าวสโมสร';
+    };
+
     (state.feed || []).forEach((f, idx) => {
       items.push({
         id: `feed-${idx}-${f.m}`,
         kind: 'feed',
+        group: 'feed',
         tone: f.tone === 'urg' ? 'urg' : f.tone === 'offer' ? 'warn' : f.tone === 'ok' ? 'ok' : 'info',
         urgent: f.tone === 'urg' || f.tone === 'offer',
-        icon: f.tone === 'urg' ? '🚨' : f.tone === 'offer' ? '💼' : f.tone === 'ok' ? '✨' : '📰',
-        tag: `${f.cat} · นัด ${f.m}${f.s !== state.season ? ` · S${f.s}` : ''}`,
+        icon:
+          f.tone === 'urg'
+            ? <AlertTriangle className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+            : f.tone === 'offer'
+              ? <Briefcase className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+              : f.tone === 'ok'
+                ? <Sparkles className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />
+                : <Newspaper className="w-3.5 h-3.5 mland:w-3 mland:h-3" aria-hidden="true" />,
+        sender: resolveFeedSender(f.cat),
+        tag: `นัด ${f.m}${f.s !== state.season ? ` · S${f.s}` : ''}`,
         title: f.txt.includes('✚')
           ? (
             <span className="inline">
@@ -857,26 +1003,42 @@ export const LeagueView = React.memo<{
 
     const pendingTasks = items.filter((it) => it.kind !== 'feed' && !!it.urgent);
     const pendingCount = pendingTasks.length;
-    const firstPendingTaskId = pendingTasks[0]?.id ?? null;
     const hasCriticalTask = pendingTasks.some((it) => it.tone === 'urg');
     const hasWarnTask = pendingTasks.some((it) => it.tone === 'warn');
-    const reqCount = items.filter((it) => it.kind === 'req').length;
+    const staffItems = items.filter((it) => it.group === 'staff');
+    const clubItems = items.filter((it) => it.group === 'club');
+    const staffCount = staffItems.length;
+    const clubCount = clubItems.length;
+    const staffUrgent = staffItems.some((it) => !!it.urgent);
+    const clubUrgent = clubItems.some((it) => !!it.urgent);
     const filteredItems = items.filter((it) => {
       if (newsFilter === 'all') return true;
-      if (newsFilter === 'urg') return it.kind !== 'feed' && !!it.urgent;
-      if (newsFilter === 'req') return it.kind === 'req';
-      return it.kind === 'feed';
+      return it.group === newsFilter;
     });
 
-    const getCardStyle = (tone: NewsTone, isTask: boolean, isSpotlight: boolean) => {
+    const getCardStyle = (tone: NewsTone, isTask: boolean) => {
       if (!isTask) {
+        const feedBar =
+          tone === 'urg'
+            ? 'bg-rose-500/75'
+            : tone === 'warn'
+              ? 'bg-amber-500/75'
+              : tone === 'ok'
+                ? 'bg-emerald-500/75'
+                : 'bg-[var(--mut)]/30';
+        const feedIcon =
+          tone === 'urg'
+            ? 'bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400'
+            : tone === 'warn'
+              ? 'bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300'
+              : tone === 'ok'
+                ? 'bg-emerald-500/10 border border-emerald-500/30 text-[var(--g)]'
+                : 'bg-[var(--surface)] border border-[var(--line)]/75 text-[var(--mut)]';
         return {
-          card: 'bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/55 border-[var(--line)]/65',
-          iconBox: 'bg-[var(--surface)] border border-[var(--line)]/75 text-[var(--mut)]',
-          glow: '',
-          sweepBg: '',
-          dotPing: '',
-          dotCore: '',
+          card: 'bg-[var(--surface-2)]/28 hover:bg-[var(--surface-2)]/52 border-[var(--line)]/60',
+          bar: feedBar,
+          iconBox: feedIcon,
+          dot: '',
           kickerCls: 'text-[var(--mut)]',
           kickerLabel: '',
           btn: 'btn-surface group-hover:bg-[var(--g)] group-hover:text-white group-hover:border-[var(--g)]'
@@ -884,142 +1046,59 @@ export const LeagueView = React.memo<{
       }
       if (tone === 'urg') {
         return {
-          card: 'bg-rose-500/[0.07] dark:bg-rose-500/[0.12] hover:bg-rose-500/[0.12] border-rose-500/50 dark:border-rose-400/50',
-          iconBox: 'bg-[var(--surface)] border border-rose-500/40 shadow-2xs text-rose-600 dark:text-rose-400',
-          glow: `${
-            isSpotlight
-              ? 'border-[1.5px] border-rose-500/90 dark:border-rose-400/90 shadow-[0_0_14px_rgba(244,63,94,0.28),inset_0_0_10px_rgba(244,63,94,0.14)] task-alert-glow-urg'
-              : 'border border-rose-500/65 dark:border-rose-400/65 shadow-[0_0_8px_rgba(244,63,94,0.16)] task-alert-glow-soft'
-          }`,
-          sweepBg: 'bg-gradient-to-r from-transparent via-rose-400/28 dark:via-rose-300/28 to-transparent',
-          dotPing: 'bg-rose-400',
-          dotCore: 'bg-rose-500',
+          card: 'bg-rose-500/[0.06] dark:bg-rose-500/[0.1] hover:bg-rose-500/[0.11] border-rose-500/40 dark:border-rose-400/40',
+          bar: 'bg-rose-500',
+          iconBox: 'bg-rose-500/12 border border-rose-500/40 text-rose-600 dark:text-rose-400 shadow-2xs',
+          dot: 'bg-rose-500 animate-pulse',
           kickerCls: 'text-rose-600 dark:text-rose-400 font-extrabold',
-          kickerLabel: isSpotlight ? 'ทำก่อน · ด่วน' : 'ด่วน',
+          kickerLabel: 'ด่วน',
           btn: 'bg-rose-600 group-hover:bg-rose-700 text-white border border-rose-500/40 shadow-xs'
         };
       }
       if (tone === 'ok') {
         return {
-          card: 'bg-emerald-500/[0.06] dark:bg-emerald-500/[0.1] hover:bg-emerald-500/[0.11] border-emerald-500/45 dark:border-emerald-400/40',
-          iconBox: 'bg-[var(--surface)] border border-emerald-500/35 shadow-2xs text-[var(--g)]',
-          glow: `${
-            isSpotlight
-              ? 'border-[1.5px] border-emerald-500/85 dark:border-emerald-400/85 shadow-[0_0_12px_rgba(16,185,129,0.24),inset_0_0_8px_rgba(16,185,129,0.12)] task-alert-glow-soft'
-              : 'border border-emerald-500/55 dark:border-emerald-400/50'
-          }`,
-          sweepBg: 'bg-gradient-to-r from-transparent via-emerald-400/28 dark:via-emerald-300/28 to-transparent',
-          dotPing: 'bg-emerald-400',
-          dotCore: 'bg-emerald-500',
+          card: 'bg-emerald-500/[0.05] dark:bg-emerald-500/[0.09] hover:bg-emerald-500/[0.1] border-emerald-500/35 dark:border-emerald-400/35',
+          bar: 'bg-emerald-500',
+          iconBox: 'bg-emerald-500/12 border border-emerald-500/40 text-[var(--g)] shadow-2xs',
+          dot: 'bg-emerald-500 animate-pulse',
           kickerCls: 'text-[var(--g)] font-extrabold',
-          kickerLabel: isSpotlight ? 'ทำก่อน · พร้อมตรวจ' : 'พร้อมตรวจ',
+          kickerLabel: 'พร้อมตรวจ',
           btn: 'bg-[var(--g)] group-hover:brightness-110 text-white border border-emerald-400/30 shadow-xs'
         };
       }
       return {
-        card: 'bg-amber-500/[0.06] dark:bg-amber-400/[0.09] hover:bg-amber-500/[0.11] border-amber-500/45 dark:border-amber-400/40',
-        iconBox: 'bg-[var(--surface)] border border-amber-500/35 shadow-2xs text-amber-700 dark:text-amber-300',
-        glow: `${
-          isSpotlight
-            ? 'border-[1.5px] border-amber-500/85 dark:border-amber-400/85 shadow-[0_0_12px_rgba(245,158,11,0.24),inset_0_0_8px_rgba(245,158,11,0.12)] task-alert-glow-soft'
-            : 'border border-amber-500/55 dark:border-amber-400/50'
-        }`,
-        sweepBg: 'bg-gradient-to-r from-transparent via-amber-400/30 dark:via-amber-300/28 to-transparent',
-        dotPing: 'bg-amber-400',
-        dotCore: 'bg-amber-500',
+        card: 'bg-amber-500/[0.05] dark:bg-amber-400/[0.08] hover:bg-amber-500/[0.1] border-amber-500/38 dark:border-amber-400/35',
+        bar: 'bg-amber-500',
+        iconBox: 'bg-amber-500/12 border border-amber-500/40 text-amber-600 dark:text-amber-300 shadow-2xs',
+        dot: 'bg-amber-500 animate-pulse',
         kickerCls: 'text-amber-700 dark:text-amber-300 font-extrabold',
-        kickerLabel: isSpotlight ? 'ทำก่อน' : 'ต้องทำ',
+        kickerLabel: 'ต้องทำ',
         btn: 'bg-amber-500 group-hover:bg-amber-600 text-[#261900] border border-amber-600/35 font-extrabold shadow-xs'
       };
     };
 
-    const filterTabs = isMgr
-      ? ([
-          ['all', 'ทั้งหมด', pendingCount > 0],
-          ['urg', `สำคัญ (${pendingCount})`, pendingCount > 0],
-          ['req', `คำขอ (${reqCount})`, reqCount > 0],
-          ['feed', 'ข่าวทีม', false]
-        ] as const)
-      : ([
-          ['all', 'ทั้งหมด', pendingCount > 0],
-          ['urg', `สำคัญ (${pendingCount})`, pendingCount > 0],
-          ['feed', 'ข่าวทีม', false]
-        ] as const);
-
-    const outerGlowCls =
-      pendingCount === 0
-        ? ''
-        : hasCriticalTask
-          ? 'border-[1.5px] border-rose-500/60 dark:border-rose-400/55 shadow-[0_0_14px_rgba(244,63,94,0.16)] task-alert-glow-urg'
-          : hasWarnTask
-            ? 'border-[1.5px] border-amber-500/55 dark:border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.14)] task-alert-glow-soft'
-            : 'border-[1.5px] border-emerald-500/55 dark:border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.14)] task-alert-glow-soft';
+    const filterTabs = (
+      [
+        ['all', `ทั้งหมด${pendingCount > 0 ? ` (${pendingCount})` : ''}`, pendingCount > 0],
+        ['staff', `ทีมงาน${staffCount > 0 ? ` (${staffCount})` : ''}`, staffUrgent],
+        ['club', `ติดต่อ${clubCount > 0 ? ` (${clubCount})` : ''}`, clubUrgent],
+        ['feed', 'ข่าวทีม', false]
+      ] as const
+    );
 
     return (
       <div
-        className={`relative p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border shadow-xs space-y-2 mland:space-y-1.5 ${
+        className={`relative p-2 sm:p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border shadow-xs space-y-1.5 mland:space-y-1 ${
           pendingCount > 0
             ? hasCriticalTask
-              ? 'border-rose-500/35 dark:border-rose-400/35'
+              ? 'border-rose-500/40 dark:border-rose-400/40'
               : hasWarnTask
-                ? 'border-amber-500/35 dark:border-amber-400/35'
-                : 'border-emerald-500/35 dark:border-emerald-400/35'
+                ? 'border-amber-500/40 dark:border-amber-400/40'
+                : 'border-emerald-500/40 dark:border-emerald-400/40'
             : 'border-[var(--line)]'
         }`}
       >
-        {pendingCount > 0 && (
-          <span
-            aria-hidden="true"
-            className={`pointer-events-none absolute -inset-[1px] rounded-[inherit] ${outerGlowCls}`}
-          />
-        )}
-
-        <div className="relative flex items-center justify-between gap-2 px-0.5 text-[11px] mland:text-[9.5px]">
-          <div className="flex items-center gap-1.5 min-w-0">
-            {pendingCount > 0 ? (
-              <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
-                <span
-                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    hasCriticalTask ? 'bg-rose-400' : hasWarnTask ? 'bg-amber-400' : 'bg-emerald-400'
-                  }`}
-                />
-                <span
-                  className={`relative inline-flex rounded-full h-2 w-2 ${
-                    hasCriticalTask ? 'bg-rose-500' : hasWarnTask ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`}
-                />
-              </span>
-            ) : (
-              <span className="text-xs leading-none shrink-0" aria-hidden="true">✅</span>
-            )}
-            <span className="font-bold text-[var(--ink)] truncate">
-              {pendingCount > 0 ? 'สิ่งที่ต้องทำ' : 'ข่าวสาร & ความพร้อมทีม'}
-            </span>
-            <span className="text-[var(--mut)] font-medium truncate tabular">
-              · {pendingCount > 0 ? `${pendingCount} รายการรอจัดการ` : 'ไม่มีงานค้าง'}
-            </span>
-          </div>
-          {pendingCount > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                setNewsFilter(newsFilter === 'urg' ? 'all' : 'urg');
-              }}
-              className={`text-[10px] mland:text-[8.5px] font-bold shrink-0 whitespace-nowrap cursor-pointer hover:underline ${
-                hasCriticalTask
-                  ? 'text-rose-600 dark:text-rose-400'
-                  : hasWarnTask
-                    ? 'text-amber-700 dark:text-amber-300'
-                    : 'text-[var(--g)]'
-              }`}
-            >
-              {newsFilter === 'urg' ? 'ดูทั้งหมด' : 'ดูเฉพาะที่ต้องทำ ›'}
-            </button>
-          )}
-        </div>
-
-        <div className={`relative seg-bar w-full grid ${isMgr ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <div className="relative seg-bar w-full grid grid-cols-4">
           {filterTabs.map(([fid, flbl, showRedDot]) => {
             const isActive = newsFilter === fid;
             return (
@@ -1035,7 +1114,7 @@ export const LeagueView = React.memo<{
                   <span
                     aria-hidden="true"
                     className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                      isActive ? 'bg-red-300 ring-1 ring-white/80' : 'bg-red-500'
+                      isActive ? 'bg-red-200 ring-1 ring-white/80' : 'bg-red-500'
                     }`}
                   />
                 )}
@@ -1045,53 +1124,39 @@ export const LeagueView = React.memo<{
           })}
         </div>
 
-        <div className="relative max-h-[300px] sm:max-h-[340px] mland:max-h-[210px] overflow-y-auto space-y-1.5 mland:space-y-1 p-0.5">
+        <div className="relative max-h-[340px] sm:max-h-[380px] mland:max-h-[240px] overflow-y-auto space-y-1 mland:space-y-1 p-0.5">
           {filteredItems.length === 0 ? (
             <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-4 text-center bg-[var(--surface-2)]/35 rounded-xl border border-dashed border-[var(--line)]">
-              {newsFilter === 'req'
-                ? 'ยังไม่มีคำเรียกร้องในตอนนี้'
-                : 'ไม่มีเรื่องสำคัญค้าง ทีมพร้อมลุยนัดถัดไป!'}
+              {newsFilter === 'staff'
+                ? 'ทีมงานไม่มีเรื่องแจ้งเพิ่มเติม ทีมพร้อมลุย!'
+                : newsFilter === 'club'
+                  ? 'ไม่มีรายการติดต่อหรือคำขอค้างในตอนนี้'
+                  : 'ไม่มีรายการสำคัญค้าง ทีมพร้อมลุยนัดถัดไป!'}
             </div>
           ) : (
             filteredItems.map((it, idx) => {
               const isUnresolvedTask = it.kind !== 'feed' && !!it.urgent;
-              const isTopPriorityTask = isUnresolvedTask && it.id === firstPendingTaskId;
               const isFirstFeedAfterTasks =
                 newsFilter === 'all' &&
                 it.kind === 'feed' &&
                 idx > 0 &&
                 filteredItems[idx - 1].kind !== 'feed';
-              const style = getCardStyle(it.tone, isUnresolvedTask, isTopPriorityTask);
+              const style = getCardStyle(it.tone, isUnresolvedTask);
               const isInteractive = Boolean(it.actionLabel && it.onAction);
 
               const cardInner = (
                 <>
-                  {isUnresolvedTask && style.glow && (
-                    <span
-                      aria-hidden="true"
-                      className={`pointer-events-none absolute -inset-[1px] rounded-[inherit] ${style.glow}`}
-                    />
-                  )}
-                  {isTopPriorityTask && style.sweepBg && (
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden"
-                    >
-                      <span className={`absolute inset-y-0 w-1/2 task-sweep-beam ${style.sweepBg}`} />
-                    </span>
-                  )}
-                  <div className={`relative w-7 h-7 mland:w-5.5 mland:h-5.5 rounded-xl mland:rounded-lg flex items-center justify-center text-xs mland:text-[10px] shrink-0 ${style.iconBox}`}>
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full ${style.bar}`}
+                  />
+                  <div className={`relative w-7 h-7 mland:w-5.5 mland:h-5.5 ml-1 rounded-lg flex items-center justify-center shrink-0 ${style.iconBox}`}>
                     {it.icon}
-                    {isUnresolvedTask && (
+                    {isUnresolvedTask && style.dot && (
                       <span
-                        title="ยังมีรายการที่ต้องจัดการให้เสร็จ"
-                        className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 mland:h-2 mland:w-2"
-                      >
-                        {(isTopPriorityTask || it.tone === 'urg') && (
-                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${style.dotPing}`} />
-                        )}
-                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 mland:h-2 mland:w-2 ring-2 ring-[var(--surface)] ${style.dotCore}`} />
-                      </span>
+                        aria-hidden="true"
+                        className={`absolute -top-0.5 -right-0.5 w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full ring-2 ring-[var(--surface)] ${style.dot}`}
+                      />
                     )}
                   </div>
                   <div className="relative min-w-0 flex-1 space-y-0.5">
@@ -1105,21 +1170,21 @@ export const LeagueView = React.memo<{
                           <span aria-hidden="true" className="opacity-45">·</span>
                         </>
                       )}
-                      <span className="font-semibold text-[var(--ink)]/75 shrink-0">
-                        {it.tag}
+                      <span className="font-semibold text-[var(--ink)]/85 truncate">
+                        จาก {it.sender}
                       </span>
-                      {it.detail && (
+                      {(it.detail || it.tag) && (
                         <>
                           <span aria-hidden="true" className="opacity-45">·</span>
                           <span className="break-words">
-                            <EffectText text={it.detail} />
+                            <EffectText text={it.detail || it.tag} />
                           </span>
                         </>
                       )}
                     </div>
                   </div>
                   {isInteractive && (
-                    <span className={`relative btn btn-xs shrink-0 whitespace-nowrap gap-1 ${style.btn}`}>
+                    <span className={`relative btn btn-xs shrink-0 whitespace-nowrap gap-0.5 ${style.btn}`}>
                       <span>{it.actionLabel}</span>
                       <ChevronRight className="w-3 h-3 mland:w-2.5 mland:h-2.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                     </span>
@@ -1140,13 +1205,13 @@ export const LeagueView = React.memo<{
                     <button
                       type="button"
                       onClick={() => { SFX.tap(); it.onAction?.(); }}
-                      className={`group w-full text-left relative px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2.5 mland:gap-2 transition-all cursor-pointer ${style.card}`}
+                      className={`group w-full text-left relative overflow-hidden pl-2.5 pr-2.5 py-1.5 mland:pl-2 mland:pr-2 mland:py-1 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2 transition-all cursor-pointer ${style.card}`}
                     >
                       {cardInner}
                     </button>
                   ) : (
                     <div
-                      className={`relative px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2.5 mland:gap-2 transition-colors ${style.card}`}
+                      className={`relative overflow-hidden pl-2.5 pr-2.5 py-1.5 mland:pl-2 mland:pr-2 mland:py-1 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2 transition-colors ${style.card}`}
                     >
                       {cardInner}
                     </div>

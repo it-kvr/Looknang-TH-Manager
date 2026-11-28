@@ -27,7 +27,7 @@ import {
   pushFeed,
   xi
 } from './playerCore';
-import { getTeamSeasonObjectiveInfo, mkMarket, rate, setBoardObjective, sortTable, syncAndEvaluateClubDemands } from './simulation';
+import { getTeamSeasonObjectiveInfo, issueBoardDirective, mkMarket, rate, setBoardObjective, sortTable, syncAndEvaluateClubDemands } from './simulation';
 import { pickUniqueSponsorBrandIds } from '../data/sponsorBrands';
 
 export interface NationalOpponentTemplate {
@@ -717,8 +717,10 @@ export function switchManagerClub(
   s.offers = [];
   s.dilemma = null;
   s.boardDirective = null;
+  s.boardDirectiveCd = 0;
   s.boardEffects = [];
   s.boardFeedbackLog = [];
+  issueBoardDirective(s);
   s.promo = 0;
   s.winBonus = 0;
   s.derby = 0;

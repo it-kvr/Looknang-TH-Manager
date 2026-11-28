@@ -148,6 +148,334 @@ const isResilientPersonality = (tr: number) =>
 const isVolatilePersonality = (tr: number) =>
   tr === 1 || tr === 5 || tr === 7 || tr === 15 || tr === 19 || tr === 22;
 
+const isNegativePersonality = (tr: number) =>
+  tr === 1 || tr === 7 || tr === 15 || tr === 19 || tr === 22;
+
+const isPositivePersonality = (tr: number) => {
+  const tone = PLAYER_PERSONALITIES[tr]?.tone;
+  return tone === 'pos' || tone === 'gold';
+};
+
+export interface PersonalityShiftEvent {
+  playerName: string;
+  teamId: number;
+  teamName: string;
+  isMe: boolean;
+  isUserClub: boolean;
+  fromId: number;
+  toId: number;
+  reason: string;
+  isPositive: boolean;
+}
+
+function appendPersCareerLog(q: Player, entry: string, careerP?: PlayerCareerProfile | null) {
+  if (!entry) return;
+  const prev = q.careerLog || [];
+  if (prev[prev.length - 1] !== entry) {
+    q.careerLog = [...prev, entry].slice(-30);
+  }
+  if (careerP) {
+    const prevP = careerP.careerLog || [];
+    if (prevP[prevP.length - 1] !== entry) {
+      careerP.careerLog = [...prevP, entry].slice(-30);
+    }
+  }
+}
+
+export function formatPersonalityShiftFeed(ev: PersonalityShiftEvent): string {
+  const fromDef = PLAYER_PERSONALITIES[ev.fromId] || PLAYER_PERSONALITIES[3];
+  const toDef = PLAYER_PERSONALITIES[ev.toId] || PLAYER_PERSONALITIES[3];
+  return `🧠 ${ev.playerName} เปลี่ยนบุคลิก: ${fromDef.label} → ${toDef.label} (${ev.reason})`;
+}
+
+function applyPersonalityShift(
+  q: Player,
+  team: Team,
+  state: GameState,
+  fromId: number,
+  toId: number,
+  reason: string,
+  curTurn: number
+): PersonalityShiftEvent | null {
+  if (fromId === toId || toId < 0 || toId >= PLAYER_PERSONALITIES.length) return null;
+  const careerP = q.me ? state.p : null;
+  q.customPers = toId;
+  q.persCd = curTurn;
+  if (q.me && careerP) {
+    careerP.customPers = toId;
+  }
+  const fromDef = PLAYER_PERSONALITIES[fromId] || PLAYER_PERSONALITIES[3];
+  const toDef = PLAYER_PERSONALITIES[toId] || PLAYER_PERSONALITIES[3];
+  appendPersCareerLog(
+    q,
+    `🧠 ซีซั่น ${state.season ?? 1}: บุคลิกเปลี่ยนเป็น ${toDef.label} (จาก ${fromDef.name}) — ${reason}`,
+    careerP
+  );
+  const isPos = !isNegativePersonality(toId) && (isPositivePersonality(toId) || isNegativePersonality(fromId));
+  return {
+    playerName: q.n,
+    teamId: team.id,
+    teamName: team.name,
+    isMe: Boolean(q.me),
+    isUserClub: team.id === state.me,
+    fromId,
+    toId,
+    reason,
+    isPositive: isPos
+  };
+}
+
+function pickDifferentTrait(pool: number[], curId: number): number | null {
+  const candidates = pool.filter((id) => id !== curId);
+  if (!candidates.length) return null;
+  return candidates[R(0, candidates.length - 1)];
+}
+
+function maybeEvolveMatchdayPersonality(
+  q: Player,
+  team: Team,
+  state: GameState,
+  info: {
+    curTurn: number;
+    played: boolean;
+    rt?: number;
+    motm?: string;
+    matchResult?: 'W' | 'D' | 'L';
+    isBigMatch?: boolean;
+    pCards: ('Y' | 'Y2R' | 'R')[];
+    nextMental: number;
+    nextPhys: number;
+    isUserClub: boolean;
+  }
+): PersonalityShiftEvent | null {
+  const { curTurn, played, rt, motm, matchResult, isBigMatch, pCards, nextMental, nextPhys, isUserClub } = info;
+  if (q.persCd != null && curTurn - q.persCd < 12) return null;
+
+  const careerP = q.me ? state.p : null;
+  const tr = resolvePersonalityId(q, careerP);
+  const tyc = q.tyc ?? q.yc ?? 0;
+  const rc = q.rc ?? 0;
+  const hasRedNow = pCards.includes('R') || pCards.includes('Y2R');
+  const hasYellowNow = pCards.includes('Y');
+
+  // 1. Discipline strain -> aggressive / hothead
+  if (
+    (hasRedNow || (hasYellowNow && tyc >= 5) || tyc >= 7 || rc >= 2) &&
+    tr !== 1 &&
+    tr !== 7 &&
+    tr !== 15
+  ) {
+    const chance = tr === 23 || tr === 6 ? 0.04 : hasRedNow ? 0.16 : 0.10;
+    if (Math.random() < chance) {
+      const nextId = pickDifferentTrait([7, 1, 15], tr);
+      if (nextId != null) {
+        return applyPersonalityShift(
+          q,
+          team,
+          state,
+          tr,
+          nextId,
+          hasRedNow ? 'อารมณ์หลุดจากใบแดงในสนาม' : 'สะสมใบเหลือง-ใบแดงจนอารมณ์ร้อนขึ้น',
+          curTurn
+        );
+      }
+    }
+  }
+
+  // 2. Heavy injury & physical/mental fatigue -> fragile
+  if ((q.inj || 0) >= 3 && nextPhys < 46 && nextMental < 56 && tr !== 19 && tr !== 18 && tr !== 23) {
+    if (Math.random() < 0.12) {
+      return applyPersonalityShift(q, team, state, tr, 19, 'บาดเจ็บหนักและสภาพจิตใจล้าสะสม', curTurn);
+    }
+  }
+
+  // 3. Prolonged benching & low morale -> withdrawn / erratic
+  if (
+    (state.md ?? 0) >= 6 &&
+    !played &&
+    (q.inj || 0) === 0 &&
+    (q.sus || 0) === 0 &&
+    (q.age || 24) >= 19 &&
+    (q.sp || 0) <= Math.max(2, Math.floor((state.md || 1) * 0.25)) &&
+    nextMental < 48 &&
+    tr !== 13 &&
+    tr !== 14 &&
+    tr !== 19 &&
+    tr !== 22
+  ) {
+    if (Math.random() < 0.09) {
+      const nextId = nextMental < 38 ? 22 : 13;
+      return applyPersonalityShift(q, team, state, tr, nextId, 'นั่งสำรองต่อเนื่องจนความมั่นใจถดถอย', curTurn);
+    }
+  }
+
+  // 4. Big-match / MOTM heroics -> clutch / fan favorite / fearless
+  if (
+    played &&
+    matchResult === 'W' &&
+    ((motm && motm === q.n) || (rt != null && rt >= 8.4)) &&
+    ((q.motm || 0) >= 2 || isBigMatch) &&
+    tr !== 4 &&
+    tr !== 9 &&
+    tr !== 16 &&
+    tr !== 17
+  ) {
+    const chance = isBigMatch ? 0.18 : 0.12;
+    if (Math.random() < chance) {
+      const pool = isNegativePersonality(tr) ? [9, 17] : [4, 9, 16, 17];
+      const nextId = pickDifferentTrait(pool, tr);
+      if (nextId != null) {
+        return applyPersonalityShift(
+          q,
+          team,
+          state,
+          tr,
+          nextId,
+          isBigMatch ? 'ระเบิดฟอร์มพระเอกในเกมใหญ่สำคัญ' : 'คว้า MOTM และพาทีมชนะต่อเนื่อง',
+          curTurn
+        );
+      }
+    }
+  }
+
+  // 5. Captaincy / Veteran leadership
+  if (
+    (team.cap === q.n || ((q.age || 24) >= 26 && (q.sp || 0) >= 10)) &&
+    nextMental >= 74 &&
+    rc === 0 &&
+    tr !== 0 &&
+    tr !== 21
+  ) {
+    const chance = team.cap === q.n ? 0.11 : 0.04;
+    if (Math.random() < chance) {
+      const nextId = team.cap === q.n ? 0 : 21;
+      return applyPersonalityShift(
+        q,
+        team,
+        state,
+        tr,
+        nextId,
+        team.cap === q.n ? 'สวมปลอกแขนกัปตันนำทีมจนเป็นผู้นำเต็มตัว' : 'เป็นพี่ใหญ่คอยประคองสปิริตห้องแต่งตัว',
+        curTurn
+      );
+    }
+  }
+
+  // 6. Hard training & disciplined lifestyle -> diligent / tactical / professional
+  const prog = isUserClub && state.mode === 'm' ? state.trainingPlan?.program : team.aiTraining?.program;
+  const inFocus =
+    (isUserClub && state.mode === 'm' && state.focusPlayer === q.n) ||
+    (!isUserClub && team.aiTraining?.focusPlayer === q.n);
+  if (
+    (state.md ?? 0) >= 8 &&
+    nextMental >= 76 &&
+    nextPhys >= 76 &&
+    tyc <= 2 &&
+    rc === 0 &&
+    (prog === 'tactics' || prog === 'fitness' || inFocus || (q.me && (q.sp || 0) >= 6)) &&
+    (tr === 3 || tr === 11 || tr === 13 || isNegativePersonality(tr))
+  ) {
+    const chance = isNegativePersonality(tr) ? 0.10 : 0.07;
+    if (Math.random() < chance) {
+      const pool =
+        prog === 'tactics'
+          ? [10, 6, 20]
+          : prog === 'fitness'
+            ? [2, 18, 23]
+            : [2, 6, 12, 23];
+      const nextId = pickDifferentTrait(pool, tr);
+      if (nextId != null) {
+        return applyPersonalityShift(q, team, state, tr, nextId, 'รักษาวินัยการฝึกซ้อมและสภาพใจ-กายยอดเยี่ยม', curTurn);
+      }
+    }
+  }
+
+  return null;
+}
+
+export function evolveSeasonPersonalities(state: GameState): PersonalityShiftEvent[] {
+  const events: PersonalityShiftEvent[] = [];
+  const curTurn = (state.season ?? 1) * 100 + (state.md ?? 0);
+  const seasonNum = state.season ?? 1;
+
+  state.teams.forEach((tm) => {
+    if (!tm?.sq?.length) return;
+    const wonTrophyThisSeason = Boolean(tm.trophies?.some((tr) => tr.season === seasonNum));
+    let clubShifts = 0;
+
+    tm.sq.forEach((q) => {
+      if (clubShifts >= 2) return;
+      if (q.persCd != null && curTurn - q.persCd < 6) return;
+
+      const careerP = q.me ? state.p : null;
+      const tr = resolvePersonalityId(q, careerP);
+      const sp = q.sp || 0;
+      const sg = q.sg || 0;
+      const sa = q.sa || 0;
+      const motm = q.motm || 0;
+      const tyc = q.tyc ?? q.yc ?? 0;
+      const rc = q.rc || 0;
+      const avgRating = (q.sra || 0) > 0 ? (q.srs || 0) / q.sra! : 0;
+      const mental = getPlayerMentalScore(q, careerP);
+
+      let ev: PersonalityShiftEvent | null = null;
+
+      // A. Heavy discipline trouble across the season
+      if ((tyc >= 6 || rc >= 2) && tr !== 1 && tr !== 7 && tr !== 15) {
+        if (Math.random() < 0.22) {
+          const nextId = pickDifferentTrait([7, 1, 15], tr);
+          if (nextId != null) {
+            ev = applyPersonalityShift(q, tm, state, tr, nextId, 'เล่นหนักและโดนใบคาดโทษบ่อยตลอดซีซั่น', curTurn);
+          }
+        }
+      }
+      // B. Trophy winner glory
+      if (!ev && wonTrophyThisSeason && (sp >= 10 || motm >= 2 || q.me) && tr !== 4 && tr !== 9 && tr !== 16 && tr !== 17 && tr !== 0 && tr !== 23) {
+        if (Math.random() < 0.22) {
+          const nextId = pickDifferentTrait([4, 9, 16, 17], tr);
+          if (nextId != null) {
+            ev = applyPersonalityShift(q, tm, state, tr, nextId, 'คว้าแชมป์ร่วมกับสโมสรจนยกระดับความนิ่ง', curTurn);
+          }
+        }
+      }
+      // C. Veteran maturity (28+, steady games, clean discipline)
+      if (!ev && (q.age || 24) >= 28 && sp >= 12 && rc === 0 && tyc <= 3 && (tr === 3 || tr === 1 || tr === 7 || tr === 22)) {
+        if (Math.random() < 0.24) {
+          const nextId = pickDifferentTrait([6, 21, 23, 14], tr);
+          if (nextId != null) {
+            ev = applyPersonalityShift(q, tm, state, tr, nextId, 'ประสบการณ์และวุฒิภาวะที่เติบโตขึ้นตลอดฤดูกาล', curTurn);
+          }
+        }
+      }
+      // D. Breakout / Superstar campaign
+      if (!ev && (motm >= 4 || avgRating >= 7.35 || sg >= 12 || sa >= 10) && tr !== 16 && tr !== 11 && tr !== 5 && tr !== 4 && tr !== 23) {
+        if (Math.random() < 0.20) {
+          const nextId = pickDifferentTrait([16, 11, 5, 4], tr);
+          if (nextId != null) {
+            ev = applyPersonalityShift(q, tm, state, tr, nextId, 'โชว์ฟอร์มยอดเยี่ยมตลอดฤดูกาลจนมั่นใจเต็มเปี่ยม', curTurn);
+          }
+        }
+      }
+      // E. Chronically sidelined & unhappy season
+      if (!ev && sp <= 3 && (q.age || 24) >= 20 && mental < 58 && (q.inj || 0) === 0 && !isNegativePersonality(tr) && tr !== 13 && tr !== 14) {
+        if (Math.random() < 0.16) {
+          const nextId = pickDifferentTrait([13, 19, 22], tr);
+          if (nextId != null) {
+            ev = applyPersonalityShift(q, tm, state, tr, nextId, 'ไม่ค่อยได้รับโอกาสลงเล่นตลอดฤดูกาล', curTurn);
+          }
+        }
+      }
+
+      if (ev) {
+        events.push(ev);
+        clubShifts++;
+      }
+    });
+  });
+
+  return events;
+}
+
 export function getPersonalityCareHint(tr: number): {
   tone: 'resilient' | 'volatile' | 'balanced';
   label: string;
@@ -752,9 +1080,12 @@ export function updateTeamWellbeingAfterMatchday(
   team: Team,
   state: GameState,
   ctx?: MatchdayWellbeingCtx
-) {
-  if (!team?.sq?.length) return;
+): PersonalityShiftEvent[] {
+  if (!team?.sq?.length) return [];
   ensureTeamWellbeing(team, state);
+  const curTurn = (state.season ?? 1) * 100 + (state.md ?? 0);
+  const personalityEvents: PersonalityShiftEvent[] = [];
+  let evolvedThisMatch = 0;
   const isUserClub = Boolean(ctx?.isUserClub ?? team.id === state.me);
   const isMgrUser = isUserClub && state.mode === 'm';
   const plan = isMgrUser ? state.trainingPlan : undefined;
@@ -1022,6 +1353,25 @@ export function updateTeamWellbeingAfterMatchday(
       state.p.mentalNote = q.mentalNote;
       state.p.physNote = q.physNote;
     }
+
+    if (evolvedThisMatch === 0) {
+      const shiftEv = maybeEvolveMatchdayPersonality(q, team, state, {
+        curTurn,
+        played,
+        rt,
+        motm: ctx?.motm,
+        matchResult: ctx?.matchResult,
+        isBigMatch: ctx?.isBigMatch,
+        pCards,
+        nextMental,
+        nextPhys,
+        isUserClub
+      });
+      if (shiftEv) {
+        personalityEvents.push(shiftEv);
+        evolvedThisMatch++;
+      }
+    }
   });
 
   if (state.mode === 'p' && team.id === state.me && state.p) {
@@ -1052,6 +1402,7 @@ export function updateTeamWellbeingAfterMatchday(
 
   // Re-roll temporary +5..+10 boost for the favorite player when both mental & phys are good
   syncFavoritePlayerBoost(team, state, true);
+  return personalityEvents;
 }
 
 export interface TalkTopicMeta {
@@ -1399,6 +1750,7 @@ export function applyPlayerCareAction(
   topicLabel?: string;
   deltaMental: number;
   deltaPhys: number;
+  personalityShift?: PersonalityShiftEvent;
 } {
   const team = state.teams[state.me];
   if (!team) {
@@ -1503,6 +1855,67 @@ export function applyPlayerCareAction(
     }
 
     const copy = buildConversationCopy(pl, team, chosenTopic, gainM, isFav, isCap, tr);
+
+    let personalityShift: PersonalityShiftEvent | undefined;
+    const canEvolveFromTalk = gainM >= 3 && (pl.persCd == null || curTurn - pl.persCd >= 8);
+    if (canEvolveFromTalk) {
+      const curPhysNow = getPlayerPhysScore(pl, pl.me ? state.p : null);
+      if (isNegativePersonality(tr) && pl.mental >= 74 && curPhysNow >= 68) {
+        const prob = chosenTopic === 'challenge' ? 0.16 : 0.26;
+        if (Math.random() < prob) {
+          const pool = tr === 19 ? [6, 8, 9] : tr === 22 ? [6, 12, 23] : [6, 8, 14, 23];
+          const nextId = pickDifferentTrait(pool, tr);
+          if (nextId != null) {
+            personalityShift =
+              applyPersonalityShift(
+                pl,
+                team,
+                state,
+                tr,
+                nextId,
+                state.mode === 'p' ? 'ปรับทัศนคติและดูแลสภาพจิตใจสำเร็จ' : 'เปิดใจพูดคุยและได้รับความไว้วางใจจากโค้ช',
+                curTurn
+              ) || undefined;
+          }
+        }
+      } else if ((tr === 3 || tr === 13) && pl.mental >= 82 && curPhysNow >= 74) {
+        if (Math.random() < 0.12) {
+          const nextId =
+            chosenTopic === 'tactical' || chosenTopic === 'coach_chat'
+              ? 10
+              : chosenTopic === 'personal' || chosenTopic === 'teammate_bond'
+                ? 8
+                : chosenTopic === 'challenge'
+                  ? 9
+                  : 6;
+          personalityShift =
+            applyPersonalityShift(
+              pl,
+              team,
+              state,
+              tr,
+              nextId,
+              state.mode === 'p' ? 'ฝึกโฟกัสจนนิ่งและชัดเจนขึ้น' : 'ซึมซับแนวคิดและทัศนคติจากโค้ช',
+              curTurn
+            ) || undefined;
+        }
+      }
+    }
+
+    let finalReply = copy.playerReply;
+    let persNote = '';
+    if (personalityShift) {
+      const toDef = PLAYER_PERSONALITIES[personalityShift.toId] || PLAYER_PERSONALITIES[3];
+      const feedTxt = formatPersonalityShiftFeed(personalityShift);
+      state.feed = state.feed || [];
+      if (state.feed[0]?.txt !== feedTxt) {
+        state.feed.unshift({ cat: 'พัฒนาบุคลิก', txt: feedTxt, tone: 'ok', s: state.season, m: (state.md ?? 0) + 1 });
+        if (state.feed.length > 8) state.feed.length = 8;
+      }
+      finalReply = `${copy.playerReply} ✨ (เปลี่ยนบุคลิกเป็น ${toDef.label})`;
+      persNote = ` · 🧠 บุคลิก → ${toDef.label}!`;
+    }
+
     if (state.mode === 'm') {
       const plan = getTeamTrainingPlan(state);
       const log: TalkDialogueLog = {
@@ -1511,7 +1924,7 @@ export function applyPlayerCareAction(
         topicId: chosenTopic,
         topicLabel: copy.topicLabel,
         coachLine: copy.coachLine,
-        playerReply: copy.playerReply,
+        playerReply: finalReply,
         deltaMental: gainM,
         deltaPhys: gainP
       };
@@ -1524,13 +1937,14 @@ export function applyPlayerCareAction(
     const physTxt = gainP > 0 ? ` · กาย +${gainP}` : '';
     return {
       ok: true,
-      msg: `💬 ${copy.topicLabel} · ${pl.n} (ใจ ${dMTxt} → ${pl.mental}/100${physTxt})${boostNow > 0 ? ` · 💖 ลูกรักปลุกพลัง +${boostNow}!` : ''}${remTxt}`,
+      msg: `💬 ${copy.topicLabel} · ${pl.n} (ใจ ${dMTxt} → ${pl.mental}/100${physTxt})${boostNow > 0 ? ` · 💖 ลูกรักปลุกพลัง +${boostNow}!` : ''}${persNote}${remTxt}`,
       boostNow,
       coachLine: copy.coachLine,
-      playerReply: copy.playerReply,
+      playerReply: finalReply,
       topicLabel: copy.topicLabel,
       deltaMental: gainM,
-      deltaPhys: gainP
+      deltaPhys: gainP,
+      personalityShift
     };
   }
 
