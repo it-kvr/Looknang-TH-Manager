@@ -169,7 +169,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
       {/* Studio Spotlight Portrait Stage */}
       <div
         className={`relative mx-2.5 mb-1 mland:mx-1.5 mland:mb-0.5 rounded-xl mland:rounded-lg border flex flex-col justify-between overflow-hidden ${
-          stretchStage ? 'flex-1 min-h-[104px] mland:min-h-[72px]' : 'min-h-[104px] mland:min-h-[72px]'
+          stretchStage ? 'flex-1 min-h-[120px] mland:min-h-[84px]' : 'min-h-[120px] mland:min-h-[84px]'
         } ${cardPalette.stageBox}`}
       >
         {/* Soft Studio Kit Radial Spotlight */}
@@ -182,7 +182,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
         />
 
         {/* Clean Top Utility Row inside Stage (Zero collision with head) */}
-        <div className="relative z-20 px-1.5 pt-1.5 mland:px-1 mland:pt-1 flex items-center justify-between gap-1 min-h-[24px] mland:min-h-[20px]">
+        <div className="relative z-20 px-1.5 pt-1 mland:px-1 mland:pt-0.5 flex items-center justify-between gap-1 min-h-[22px] mland:min-h-[18px]">
           <div className="flex items-center gap-1 min-w-0 flex-1">
             {resolvedStageTopLeft}
           </div>
@@ -193,7 +193,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
         </div>
 
         {/* Portrait & Corner Telemetry Container */}
-        <div className="relative flex-1 flex items-end justify-center pt-0.5">
+        <div className="relative flex-1 flex items-end justify-center">
           {/* Bottom-Left Inside Portrait: Height, Weight, Preferred Foot Stacked Vertically */}
           <div
             className="absolute bottom-1.5 left-1.5 mland:bottom-1 mland:left-1 z-20 flex flex-col items-start gap-[2px] mland:gap-[1px] pointer-events-none select-none"
@@ -219,8 +219,8 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           <div
             className={`relative z-10 [&>svg]:block ${
               stretchStage
-                ? '[&>svg]:w-[76px] [&>svg]:h-[82px] sm:[&>svg]:w-[88px] sm:[&>svg]:h-[94px] mland:[&>svg]:w-[48px] mland:[&>svg]:h-[52px]'
-                : '[&>svg]:w-[62px] [&>svg]:h-[66px] mland:[&>svg]:w-[42px] mland:[&>svg]:h-[44px]'
+                ? '[&>svg]:w-[92px] [&>svg]:h-[98px] sm:[&>svg]:w-[102px] sm:[&>svg]:h-[109px] mland:[&>svg]:w-[64px] mland:[&>svg]:h-[68px]'
+                : '[&>svg]:w-[80px] [&>svg]:h-[85px] sm:[&>svg]:w-[86px] sm:[&>svg]:h-[92px] mland:[&>svg]:w-[56px] mland:[&>svg]:h-[60px]'
             }`}
           >
             <PlayerFace
@@ -228,7 +228,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
               isGK={isCardGK}
               kitColor={cardShirtKit}
               trimColor={cardShirtTrim}
-              size={stretchStage ? 88 : 64}
+              size={stretchStage ? 98 : 84}
               bare
             />
           </div>

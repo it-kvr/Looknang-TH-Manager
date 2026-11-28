@@ -46,6 +46,7 @@ export const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamI
     const v = patch.vis.slice();
     v[5] = pl.no || v[5] || 10;
     pl.vis = v;
+    pl.visCustom = 1;
   }
   pl.age = clamp(Math.round(patch.age), 15, 45);
   if (patch.ht !== undefined) pl.ht = clamp(Math.round(patch.ht), 155, 205);

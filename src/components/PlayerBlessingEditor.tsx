@@ -479,7 +479,7 @@ export const PlayerBlessingEditor: React.FC<{
                 type="button"
                 onClick={() => {
                   SFX.tap();
-                  const next = rndVis(curPos, age < 20);
+                  const next = rndVis(curPos, age < 20, { natCode: player.nat });
                   next[5] = player.no || vis[5] || 10;
                   setVis(next);
                 }}

@@ -6,7 +6,7 @@ import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, TIER_STANDALONE_CLUBS, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { KIT_PATTERNS } from '../data/crestAndKitData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, getTeamClubIdentity, SPW, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, getTeamClubIdentity, SPW, APPEARANCE_ORIGIN_PRESETS, getPresetGroupProfile, rndVis, type AppearancePresetGroup, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort, getClubLevelAndGrantMeta } from '../engine/simulation';
 import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
@@ -284,16 +284,27 @@ export const MainMenu = React.memo<{
     return n;
   };
 
-  const rollFaceTraits = () => ({
-    c: P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']),
-    k: P([SKIN_P[0], SKIN_P[1], SKIN_P[2], SKIN_P[5], SKIN_P[6]]),
-    h: P([HAIR_P[0], HAIR_P[0], HAIR_P[1], HAIR_P[2], HAIR_P[5]]),
-    hs: P([20, 21, 22, 23, 24, 25, 14, 15, 16, 17, 18, 19, 9, 7, 5, 2]),
-    fh: P([0, 0, 0, 4, 1]),
-    fs: P([0, 2, 3, 5, 4]),
-    ey: P([9, 8, 5, 2, 0, 3]),
-    acc: Math.random() < 0.25 ? P([1, 4]) : 0
-  });
+  const [faceOrigin, setFaceOrigin] = useState<'all' | AppearancePresetGroup>('all');
+
+  const rollFaceTraitsFor = (
+    originOverride: 'all' | AppearancePresetGroup = 'all',
+    posOverride: Position = 'FW',
+    ageOverride = 17
+  ) => {
+    const preset: AppearancePresetGroup =
+      originOverride === 'all' ? P(APPEARANCE_ORIGIN_PRESETS).id : originOverride;
+    const vis = rndVis(posOverride, ageOverride < 20, { originPreset: preset });
+    return {
+      c: P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']),
+      k: SKIN_P[vis[0]] || SKIN_P[2],
+      h: HAIR_P[vis[1]] || HAIR_P[0],
+      hs: vis[2] % HS_N.length,
+      fh: vis[3] % FH_N.length,
+      fs: (vis[6] ?? 0) % FS_N.length,
+      ey: vis[4] % EY_N.length,
+      acc: (vis[7] ?? 0) % ACC_N.length
+    };
+  };
 
   const defaultNoForPos = (pos: Position) => (pos === 'GK' ? 1 : pos === 'DF' ? 4 : pos === 'MF' ? 8 : 10);
 
@@ -315,7 +326,7 @@ export const MainMenu = React.memo<{
   const [cFs, setCFs] = useState<number>(2);
   const [cEy, setCEy] = useState<number>(9);
   const [cAcc, setCAcc] = useState<number>(0);
-  const [faceChoices, setFaceChoices] = useState(() => Array.from({ length: 6 }, rollFaceTraits));
+  const [faceChoices, setFaceChoices] = useState(() => Array.from({ length: 6 }, () => rollFaceTraitsFor('all', 'FW', 17)));
   const [cSubMap, setCSubMap] = useState<Record<string, number>>({});
   const [cBase, setCBase] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
   const [cAttrs, setCAttrs] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
@@ -414,7 +425,7 @@ export const MainMenu = React.memo<{
     setClubFilter('all');
   };
 
-  const applyFaceTraits = (f: ReturnType<typeof rollFaceTraits>) => {
+  const applyFaceTraits = (f: ReturnType<typeof rollFaceTraitsFor>) => {
     setCColor(f.c);
     setCSkin(f.k);
     setCHair(f.h);
@@ -438,7 +449,7 @@ export const MainMenu = React.memo<{
     const rolled = rollStartingStats('FW', 'ST', defaultArch);
     const initTalent = R(62, 93);
     const initOv = OVF('FW', rolled.attrs);
-    const gallery = Array.from({ length: 6 }, rollFaceTraits);
+    const gallery = Array.from({ length: 6 }, () => rollFaceTraitsFor(faceOrigin, 'FW', 17));
     setFaceChoices(gallery);
     applyFaceTraits(gallery[0]);
     setCPos('FW');
@@ -1406,13 +1417,13 @@ export const MainMenu = React.memo<{
 
     const randomizeFaceOnly = () => {
       SFX.tap();
-      const next = rollFaceTraits();
+      const next = rollFaceTraitsFor(faceOrigin, cPos, cAge);
       applyFaceTraits({ ...next, c: cColor });
     };
 
-    const rerollFaceGallery = () => {
+    const rerollFaceGallery = (originOverride: 'all' | AppearancePresetGroup = faceOrigin) => {
       SFX.tap();
-      const nextGallery = Array.from({ length: 6 }, rollFaceTraits);
+      const nextGallery = Array.from({ length: 6 }, () => rollFaceTraitsFor(originOverride, cPos, cAge));
       setFaceChoices(nextGallery);
       applyFaceTraits(nextGallery[0]);
     };
@@ -1420,7 +1431,7 @@ export const MainMenu = React.memo<{
     const randomizeAll = () => {
       SFX.tap();
       setCName(genPlayerName());
-      const nextGallery = Array.from({ length: 6 }, rollFaceTraits);
+      const nextGallery = Array.from({ length: 6 }, () => rollFaceTraitsFor(faceOrigin, cPos, cAge));
       setFaceChoices(nextGallery);
       applyFaceTraits(nextGallery[0]);
       const rSp = SPW(cPos);
@@ -1849,15 +1860,61 @@ export const MainMenu = React.memo<{
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">เลือกใบหน้าต้นแบบ</span>
-                      <span className="hidden sm:inline ml-2 text-[11px] text-[var(--mut)]">คลิกเลือกแล้วปรับละเอียดด้านล่างได้</span>
+                      <span className="hidden sm:inline ml-2 text-[11px] text-[var(--mut)]">เลือกสไตล์ภูมิภาคไทย/ต่างชาติ หรือคลิกปรับละเอียดด้านล่าง</span>
                     </div>
                     <button
                       type="button"
-                      onClick={rerollFaceGallery}
+                      onClick={() => rerollFaceGallery()}
                       className="btn btn-xs btn-secondary shrink-0"
                     >
                       🎲 สุ่ม 6 หน้าใหม่
                     </button>
+                  </div>
+
+                  {/* Origin / Nationality Face Style Selector */}
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFaceOrigin('all');
+                          rerollFaceGallery('all');
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors ${
+                          faceOrigin === 'all'
+                            ? 'bg-[var(--g)] text-white shadow-xs'
+                            : 'bg-[var(--surface-2)]/70 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                        }`}
+                      >
+                        🌐 ไทย + ต่างชาติ
+                      </button>
+                      {APPEARANCE_ORIGIN_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            setFaceOrigin(preset.id);
+                            rerollFaceGallery(preset.id);
+                          }}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors inline-flex items-center gap-1 ${
+                            faceOrigin === preset.id
+                              ? 'bg-[var(--g)] text-white shadow-xs'
+                              : 'bg-[var(--surface-2)]/70 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                          }`}
+                        >
+                          <span>{preset.icon}</span>
+                          <span>{preset.shortLabel}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {faceOrigin !== 'all' && (() => {
+                      const meta = getPresetGroupProfile(faceOrigin);
+                      return (
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] bg-[var(--surface-2)]/50 border border-[var(--line)]/70 rounded-lg px-2 py-1 leading-snug">
+                          <b className="text-[var(--ink)]">{meta.icon} {meta.label}:</b> {meta.faceDesc} · <b className="text-[var(--ink)]">ทรงผม:</b> {meta.hairDesc}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="grid grid-cols-3 sm:grid-cols-6 mland:grid-cols-6 gap-2 mland:gap-1.5">
@@ -1928,40 +1985,72 @@ export const MainMenu = React.memo<{
                   ))}
                 </div>
 
-                <div className="pt-2.5 mland:pt-1.5 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-x-4 gap-y-2 mland:gap-y-1.5 text-xs mland:text-[10px]">
+                <div className="pt-2.5 mland:pt-1.5 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-x-4 gap-y-2 mland:gap-y-1.5 text-xs mland:text-[10px] items-start">
                   {[
                     ['รูปหน้า', FS_N, cFs, setCFs],
                     ['แววตา / อารมณ์', EY_N, cEy, setCEy],
-                    ['ทรงผม', HS_N, cHs, setCHs],
-                    ['หนวดเครา', FH_N, cFh, setCFh],
-                    ['เอกลักษณ์ / เครื่องประดับ', ACC_N, cAcc, setCAcc]
+                    ['ทรงผม', HS_N, cHs, setCHs]
                   ].map(([lbl, arr, cur, setter]) => (
-                    <div
-                      key={lbl as string}
-                      className={`space-y-1 ${
-                        lbl === 'เอกลักษณ์ / เครื่องประดับ' ? 'sm:col-span-2 mland:col-span-2' : ''
-                      }`}
-                    >
+                    <div key={lbl as string} className="space-y-1">
                       <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">{lbl as string}</div>
                       <div className="flex flex-wrap gap-1">
-                        {(arr as string[]).map((l, i) => (
-                          <button
-                            key={l}
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              (setter as React.Dispatch<React.SetStateAction<number>>)(i);
-                            }}
-                            className={`px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9px] font-semibold cursor-pointer transition-colors ${
-                              cur === i ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]/65 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
-                            }`}
-                          >
-                            {l}
-                          </button>
-                        ))}
+                        {(arr as string[]).map((l, i) => {
+                          const isHairRec =
+                            lbl === 'ทรงผม' &&
+                            faceOrigin !== 'all' &&
+                            getPresetGroupProfile(faceOrigin).recommendedHairStyles.includes(i);
+                          return (
+                            <button
+                              key={l}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                (setter as React.Dispatch<React.SetStateAction<number>>)(i);
+                              }}
+                              className={`px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9px] font-semibold cursor-pointer transition-colors ${
+                                cur === i
+                                  ? 'bg-[var(--g)] text-white shadow-xs'
+                                  : isHairRec
+                                    ? 'bg-[var(--lamp-soft)]/35 border border-[var(--lamp)]/50 text-[var(--ink)] hover:border-[var(--g)]'
+                                    : 'bg-[var(--surface-2)]/65 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                              }`}
+                            >
+                              {isHairRec ? `★ ${l}` : l}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
+                  <div className="space-y-2 mland:space-y-1.5">
+                    {[
+                      ['หนวดเครา', FH_N, cFh, setCFh],
+                      ['เอกลักษณ์ / เครื่องประดับ', ACC_N, cAcc, setCAcc]
+                    ].map(([lbl, arr, cur, setter]) => (
+                      <div key={lbl as string} className="space-y-1">
+                        <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">{lbl as string}</div>
+                        <div className="flex flex-wrap gap-1">
+                          {(arr as string[]).map((l, i) => (
+                            <button
+                              key={l}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                (setter as React.Dispatch<React.SetStateAction<number>>)(i);
+                              }}
+                              className={`px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9px] font-semibold cursor-pointer transition-colors ${
+                                cur === i
+                                  ? 'bg-[var(--g)] text-white shadow-xs'
+                                  : 'bg-[var(--surface-2)]/65 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                              }`}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

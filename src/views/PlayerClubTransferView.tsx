@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { GameState, Player, SubRole, Team } from '../types/game';
-import { clamp } from '../utils/math';
+import { clamp, fmtMoneyNum } from '../utils/math';
 import { TN, AR_T, LINE } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import {
@@ -428,7 +428,7 @@ export const PlayerClubTransferView = React.memo<{
                             {(q.hg || q.customCreated) ? <span className="text-[10px] shrink-0" title="เด็กปั้นสโมสร">🌱</span> : null}
                           </div>
                           <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                            อายุ {q.age} ปี · {isStarter ? '⭐ ตัวจริง' : '🪑 สำรอง'}
+                            อายุ {q.age} ปี · {isStarter ? '⭐ ตัวจริง' : '🪑 สำรอง'} · ค่าเหนื่อย <b className="text-[#b45309] dark:text-[var(--lamp)]">{fmtMoneyNum(q.con?.wg ?? wagOf(q))}/นัด</b>
                           </div>
                         </div>
                       </div>

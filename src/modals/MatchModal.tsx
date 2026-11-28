@@ -498,6 +498,7 @@ export const MatchModal = React.memo<{
     highlightSeq: 0,
     miracleUsedH: false,
     miracleUsedA: false,
+    godPowerStrikes: 0,
     maxDeficitH: 0,
     maxDeficitA: 0,
     miracleCelebrated: false,
@@ -1131,7 +1132,12 @@ export const MatchModal = React.memo<{
           fit: oldAg.fit,
           injuredOut: oldAg.injuredOut,
           blessedMins: oldAg.blessedMins,
-          blessedTag: oldAg.blessedTag
+          blessedTag: oldAg.blessedTag,
+          godPowerMins: oldAg.godPowerMins,
+          godPowerOrigD: oldAg.godPowerOrigD,
+          godPowerOrigOv: oldAg.godPowerOrigOv,
+          d: oldAg.godPowerMins && oldAg.godPowerMins > 0 ? { ...oldAg.d } : nextAg.d,
+          ov: oldAg.godPowerMins && oldAg.godPowerMins > 0 ? oldAg.ov : nextAg.ov
         };
       }
     });
@@ -4270,6 +4276,7 @@ export const MatchModal = React.memo<{
         (shooter.d.cur + (shooter.sig === 'cur' ? 6 : 0) + (agentHasTrait(shooter, 'outside_curler') && (shotStyle === 'trivela' || shotStyle === 'curler') ? 8 : 0)) * 0.25 +
         (shooter.d.pw + (shooter.sig === 'pw' ? 6 : 0) + (agentHasTrait(shooter, 'long_shot_lover') && dist >= 20 ? 8 : 0)) * 0.25 +
         (isClutchShooter && (curMin >= 70 || isDerby || kind !== 'league') ? 6 : 0) +
+        (shooter.tr === 26 ? 7 : 0) +
         (agentHasTrait(shooter, 'super_sub') && isShooterSub ? 7 : 0) +
         (attBlessed ? 16 : 0)
       : 60;
@@ -5410,7 +5417,7 @@ export const MatchModal = React.memo<{
         return;
       }
 
-      const defVolatile = nearestDef.tr === 1 || nearestDef.tr === 7 || nearestDef.tr === 15 || nearestDef.tr === 22;
+      const defVolatile = nearestDef.tr === 1 || nearestDef.tr === 7 || nearestDef.tr === 15 || nearestDef.tr === 22 || nearestDef.tr === 26;
       const defBehindScore = defSide === 'H' ? simRef.current.gh < simRef.current.ga : simRef.current.ga < simRef.current.gh;
       const defHasDisciplinePerk = defTeam.id === state.me && Boolean(state.p?.perks?.includes('discipline_pro'));
       const defsBetweenCarrierAndGoal = defPool.filter(
@@ -5422,6 +5429,7 @@ export const MatchModal = React.memo<{
         0.048 +
           (defCfg.press === 2 ? 0.028 : defCfg.press === 0 ? -0.014 : 0) +
           (defVolatile ? 0.034 : nearestDef.tr === 0 || nearestDef.tr === 6 || nearestDef.tr === 21 || nearestDef.tr === 23 ? -0.014 : 0) +
+          (carrier.tr === 25 ? 0.026 : 0) +
           (agentHasTrait(nearestDef, 'slide_tackler') ? 0.012 : 0) +
           (defHasDisciplinePerk ? -0.012 : 0) +
           (nearestDef.fit < 58 ? 0.018 : nearestDef.fit < 68 ? 0.008 : 0) +
@@ -10160,8 +10168,22 @@ export const MatchModal = React.memo<{
     sr.maxDeficitH = Math.max(sr.maxDeficitH, sr.ga - sr.gh);
     sr.maxDeficitA = Math.max(sr.maxDeficitA, sr.gh - sr.ga);
 
-    // Tick down active divine blessings
+    // Tick down active divine blessings & temporary God Power (+50)
     w.agents.forEach((ag) => {
+      if ((ag.godPowerMins ?? 0) > 0) {
+        ag.godPowerMins = Math.max(0, (ag.godPowerMins ?? 0) - 1);
+        if (ag.godPowerMins === 0) {
+          if (ag.godPowerOrigD) {
+            ag.d = { ...ag.godPowerOrigD };
+            ag.godPowerOrigD = undefined;
+          }
+          if (ag.godPowerOrigOv != null) {
+            ag.ov = ag.godPowerOrigOv;
+            ag.godPowerOrigOv = undefined;
+          }
+          pushLog(curMin, `⚡ หมดเวลาพลังเทพ +50 ชั่วคราวของ ${ag.shortName}`, 'sys');
+        }
+      }
       if ((ag.blessedMins ?? 0) > 0) {
         ag.blessedMins = Math.max(0, (ag.blessedMins ?? 0) - 1);
         if (ag.blessedMins === 0) ag.blessedTag = undefined;
@@ -10325,6 +10347,68 @@ export const MatchModal = React.memo<{
           if (picked.isMe || blessedNowCount === 0) {
             pushTimeline(curMin, bSide, 'blessed', picked.id, tagByPos);
           }
+        }
+      }
+    }
+
+    // 3. God Power Lightning Strike ("พลังเทพ +50") — sky lightning strikes a player on pitch for +50 temporary attributes!
+    const godActiveNow = activeAgentsAll.some((a) => (a.godPowerMins ?? 0) > 0);
+    if (curMin >= 10 && curMin <= 86 && !godActiveNow && sr.godPowerStrikes < 2) {
+      const strikeChance = sr.godPowerStrikes === 0 && curMin >= 22 ? 0.045 : 0.025;
+      if (Math.random() < strikeChance) {
+        const candidates = activeAgentsAll.filter((a) => (a.godPowerMins ?? 0) === 0);
+        if (candidates.length) {
+          const picked = P(candidates);
+          const minsDur = R(6, 10);
+          sr.godPowerStrikes += 1;
+          if (!picked.godPowerOrigD) picked.godPowerOrigD = { ...picked.d };
+          if (picked.godPowerOrigOv == null) picked.godPowerOrigOv = picked.ov;
+          const boostedD: Record<string, number> = {};
+          Object.keys(picked.godPowerOrigD).forEach((k) => {
+            boostedD[k] = clamp((picked.godPowerOrigD![k] || 50) + 50, 1, 199);
+          });
+          picked.d = boostedD;
+          picked.ov = clamp((picked.godPowerOrigOv || picked.ov) + 50, 1, 199);
+          picked.godPowerMins = minsDur;
+          picked.blessedMins = Math.max(picked.blessedMins || 0, minsDur);
+          picked.blessedTag = 'พลังเทพ +50';
+          adjustLiveForm(picked.id, 0.75);
+          const gTeam = picked.side === 'H' ? homeOrig : awayOrig;
+          if (!isInstant) {
+            for (let i = 0; i < 24; i++) {
+              const ang = (Math.PI * 2 * i) / 24;
+              const spd = 9 + Math.random() * 18;
+              w.sparkles.push({
+                x: picked.x,
+                y: picked.y,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd,
+                color: i % 3 === 0 ? '#ffffff' : i % 3 === 1 ? '#38bdf8' : '#fde047',
+                size: 2.4 + Math.random() * 2.2,
+                ttl: 1.6,
+                maxTtl: 1.6
+              });
+            }
+            addWorldFx(w, {
+              type: 'lightning',
+              x: picked.x,
+              y: picked.y,
+              label: `⚡ ฟ้าผ่า! ${picked.shortName} พลังเทพ +50`,
+              color: '#38bdf8',
+              ttl: 2.5,
+              maxTtl: 2.5
+            });
+            triggerDramaSlow(w, 1.85, `⚡🌩️ เปรี้ยง!! ฟ้าผ่าโดน ${picked.shortName} ได้รับพลังเทพชั่วคราว +50!`);
+            triggerCoachShout(w, picked.side, `⚡ ${picked.shortName} ร่างเทพ +50!!`, 3.2);
+            SFX.thunder();
+            vibrate([40, 25, 65]);
+          }
+          pushLog(
+            curMin,
+            `⚡🌩️ เปรี้ยง!! ฟ้าผ่ากลางสนามโดน ${picked.id} (${gTeam.name}) ได้รับค่าพลังเทพชั่วคราว +50 นาน ${minsDur} นาที!`,
+            'goal'
+          );
+          pushTimeline(curMin, picked.side, 'god_power', picked.id, `พลังเทพ +50 (${minsDur}')`);
         }
       }
     }
@@ -11597,7 +11681,7 @@ export const MatchModal = React.memo<{
           (w.ball.flightType === 'bounce' && (Boolean(w.ball.bounceNext?.goalPayload) || Boolean(w.ball.bounceNext?.looseRebound)));
         const slowActive = cineSlowMoRef.current && (w.dramaSlowSec > 0 || isSlowShot);
         const isBigFx = (t: LivePitchFx['type']) =>
-          t === 'goal' || t === 'var' || t === 'foul' || t === 'penalty' || t === 'save' || t === 'woodwork' || t === 'offside' || t === 'sub';
+          t === 'goal' || t === 'var' || t === 'foul' || t === 'penalty' || t === 'save' || t === 'woodwork' || t === 'offside' || t === 'sub' || t === 'lightning';
 
         w.fx.forEach((f) => {
           f.ttl -= rawDt * (isBigFx(f.type) ? 1 : speedMul > 2 ? 1.4 : 1);
@@ -11981,7 +12065,7 @@ export const MatchModal = React.memo<{
             lowFitSpd *
             turfMatchMods.sprintSpeedMult *
             agFacMods.sprintBonusMult *
-            ((ag.blessedMins ?? 0) > 0 ? 1.14 : 1.0) *
+            ((ag.godPowerMins ?? 0) > 0 ? 1.24 : (ag.blessedMins ?? 0) > 0 ? 1.14 : 1.0) *
             (w.miracle?.side === ag.side && w.miracle.minsLeft > 0 ? (w.miracle.maxDeficit >= 3 ? 1.2 : 1.16) : 1.0) *
             moveScale;
           const isUrgent = ag.intent === 'PASS_TARGET' || ag.intent === 'PRESS' || ag.intent === 'RESET' || ag.intent === 'MAKE_RUN' || ag.intent === 'WALL';

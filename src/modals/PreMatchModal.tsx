@@ -19,8 +19,8 @@ import type { GameState, MatchEnvironment, Mentality, Player, SubRole, Team } fr
 import { AR_T, FSD, POS, RN, TN } from '../data/thaiFootballData';
 import { computeTurfMatchModifiers, getStadiumStyleSpec, getTurfGradeSpec } from '../data/crestAndKitData';
 import { SFX } from '../utils/audioTheme';
-import { clamp } from '../utils/math';
-import { getFormationSlots, getShirtNo, matchKits, pickBestCaptain, pickGK, playerPen, xi } from '../engine/playerCore';
+import { clamp, fmtMoneyNum } from '../utils/math';
+import { getFormationSlots, getShirtNo, matchKits, pickBestCaptain, pickGK, playerPen, squadWage, wagOf, xi } from '../engine/playerCore';
 import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
 import {
   EXTRA_CUP_META,
@@ -190,6 +190,16 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     () => Math.round(awayXi.reduce((s, q) => s + q.ov, 0) / Math.max(1, awayXi.length)),
     [awayXi]
   );
+  const homeXiWage = useMemo(
+    () => +homeXi.reduce((s, q) => s + (q.con?.wg ?? wagOf(q)), 0).toFixed(1),
+    [homeXi]
+  );
+  const awayXiWage = useMemo(
+    () => +awayXi.reduce((s, q) => s + (q.con?.wg ?? wagOf(q)), 0).toFixed(1),
+    [awayXi]
+  );
+  const homeSquadWage = useMemo(() => squadWage(homeTeam), [homeTeam]);
+  const awaySquadWage = useMemo(() => squadWage(awayTeam), [awayTeam]);
   const homeSlots = useMemo(() => getFormationSlots(homeTeam), [homeTeam]);
   const awaySlots = useMemo(() => getFormationSlots(awayTeam), [awayTeam]);
 
@@ -475,9 +485,11 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     team: Team,
     isStarter: boolean,
     isCap: boolean,
-    opts?: { compact?: boolean }
+    opts?: { compact?: boolean; showWage?: boolean }
   ) => {
     const compact = Boolean(opts?.compact);
+    const showWage = Boolean(opts?.showWage);
+    const rowWage = pl.con?.wg ?? wagOf(pl);
     const no = getShirtNo(team, pl);
     const stMeta = getStaminaMeta(pl.fit);
     const fit = stMeta.f;
@@ -505,7 +517,9 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const rowFavBoost = getActiveFavBoost(pl, team, isMePlayer ? state.p : null);
     const gridColsCls = showSwapCol
       ? 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_auto_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_auto_auto]'
-      : 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_auto]';
+      : showWage
+        ? 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_62px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_54px_auto]'
+        : 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_auto]';
 
     return (
       <div
@@ -594,7 +608,15 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           <PlayerStatusBadge sus={pl.sus} inj={pl.inj} fit={fit} variant="cell" />
         </div>
 
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-1.5 mland:gap-1">
+          {showWage && (
+            <span
+              title={`ค่าเหนื่อย ${fmtMoneyNum(rowWage)}/นัด`}
+              className="text-[9.5px] mland:text-[8px] font-bold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap"
+            >
+              {fmtMoneyNum(rowWage)}
+            </span>
+          )}
           <OvrBadge
             ov={pl.ov + rowFavBoost}
             boost={rowFavBoost}
@@ -848,49 +870,120 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 mland:p-2 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2">
-                {[
-                  { side: 'H' as const, team: homeTeam, list: homeXi, slots: homeSlots, bench: homeBench, cap: homeCap, ov: homeXiOv },
-                  { side: 'A' as const, team: awayTeam, list: awayXi, slots: awaySlots, bench: awayBench, cap: awayCap, ov: awayXiOv }
-                ].map((col) => (
-                  <div key={col.side} className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex flex-col min-w-0">
-                    <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <ClubCrest name={col.team.name} size={20} team={col.team} club={state.club} isMyClub={col.team.id === state.me && isMgr} />
-                        <span className="font-extrabold text-xs mland:text-[10.5px] truncate">{col.team.name}</span>
-                        {col.team.id === state.me && <MyTeamBadge size="2xs" />}
+                <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 mland:p-2 space-y-3 mland:space-y-2">
+                  {/* Head-to-Head Power & Wage Comparison Strip */}
+                  {(() => {
+                    const xiOvDiff = homeXiOv - awayXiOv;
+                    const xiWgDiff = +(homeXiWage - awayXiWage).toFixed(1);
+                    const sqWgDiff = homeSquadWage - awaySquadWage;
+                    return (
+                      <div className="rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5 mland:space-y-1">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 text-[11px] mland:text-[9.5px]">
+                          <div className="flex items-center justify-end gap-1.5 min-w-0">
+                            <span className={`font-extrabold truncate ${meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                              {homeTeam.name}
+                            </span>
+                            <ClubCrest name={homeTeam.name} size={18} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+                          </div>
+                          <span className="text-[9.5px] mland:text-[8px] font-black uppercase tracking-wider text-[var(--mut)] px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)]">
+                            เทียบพลัง &amp; ค่าเหนื่อย
+                          </span>
+                          <div className="flex items-center justify-start gap-1.5 min-w-0">
+                            <ClubCrest name={awayTeam.name} size={18} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+                            <span className={`font-extrabold truncate ${!meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                              {awayTeam.name}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-1.5 mland:gap-1 text-center">
+                          <div className="rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 px-2 py-1 mland:py-0.5">
+                            <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">⚡ ค่าพลัง 11 ตัวจริง (รุก/รับ)</div>
+                            <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold tabular">
+                              <span className={xiOvDiff > 0 ? 'text-[var(--g)]' : xiOvDiff < 0 ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
+                                {homeXiOv} <span className="text-[9px] mland:text-[7.5px] font-semibold text-[var(--mut)]">({homeRate.at}/{homeRate.df})</span>
+                              </span>
+                              <span className="text-[var(--mut)] font-bold">vs</span>
+                              <span className={xiOvDiff < 0 ? 'text-[var(--g)]' : xiOvDiff > 0 ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
+                                {awayXiOv} <span className="text-[9px] mland:text-[7.5px] font-semibold text-[var(--mut)]">({awayRate.at}/{awayRate.df})</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 px-2 py-1 mland:py-0.5">
+                            <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">💰 ค่าเหนื่อย XI / นัด</div>
+                            <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold tabular">
+                              <span className={xiWgDiff > 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}>
+                                {fmtMoneyNum(homeXiWage)}
+                              </span>
+                              <span className="text-[var(--mut)] font-bold">vs</span>
+                              <span className={xiWgDiff < 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}>
+                                {fmtMoneyNum(awayXiWage)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 px-2 py-1 mland:py-0.5">
+                            <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">🏦 ค่าเหนื่อยทั้งทีม / นัด</div>
+                            <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold tabular">
+                              <span className={sqWgDiff > 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}>
+                                {fmtMoneyNum(homeSquadWage)}
+                              </span>
+                              <span className="text-[var(--mut)] font-bold">vs</span>
+                              <span className={sqWgDiff < 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}>
+                                {fmtMoneyNum(awaySquadWage)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-bold tabular shrink-0">
-                        {col.team.cf ? 'กำหนดเอง' : col.team.form} · {AR_T[col.team.tac]} · XI {col.ov}
-                      </span>
-                    </div>
-                    <div
-                      className="px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
-                      style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
-                    >
-                      <span>ตัวจริง</span>
-                      <span className="tabular">{col.list.length} คน</span>
-                    </div>
-                    <div className="divide-y divide-[var(--line)]/50">
-                      {col.list.map((pl, idx) =>
-                        renderPlayerRow(pl, col.slots[idx]?.sp || pl.ro, col.team, true, pl.n === col.cap, { compact: true })
+                    );
+                  })()}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2">
+                  {[
+                    { side: 'H' as const, team: homeTeam, list: homeXi, slots: homeSlots, bench: homeBench, cap: homeCap, ov: homeXiOv, xiWg: homeXiWage, sqWg: homeSquadWage },
+                    { side: 'A' as const, team: awayTeam, list: awayXi, slots: awaySlots, bench: awayBench, cap: awayCap, ov: awayXiOv, xiWg: awayXiWage, sqWg: awaySquadWage }
+                  ].map((col) => (
+                    <div key={col.side} className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex flex-col min-w-0">
+                      <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <ClubCrest name={col.team.name} size={20} team={col.team} club={state.club} isMyClub={col.team.id === state.me && isMgr} />
+                          <span className="font-extrabold text-xs mland:text-[10.5px] truncate">{col.team.name}</span>
+                          {col.team.id === state.me && <MyTeamBadge size="2xs" />}
+                        </div>
+                        <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-bold tabular shrink-0">
+                          {col.team.cf ? 'กำหนดเอง' : col.team.form} · XI <b className="text-[var(--ink)]">{col.ov}</b> · <b className="text-[#b45309] dark:text-[var(--lamp)]">{fmtMoneyNum(col.xiWg)}/นัด</b>
+                        </span>
+                      </div>
+                      <div
+                        className="px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
+                        style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
+                      >
+                        <span>ตัวจริง ({col.list.length} คน)</span>
+                        <span className="tabular text-[9px] mland:text-[7.5px] text-[var(--mut)] font-bold">ค่าเหนื่อย / OVR</span>
+                      </div>
+                      <div className="divide-y divide-[var(--line)]/50">
+                        {col.list.map((pl, idx) =>
+                          renderPlayerRow(pl, col.slots[idx]?.sp || pl.ro, col.team, true, pl.n === col.cap, { compact: true, showWage: true })
+                        )}
+                      </div>
+                      {col.bench.length > 0 && (
+                        <>
+                          <div className="px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
+                            <span>ตัวสำรอง ({col.bench.length} คน)</span>
+                            <span className="tabular text-[9px] mland:text-[7.5px] text-[var(--mut)] font-bold">รวมทีม {fmtMoneyNum(col.sqWg)}/นัด</span>
+                          </div>
+                          <div className="divide-y divide-[var(--line)]/50">
+                            {col.bench.slice(0, 7).map((pl) =>
+                              renderPlayerRow(pl, pl.ro, col.team, false, false, { compact: true, showWage: true })
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
-                    {col.bench.length > 0 && (
-                      <>
-                        <div className="px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
-                          <span>ตัวสำรอง</span>
-                          <span className="tabular text-[var(--mut)]">{col.bench.length} คน</span>
-                        </div>
-                        <div className="divide-y divide-[var(--line)]/50">
-                          {col.bench.slice(0, 7).map((pl) =>
-                            renderPlayerRow(pl, pl.ro, col.team, false, false, { compact: true })
-                          )}
-                        </div>
-                      </>
-                    )}
+                  ))}
                   </div>
-                ))}
                 </div>
               </div>
             ) : (

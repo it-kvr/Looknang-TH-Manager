@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Scissors, Star } from 'lucide-react';
 import type { Position, Player, Team, GameState } from '../types/game';
-import { fmtMoney } from '../utils/math';
+import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, SPN, AR_T, CONFED_META, getCountryMetaByCode, getForeignClubStadiumName, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK } from '../engine/playerCore';
+import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK, squadWage, wagOf } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
 import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans, isPlayerShortlisted, toggleShortlistPlayer } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
@@ -54,6 +54,13 @@ export const PlayerInspectorModal: React.FC<{
   const effectiveMode = inspectMode === 'missions' && isRetired ? 'info' : inspectMode;
   const canDoMissions = !isRetired;
   const canEditShirtNo = !isRetired && Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
+  const canEditAppearance = !isRetired && ((isMePlayer && state.mode === 'p') || (isMyTeam && state.mode === 'm'));
+  const resolvedNatCode =
+    livePlayer.nat ||
+    (liveTeam && (liveTeam.tier >= 3 || liveTeam.foreign === 1)
+      ? getForeignTeamCountryMeta(liveTeam.name)?.code
+      : undefined) ||
+    'TH';
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
   const isFav = !isRetired && isTeamFavoritePlayer(liveTeam, livePlayer.n);
@@ -276,6 +283,7 @@ export const PlayerInspectorModal: React.FC<{
                   careerProfile: isMePlayer ? state.p : null
                 }}
                 name={livePlayer.n}
+                nationalityCode={resolvedNatCode}
                 clubCrest={
                   liveTeam ? (
                     <ClubCrest
@@ -350,7 +358,7 @@ export const PlayerInspectorModal: React.FC<{
                   ) : null
                 }
                 renderStageTopRight={
-                  isMePlayer && state.mode === 'p' && !isRetired
+                  canEditAppearance
                     ? (_palette, tone) => (
                         <button
                           type="button"
@@ -466,9 +474,11 @@ export const PlayerInspectorModal: React.FC<{
           onToast={onToast}
         />
       )}
-      {showAppearanceModal && isMePlayer && state.mode === 'p' && !isRetired && (
+      {showAppearanceModal && canEditAppearance && (
         <PlayerAppearanceModal
           state={state}
+          targetPlayer={!isMePlayer || state.mode === 'm' ? livePlayer : null}
+          targetTeam={liveTeam}
           onClose={() => setShowAppearanceModal(false)}
           onUpdateState={onUpdateState}
           onToast={onToast}
@@ -499,6 +509,10 @@ export const TeamInspectorModal: React.FC<{
   const topScorer = team.sq.slice().sort((a, b) => (b.sg || 0) - (a.sg || 0) || b.ov - a.ov)[0];
   const topAssist = team.sq.slice().sort((a, b) => (b.sa || 0) - (a.sa || 0) || b.ov - a.ov)[0];
   const totalVal = team.sq.reduce((s, q) => s + vlu(q), 0);
+  const teamWage = squadWage(team);
+  const myTeamWage = squadWage(myTeam);
+  const xiWage = +starters.reduce((s, q) => s + (q.con?.wg ?? wagOf(q)), 0).toFixed(1);
+  const myXiWage = +xi(myTeam).reduce((s, q) => s + (q.con?.wg ?? wagOf(q)), 0).toFixed(1);
   const formChars = (team.fm || '').slice(-5).split('');
   const gd = team.gf - team.ga;
   const favPlayersList = getTeamFavoritePlayers(team);
@@ -758,6 +772,36 @@ export const TeamInspectorModal: React.FC<{
                   })}
                 </div>
 
+                {/* Power & Wage Head-to-Head vs My Club */}
+                <div className="grid grid-cols-2 divide-x divide-[var(--line)]/70 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)]/70 py-1 mland:py-0.5 text-center">
+                  {(
+                    [
+                      ['💰 ค่าเหนื่อย XI/นัด', xiWage, myXiWage],
+                      ['🏦 ค่าเหนื่อยทั้งทีม/นัด', teamWage, myTeamWage]
+                    ] as const
+                  ).map(([lbl, val, myVal]) => {
+                    const diff = +(val - myVal).toFixed(1);
+                    return (
+                      <div key={lbl} className="px-1.5">
+                        <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-tight">{lbl}</div>
+                        <div className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] font-display tabular leading-tight mt-0.5 text-[var(--ink)]">
+                          {fmtMoneyNum(val)}
+                          {!isMeTeam && Math.abs(diff) >= 0.1 && (
+                            <span className={`ml-1 text-[9.5px] mland:text-[7.5px] font-bold ${diff > 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+                              ({diff > 0 ? `+${fmtMoneyNum(diff)}` : fmtMoneyNum(diff)})
+                            </span>
+                          )}
+                        </div>
+                        {!isMeTeam && (
+                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] tabular leading-tight">
+                            ทีมเรา {fmtMoneyNum(myVal)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <div className="border-t border-[var(--line)]/70 pt-1.5 mland:pt-1 space-y-1 mland:space-y-0.5 text-[11px] mland:text-[9px]">
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="truncate text-[var(--mut)]">
@@ -902,12 +946,14 @@ export const TeamInspectorModal: React.FC<{
                         (q.yc || 0) > 0 ||
                         (q.rc || 0) > 0;
 
+                      const rowWage = q.con?.wg ?? wagOf(q);
+
                       return (
                         <button
                           key={q.n}
                           type="button"
                           onClick={() => onInspectPlayer(q, team)}
-                          className={`w-full text-left grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_52px_74px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_42px_64px_auto] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
+                          className={`w-full text-left grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_48px_62px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_38px_54px_auto] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
                             unavailable
                               ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09] opacity-85'
                               : isMe
@@ -989,7 +1035,13 @@ export const TeamInspectorModal: React.FC<{
                             <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
                           </div>
 
-                          <div className="flex items-center justify-end">
+                          <div className="flex items-center justify-end gap-1.5 mland:gap-1">
+                            <span
+                              title={`ค่าเหนื่อย ${fmtMoneyNum(rowWage)}/นัด`}
+                              className="text-[9.5px] mland:text-[8px] font-bold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap"
+                            >
+                              {fmtMoneyNum(rowWage)}
+                            </span>
                             <OvrBadge
                               ov={q.ov + rBoost}
                               boost={rBoost}

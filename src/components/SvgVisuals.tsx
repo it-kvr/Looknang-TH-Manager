@@ -872,7 +872,13 @@ export function faceBodySvg(
   const acc = (v[7] ?? 0) % ACC_N.length;
   const sk = SKIN_P[ki] || SKIN_P[2];
   const hr = HAIR_P[hi] || HAIR_P[0];
-  const irisCol = ki <= 1 || ki === 5 ? '#2c221e' : '#1b1614';
+  const lightEyePalette = ['#2b5b84', '#3d6346', '#5a4228', '#263442'];
+  const irisCol =
+    (ki === 5 && hi >= 1 && hi <= 7) || (ki === 0 && (hi === 3 || hi === 6 || hi === 7))
+      ? lightEyePalette[(fs + ey + no) % lightEyePalette.length]
+      : ki <= 1 || ki === 5
+        ? '#2c221e'
+        : '#1b1614';
 
   const headD = [
     // 0: เรียว (Sharp athletic oval)

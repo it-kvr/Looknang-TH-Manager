@@ -647,6 +647,13 @@ export const SFX = {
       playCrispSweep(0.026, 'bandpass', 1650, 860, 1.35, 0.058, 0, 0.004);
     }
   },
+  // Dramatic lightning crack + deep rolling thunder ("เปรี้ยง!!")
+  thunder: () => {
+    playCrispSweep(0.09, 'highpass', 3800, 1100, 1.2, 0.22, 0, 0.002);
+    playNoiseBurst(0.14, 'bandpass', 2400, 0.7, 0.19, 0.005);
+    playThump(160, 34, 0.28, 0.26, 0.01);
+    playNoiseBurst(0.62, 'lowpass', 280, 0.9, 0.18, 0.08);
+  },
   // Air kick whiff swoosh ("ฟิ้ว!")
   whiff: () => {
     playCrispSweep(0.15, 'bandpass', jitter(1680, 0.07), 380, 1.25, 0.088, 0, 0.016);

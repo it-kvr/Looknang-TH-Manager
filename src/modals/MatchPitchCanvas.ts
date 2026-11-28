@@ -4879,9 +4879,38 @@ export const drawLivePitchToCanvas = (
     ctx.save();
     ctx.translate(cx, cy);
 
-    // Divine blessing / hot-streak golden halo aura (can occur on either team!)
+    // Divine blessing (gold) OR Lightning God Power +50 (electric cyan) aura
+    const isGodPower = (ag.godPowerMins ?? 0) > 0;
     const isBlessed = (ag.blessedMins ?? 0) > 0;
-    if (isBlessed) {
+    if (isGodPower) {
+      const gPulse = 0.7 + 0.3 * Math.sin(world.minuteFloat * 16 + ag.slotIndex);
+      const auraR = playerRadius + 12;
+      const gGrad = ctx.createRadialGradient(0, 0, playerRadius * 0.45, 0, 0, auraR);
+      gGrad.addColorStop(0, `rgba(56, 189, 248, ${0.58 * gPulse})`);
+      gGrad.addColorStop(0.55, `rgba(14, 165, 233, ${0.34 * gPulse})`);
+      gGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = gGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, auraR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(125, 211, 252, ${0.95 * gPulse})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 7.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Crackling orbiting lightning arcs
+      for (let g = 0; g < 4; g++) {
+        const ang = world.minuteFloat * 7.5 + ag.slotIndex + (g * Math.PI) / 2;
+        const gx = Math.cos(ang) * (playerRadius + 8.5);
+        const gy = Math.sin(ang) * (playerRadius + 8.5);
+        ctx.fillStyle = g % 2 === 0 ? '#e0f2fe' : '#fde047';
+        ctx.beginPath();
+        ctx.arc(gx, gy, 2.0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (isBlessed) {
       const bPulse = 0.65 + 0.3 * Math.sin(world.minuteFloat * 10 + ag.slotIndex);
       const auraSprite = getBlessedAuraSprite(playerRadius);
       if (auraSprite) {
@@ -5768,9 +5797,11 @@ export const drawLivePitchToCanvas = (
                       : ag.celebratePose === 'finger_point'
                         ? '👉 '
                         : '🎉 '
-          : isBlessed
-            ? '✨ '
-            : '';
+          : isGodPower
+            ? '⚡ '
+            : isBlessed
+              ? '✨ '
+              : '';
       const label = ag.isMe ? `${prefix}★ ${ag.shortName} ${Math.round(ag.fit)}%` : `${prefix}${ag.shortName}`;
       ctx.font = `700 ${Math.max(9.5, Math.round(playerRadius * 0.86))}px "Noto Sans Thai", sans-serif`;
       const tw = measureTextCached(ctx, label);
@@ -5778,26 +5809,30 @@ export const drawLivePitchToCanvas = (
       const bh = 13.5;
       const by = playerRadius + 13;
       const lxOff = clamp(cx, bw / 2 + 4, cssW - bw / 2 - 4) - cx;
-      ctx.fillStyle = isBlessed
-        ? 'rgba(245, 158, 11, 0.94)'
-        : ag.isMe
-          ? 'rgba(250, 204, 21, 0.93)'
-          : ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
-            ? 'rgba(16, 185, 129, 0.94)'
-            : 'rgba(6, 18, 12, 0.84)';
-      ctx.strokeStyle = isBlessed
-        ? 'rgba(254, 240, 138, 0.85)'
-        : ag.isMe
-          ? 'rgba(254, 240, 138, 0.9)'
-          : ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
-            ? 'rgba(167, 243, 208, 0.7)'
-            : 'rgba(255, 255, 255, 0.2)';
+      ctx.fillStyle = isGodPower
+        ? 'rgba(14, 165, 233, 0.96)'
+        : isBlessed
+          ? 'rgba(245, 158, 11, 0.94)'
+          : ag.isMe
+            ? 'rgba(250, 204, 21, 0.93)'
+            : ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
+              ? 'rgba(16, 185, 129, 0.94)'
+              : 'rgba(6, 18, 12, 0.84)';
+      ctx.strokeStyle = isGodPower
+        ? 'rgba(224, 242, 254, 0.95)'
+        : isBlessed
+          ? 'rgba(254, 240, 138, 0.85)'
+          : ag.isMe
+            ? 'rgba(254, 240, 138, 0.9)'
+            : ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
+              ? 'rgba(167, 243, 208, 0.7)'
+              : 'rgba(255, 255, 255, 0.2)';
       ctx.lineWidth = 0.8;
       ctx.beginPath();
       ctx.roundRect(lxOff - bw / 2, by - bh / 2, bw, bh, 4);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = isBlessed || ag.isMe ? '#1a1200' : '#ffffff';
+      ctx.fillStyle = isGodPower ? '#f8fafc' : isBlessed || ag.isMe ? '#1a1200' : '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, lxOff, by + 0.3);
@@ -5950,8 +5985,72 @@ export const drawLivePitchToCanvas = (
   ctx.stroke();
   ctx.restore();
 
-  // 7. Floating event callouts (Offside flag, Foul, Save, Woodwork, Goal!)
+  // 7. Floating event callouts (Offside flag, Foul, Save, Woodwork, Lightning Strike, Goal!)
   world.fx.forEach((fx) => {
+    if (fx.type === 'lightning') {
+      const prog = clamp(1 - fx.ttl / Math.max(0.01, fx.maxTtl), 0, 1);
+      const targetX = px(fx.x);
+      const targetY = py(fx.y);
+      // Brief sky-flash on strike impact
+      if (prog < 0.22) {
+        const flashA = clamp(1 - prog / 0.22, 0, 1) * 0.38;
+        ctx.save();
+        ctx.fillStyle = `rgba(186, 230, 253, ${flashA})`;
+        ctx.fillRect(0, 0, cssW, cssH);
+        ctx.restore();
+      }
+      // Expanding ground shockwave ring
+      if (prog < 0.65) {
+        const ringT = prog / 0.65;
+        const ringR = 8 + ringT * 34;
+        ctx.save();
+        ctx.strokeStyle = `rgba(56, 189, 248, ${(1 - ringT) * 0.85})`;
+        ctx.lineWidth = 2.4 * (1 - ringT * 0.6);
+        ctx.beginPath();
+        ctx.ellipse(targetX, targetY, ringR, ringR * 0.62, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+      // Jagged lightning bolt from top of canvas straight down onto target player
+      if (prog < 0.45) {
+        const boltAlpha = clamp(1 - prog / 0.45, 0, 1);
+        const segs = 8;
+        const pts: { x: number; y: number }[] = [{ x: targetX + Math.sin(fx.id * 3.1) * 18, y: 0 }];
+        for (let si = 1; si < segs; si++) {
+          const t = si / segs;
+          const jitterX = Math.sin(si * 7.3 + fx.id * 2.1 + prog * 28) * (1 - t * 0.45) * 16;
+          pts.push({ x: targetX + jitterX, y: targetY * t });
+        }
+        pts.push({ x: targetX, y: targetY });
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        // Outer cyan electric glow
+        ctx.strokeStyle = `rgba(56, 189, 248, ${boltAlpha * 0.85})`;
+        ctx.lineWidth = 7.5;
+        ctx.beginPath();
+        pts.forEach((pt, idx) => (idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
+        ctx.stroke();
+        // Bright white lightning core
+        ctx.strokeStyle = `rgba(255, 255, 255, ${boltAlpha})`;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        pts.forEach((pt, idx) => (idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
+        ctx.stroke();
+        // Side fork branch
+        if (pts.length >= 5) {
+          const br = pts[3];
+          ctx.strokeStyle = `rgba(125, 211, 252, ${boltAlpha * 0.85})`;
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.moveTo(br.x, br.y);
+          ctx.lineTo(br.x + (fx.id % 2 === 0 ? 18 : -18), br.y + 18);
+          ctx.lineTo(br.x + (fx.id % 2 === 0 ? 28 : -28), br.y + 34);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
     if (!fx.label) return;
     const alpha = clamp(fx.ttl / fx.maxTtl, 0, 1);
     ctx.save();

@@ -123,6 +123,7 @@ export interface Player {
   no?: number;
   me?: number;
   vis?: number[];
+  visCustom?: number;
   con?: PlayerContract;
   loan?: number;
   loanOpt?: number;
@@ -456,7 +457,7 @@ export interface MatchSubEvent {
 export interface MatchDramaticEvent {
   m: number;
   t?: number;
-  kind: 'var' | 'penalty' | 'woodwork' | 'save' | 'injury' | 'skill' | 'shootout' | 'clutch' | 'miracle' | 'blessed' | 'own_goal' | 'slip' | 'whiff';
+  kind: 'var' | 'penalty' | 'woodwork' | 'save' | 'injury' | 'skill' | 'shootout' | 'clutch' | 'miracle' | 'blessed' | 'god_power' | 'own_goal' | 'slip' | 'whiff';
   text: string;
 }
 
@@ -921,6 +922,7 @@ export type TimelineKind =
   | 'var_no_goal'
   | 'miracle'
   | 'blessed'
+  | 'god_power'
   | 'sub';
 
 export interface MatchTimelineItem {
@@ -1513,6 +1515,9 @@ export interface LivePitchAgent {
   vis: number[];
   blessedMins?: number;
   blessedTag?: string;
+  godPowerMins?: number;
+  godPowerOrigD?: Record<string, number>;
+  godPowerOrigOv?: number;
   celebratePose?: GoalCelebrationStyle;
   celebrateRole?: 'scorer' | 'assister' | 'teammate' | 'gk' | 'conceded';
   celebratePhase?: number;
@@ -1632,6 +1637,7 @@ export interface LivePitchFx {
     | 'slip'
     | 'whiff'
     | 'kick_burst'
+    | 'lightning'
     | 'sub';
   x: number;
   y: number;

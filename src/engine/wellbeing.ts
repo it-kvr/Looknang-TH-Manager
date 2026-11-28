@@ -143,7 +143,7 @@ export function resolvePersonalityId(q: Player, careerP?: PlayerCareerProfile | 
 }
 
 const isResilientPersonality = (tr: number) =>
-  tr === 0 || tr === 4 || tr === 6 || tr === 9 || tr === 14 || tr === 16 || tr === 17 || tr === 21 || tr === 23;
+  tr === 0 || tr === 4 || tr === 6 || tr === 9 || tr === 14 || tr === 16 || tr === 17 || tr === 21 || tr === 23 || tr === 24 || tr === 25 || tr === 26;
 
 const isVolatilePersonality = (tr: number) =>
   tr === 1 || tr === 5 || tr === 7 || tr === 15 || tr === 19 || tr === 22;
@@ -283,7 +283,7 @@ function maybeEvolveMatchdayPersonality(
   }
 
   // 2. Heavy injury & physical/mental fatigue -> fragile
-  if ((q.inj || 0) >= 3 && nextPhys < 46 && nextMental < 56 && tr !== 19 && tr !== 18 && tr !== 23) {
+  if ((q.inj || 0) >= 3 && nextPhys < 46 && nextMental < 56 && tr !== 19 && tr !== 18 && tr !== 23 && tr !== 24) {
     if (Math.random() < 0.12) {
       return applyPersonalityShift(q, team, state, tr, 19, 'บาดเจ็บหนักและสภาพจิตใจล้าสะสม', curTurn);
     }
@@ -430,7 +430,7 @@ export function evolveSeasonPersonalities(state: GameState): PersonalityShiftEve
         }
       }
       // B. Trophy winner glory
-      if (!ev && wonTrophyThisSeason && (sp >= 10 || motm >= 2 || q.me) && tr !== 4 && tr !== 9 && tr !== 16 && tr !== 17 && tr !== 0 && tr !== 23) {
+      if (!ev && wonTrophyThisSeason && (sp >= 10 || motm >= 2 || q.me) && tr !== 4 && tr !== 9 && tr !== 16 && tr !== 17 && tr !== 0 && tr !== 23 && tr !== 26) {
         if (Math.random() < 0.22) {
           const nextId = pickDifferentTrait([4, 9, 16, 17], tr);
           if (nextId != null) {
@@ -448,7 +448,7 @@ export function evolveSeasonPersonalities(state: GameState): PersonalityShiftEve
         }
       }
       // D. Breakout / Superstar campaign
-      if (!ev && (motm >= 4 || avgRating >= 7.35 || sg >= 12 || sa >= 10) && tr !== 16 && tr !== 11 && tr !== 5 && tr !== 4 && tr !== 23) {
+      if (!ev && (motm >= 4 || avgRating >= 7.35 || sg >= 12 || sa >= 10) && tr !== 16 && tr !== 11 && tr !== 5 && tr !== 4 && tr !== 23 && tr !== 26) {
         if (Math.random() < 0.20) {
           const nextId = pickDifferentTrait([16, 11, 5, 4], tr);
           if (nextId != null) {
@@ -1115,6 +1115,7 @@ export function updateTeamWellbeingAfterMatchday(
     return ((fp.sra || 0) >= 2 && avgRt < 6.45) || fp.ov < teamTopOv - 6;
   }) || null;
   let jealousyTriggeredCount = 0;
+  const hasSquadJoker = team.sq.some((mate) => resolvePersonalityId(mate, mate.me ? state.p : null) === 25);
 
   team.sq.forEach((q) => {
     const careerP = q.me ? state.p : null;
@@ -1150,7 +1151,8 @@ export function updateTeamWellbeingAfterMatchday(
       if (played) {
         addM('ได้ลงสนามช่วยทีม', role === 'key' ? 3 : 4);
       } else if ((q.inj || 0) === 0 && (q.sus || 0) === 0) {
-        if (role === 'key') addM('ตัวหลักไม่ได้ลงสนาม (อึดอัด)', -5);
+        if (tr === 24) addM('ติดดินไม่งอแง รอโอกาสอย่างใจเย็น', 1);
+        else if (role === 'key') addM('ตัวหลักไม่ได้ลงสนาม (อึดอัด)', -5);
         else if (role === 'rot') addM('นั่งสำรองไม่ได้ลงเล่น', -2);
         else addM('รอโอกาสลงสนาม', -1);
       }
@@ -1174,17 +1176,20 @@ export function updateTeamWellbeingAfterMatchday(
         addM('ได้โบนัสอัดฉีดชัยชนะ', 2);
       }
     }
+    if (hasSquadJoker && (ctx?.matchResult === 'L' || ctx?.matchResult === 'D')) {
+      addM(tr === 25 ? 'ปล่อยมุกคูลดาวน์หลังเกมไม่ชนะ' : 'ตัวโจ้กช่วยคลายความตึงเครียดหลังเกม', 2);
+    }
 
     // --- 3. Individual Match Rating / MOTM / Cards / Own Goal ---
     if (ctx?.motm && ctx.motm === q.n) {
-      addM('คว้าแมนออฟเดอะแมตช์ (MOTM)', 6);
+      addM('คว้าแมนออฟเดอะแมตช์ (MOTM)', tr === 26 ? 8 : 6);
     } else if (rt != null) {
       if (rt >= 7.6) addM(`ฟอร์มเด่นเรตติ้ง ${rt.toFixed(1)}`, 4);
       else if (rt >= 7.0) addM(`เล่นได้ตามมาตรฐาน (${rt.toFixed(1)})`, 1);
       else if (rt < 6.0) addM(`ฟอร์มตกเรตติ้ง ${rt.toFixed(1)}`, -4);
     }
     if (pCards.includes('R') || pCards.includes('Y2R')) {
-      addM('โดนใบแดงไล่ออกจากสนาม', -7);
+      addM('โดนใบแดงไล่ออกจากสนาม', tr === 26 ? -9 : -7);
     }
     if (ogSet.has(q.n)) {
       addM('ทำเข้าประตูตัวเอง เสียความมั่นใจ', -6);
@@ -1194,12 +1199,14 @@ export function updateTeamWellbeingAfterMatchday(
     if (favNamesSet.has(q.n)) {
       if (ctx?.matchPlayed && played && rt != null && rt < 6.4) {
         addM('ความกดดันในฐานะลูกรัก (ฟอร์มต่ำกว่าคาด)', -5);
-      } else if (ctx?.matchPlayed && !played && (q.inj || 0) === 0 && (q.sus || 0) === 0) {
+      } else if (ctx?.matchPlayed && !played && (q.inj || 0) === 0 && (q.sus || 0) === 0 && tr !== 24) {
         addM('ลูกรักถูกดร็อปสำรอง สื่อเริ่มตั้งคำถาม', -4);
       } else {
         addM('ได้รับความไว้ใจในฐานะลูกรัก', 2);
       }
     } else if (
+      !hasSquadJoker &&
+      tr !== 24 &&
       undeservingFav &&
       jealousyTriggeredCount < 2 &&
       q.ov >= undeservingFav.ov &&
@@ -1304,7 +1311,7 @@ export function updateTeamWellbeingAfterMatchday(
       addP('เดินทางสะดวก ลดอาการล้า', 1);
     }
 
-    if (ctx?.matchEnv && played) {
+    if (ctx?.matchEnv && played && tr !== 24) {
       if (ctx.matchEnv.season === 'rainy' || (ctx.matchEnv.season === 'summer' && ctx.matchEnv.timeOfDay === 'day')) {
         addP('สภาพอากาศ/สนามหนักระหว่างแข่ง', -2);
       }
@@ -1315,6 +1322,7 @@ export function updateTeamWellbeingAfterMatchday(
 
     if (tr === 18 || tr === 23) addP('พื้นฐานร่างกายอึดทนทาน', 2);
     else if (tr === 19) addP('ร่างกายอ่อนล้าง่ายกว่าปกติ', -3);
+    else if (tr === 26 && played) addP('ทุ่มพลังบดขยี้สุดตัว', -2);
 
     // Realistic Random Physical / Body Events
     const bodyChance = tr === 19 ? 0.28 : tr === 18 || tr === 23 ? 0.14 : 0.2;
@@ -1666,6 +1674,8 @@ export function applyTeamTalkAction(
     team.tacFam = clamp((team.tacFam ?? 65) + 3, 30, 100);
   }
 
+  const teamHasJoker = team.sq.some((mate) => resolvePersonalityId(mate, mate.me ? state.p : null) === 25);
+
   team.sq.forEach((q) => {
     const careerP = q.me ? state.p : null;
     const tr = resolvePersonalityId(q, careerP);
@@ -1678,14 +1688,14 @@ export function applyTeamTalkAction(
       dM = R(2, 4) + (isResilientPersonality(tr) || isTeamFavoritePlayer(team, q.n) ? 1 : 0);
       note = 'ทีมทอล์กปลุกใจนักสู้';
     } else if (talkId === 'calm') {
-      dM = curM < 66 ? R(5, 7) : R(2, 3);
+      dM = (curM < 66 ? R(5, 7) : R(2, 3)) + (teamHasJoker ? 1 : 0);
       note = curM < 66 ? 'ทีมทอล์กลดความกดดัน (คลายเครียด)' : 'ทีมทอล์กลดความกดดัน';
     } else if (talkId === 'tactics') {
       const keyRole = team.cap === q.n || q.con?.role === 'key';
       dM = keyRole || isResilientPersonality(tr) ? 3 : R(1, 2);
       note = 'ทีมทอล์กย้ำวินัยแท็กติก';
     } else {
-      dM = R(2, 4);
+      dM = R(2, 4) + (teamHasJoker ? 1 : 0);
       dP = 2;
       q.fit = clamp((q.fit ?? 100) + 1, 20, 100);
       note = 'ทีมทอล์กชื่นชมความทุ่มเท';

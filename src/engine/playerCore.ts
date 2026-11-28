@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSea
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp, capMoney } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, AWAY_KIT_PAIRINGS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, COUNTRY_META_BY_CODE, LEGACY_FOREIGN_CLUB_RENAMES, LEGACY_THAI_CLUB_PREFIX_RENAMES, LEGACY_THAI_STANDALONE_RENAMES, getForeignClubStadiumName, getForeignTeamCountryMeta, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, HS_N, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, COUNTRY_META_BY_CODE, LEGACY_FOREIGN_CLUB_RENAMES, LEGACY_THAI_CLUB_PREFIX_RENAMES, LEGACY_THAI_STANDALONE_RENAMES, getForeignClubStadiumName, getForeignTeamCountryMeta, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
 import { ensureTeamWellbeing, getActiveFavBoost, getWellbeingOvrAdjustment, initPlayerWellbeing } from './wellbeing';
 
 export const NMU = new Set<string>();
@@ -95,10 +95,22 @@ export function localizeForeignTeams(teams?: Team[] | null): boolean {
         if (imp?.code || meta?.code) {
           q.nat = imp?.code || meta?.code;
         }
+        q.vis = rndVis(q.pos, (q.age ?? 22) < 20, { natCode: q.nat || meta?.code, foreignRegion: imp?.region || region });
+        if (q.no) q.vis[5] = q.no;
         changed = true;
-      } else if (!q.nat && meta?.code) {
-        q.nat = meta.code;
-        changed = true;
+      } else {
+        if (!q.nat && meta?.code) {
+          q.nat = meta.code;
+          changed = true;
+        }
+        if (!q.blessed && !q.visCustom) {
+          const origin = resolveAppearanceOrigin(q.nat || meta?.code, region);
+          if (!Array.isArray(q.vis) || q.vis.length < 5 || !isVisAuthenticForOrigin(q.vis, origin)) {
+            q.vis = rndVis(q.pos, (q.age ?? 22) < 20, { natCode: q.nat || meta?.code, foreignRegion: region });
+            if (q.no) q.vis[5] = q.no;
+            changed = true;
+          }
+        }
       }
     });
 
@@ -837,20 +849,381 @@ export function assignTeamShirtNumbers(
   });
 }
 
-const HANDSOME_HAIR_POOL = [20, 21, 22, 23, 24, 25, 14, 15, 16, 17, 18, 19, 9, 7, 5, 2, 0, 1, 6, 10];
-const HANDSOME_EYE_POOL = [0, 2, 5, 8, 9, 3, 6, 7];
-const HANDSOME_SHAPE_POOL = [0, 2, 3, 5, 4];
+export type AppearanceOriginId =
+  | 'th'
+  | 'asean'
+  | 'east_asia'
+  | 'me_arab'
+  | 'central_asia'
+  | 'south_asia'
+  | 'europe_north'
+  | 'europe_south'
+  | 'france'
+  | 'latam_br'
+  | 'latam_es'
+  | 'africa';
 
-export function rndVis(pos: Position, yo?: boolean): number[] {
+export type AppearancePresetGroup = 'th' | 'east_asia' | 'europe' | 'latam' | 'me_arab' | 'africa';
+
+interface AppearanceOriginProfile {
+  skins: number[];
+  hairColors: number[];
+  hairStyles: number[];
+  facialHairChance: number;
+  facialHairs: number[];
+  eyePool: number[];
+  shapes: number[];
+  accChance: number;
+  accs: number[];
+  allowedSkins: number[];
+  allowedHairColors: number[];
+  allowedHairStyles: number[];
+}
+
+const ORIGIN_PROFILES: Record<AppearanceOriginId, AppearanceOriginProfile> = {
+  th: {
+    skins: [1, 1, 2, 2, 0, 5, 6, 3],
+    hairColors: [0, 0, 0, 0, 1, 1, 2, 5],
+    hairStyles: [14, 15, 23, 18, 16, 19, 21, 24, 9, 7, 5, 2, 0, 1, 4, 12],
+    facialHairChance: 0.24,
+    facialHairs: [4, 4, 1, 3, 5],
+    eyePool: [0, 2, 5, 8, 9, 3, 6, 7],
+    shapes: [0, 2, 3, 5, 4, 1],
+    accChance: 0.16,
+    accs: [1, 4, 2, 3],
+    allowedSkins: [0, 1, 2, 3, 5, 6],
+    allowedHairColors: [0, 1, 2, 3, 5, 6],
+    allowedHairStyles: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+  },
+  asean: {
+    skins: [1, 2, 2, 6, 0, 3],
+    hairColors: [0, 0, 0, 0, 1, 1, 2],
+    hairStyles: [0, 1, 2, 4, 5, 7, 9, 14, 15, 16, 19, 21, 23, 24],
+    facialHairChance: 0.25,
+    facialHairs: [4, 4, 1, 3],
+    eyePool: [0, 2, 5, 8, 9, 3, 6],
+    shapes: [0, 1, 2, 3, 5],
+    accChance: 0.16,
+    accs: [1, 4, 2],
+    allowedSkins: [0, 1, 2, 3, 5, 6],
+    allowedHairColors: [0, 1, 2, 5],
+    allowedHairStyles: [0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+  },
+  east_asia: {
+    skins: [0, 0, 5, 5, 1, 0],
+    hairColors: [0, 0, 0, 0, 1, 1, 2, 5],
+    hairStyles: [14, 14, 15, 15, 23, 18, 7, 2, 5, 12, 16, 19, 21, 0, 1, 25],
+    facialHairChance: 0.12,
+    facialHairs: [4, 1],
+    eyePool: [0, 3, 5, 7, 8, 9, 2],
+    shapes: [0, 2, 4, 5, 1],
+    accChance: 0.14,
+    accs: [1, 4, 3],
+    allowedSkins: [0, 1, 5],
+    allowedHairColors: [0, 1, 2, 5, 6],
+    allowedHairStyles: [0, 1, 2, 4, 5, 6, 7, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25]
+  },
+  me_arab: {
+    skins: [1, 2, 2, 3, 0, 6],
+    hairColors: [0, 0, 0, 1, 1, 2],
+    hairStyles: [9, 16, 17, 20, 22, 19, 4, 3, 0, 5, 6, 13, 24],
+    facialHairChance: 0.82,
+    facialHairs: [2, 2, 7, 7, 4, 5, 6, 1],
+    eyePool: [0, 1, 4, 5, 7, 8, 9],
+    shapes: [2, 3, 0, 4, 5],
+    accChance: 0.14,
+    accs: [1, 3, 4],
+    allowedSkins: [0, 1, 2, 3, 6],
+    allowedHairColors: [0, 1, 2, 5],
+    allowedHairStyles: [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 13, 16, 17, 19, 20, 21, 22, 24]
+  },
+  central_asia: {
+    skins: [0, 1, 5, 2],
+    hairColors: [0, 0, 1, 1, 2],
+    hairStyles: [0, 4, 5, 9, 16, 17, 19, 21, 13, 2],
+    facialHairChance: 0.52,
+    facialHairs: [4, 2, 1, 5, 3],
+    eyePool: [0, 1, 3, 7, 8, 9],
+    shapes: [2, 3, 5, 0],
+    accChance: 0.12,
+    accs: [1, 3, 4],
+    allowedSkins: [0, 1, 2, 5],
+    allowedHairColors: [0, 1, 2, 5],
+    allowedHairStyles: [0, 1, 2, 4, 5, 7, 9, 13, 16, 17, 19, 20, 21, 22]
+  },
+  south_asia: {
+    skins: [2, 3, 3, 6, 4],
+    hairColors: [0, 0, 0, 1],
+    hairStyles: [0, 2, 5, 9, 16, 19, 21, 3, 4, 17],
+    facialHairChance: 0.68,
+    facialHairs: [2, 3, 4, 5, 1, 7],
+    eyePool: [0, 2, 3, 5, 8, 9],
+    shapes: [0, 2, 3, 4],
+    accChance: 0.12,
+    accs: [1, 3],
+    allowedSkins: [2, 3, 4, 6],
+    allowedHairColors: [0, 1],
+    allowedHairStyles: [0, 2, 3, 4, 5, 6, 9, 13, 16, 17, 19, 20, 21, 22]
+  },
+  europe_north: {
+    skins: [5, 5, 0, 0, 1],
+    hairColors: [1, 2, 2, 3, 3, 0, 4, 7, 6],
+    hairStyles: [16, 19, 20, 21, 17, 25, 7, 9, 4, 0, 1, 3, 12, 13],
+    facialHairChance: 0.54,
+    facialHairs: [4, 4, 2, 1, 3, 5],
+    eyePool: [0, 2, 3, 5, 7, 8, 9, 1],
+    shapes: [2, 3, 0, 4, 5],
+    accChance: 0.14,
+    accs: [1, 4, 3],
+    allowedSkins: [0, 1, 3, 4, 5, 7],
+    allowedHairColors: [0, 1, 2, 3, 4, 5, 6, 7],
+    allowedHairStyles: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 19, 20, 21, 22, 24, 25]
+  },
+  europe_south: {
+    skins: [0, 1, 5, 2, 0],
+    hairColors: [0, 1, 1, 2, 2, 3, 4],
+    hairStyles: [22, 17, 20, 16, 19, 5, 7, 10, 6, 21, 25, 3, 0, 4],
+    facialHairChance: 0.58,
+    facialHairs: [4, 4, 2, 1, 5, 6],
+    eyePool: [0, 2, 5, 8, 9, 3, 7],
+    shapes: [0, 2, 3, 4, 5],
+    accChance: 0.16,
+    accs: [1, 4, 2],
+    allowedSkins: [0, 1, 2, 5, 6],
+    allowedHairColors: [0, 1, 2, 3, 4, 5],
+    allowedHairStyles: [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 13, 16, 17, 19, 20, 21, 22, 24, 25]
+  },
+  france: {
+    skins: [5, 0, 1, 4, 7, 3, 6],
+    hairColors: [0, 0, 1, 2, 3, 1],
+    hairStyles: [3, 4, 11, 24, 22, 16, 19, 17, 9, 0, 13, 6],
+    facialHairChance: 0.56,
+    facialHairs: [4, 2, 1, 6, 5, 7],
+    eyePool: [0, 2, 4, 5, 7, 8, 9],
+    shapes: [2, 3, 0, 5, 4],
+    accChance: 0.16,
+    accs: [1, 4, 2],
+    allowedSkins: [0, 1, 2, 3, 4, 5, 6, 7],
+    allowedHairColors: [0, 1, 2, 3, 4, 5, 6],
+    allowedHairStyles: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 16, 17, 19, 20, 21, 22, 24, 25]
+  },
+  latam_br: {
+    skins: [1, 2, 3, 6, 4, 0, 5],
+    hairColors: [0, 0, 1, 1, 2, 3, 6],
+    hairStyles: [3, 4, 8, 11, 22, 24, 16, 17, 19, 9, 6, 10, 12, 0],
+    facialHairChance: 0.48,
+    facialHairs: [4, 1, 5, 6, 2],
+    eyePool: [0, 2, 5, 6, 8, 9, 3],
+    shapes: [0, 2, 3, 5, 1],
+    accChance: 0.18,
+    accs: [1, 4, 2],
+    allowedSkins: [0, 1, 2, 3, 4, 5, 6, 7],
+    allowedHairColors: [0, 1, 2, 3, 5, 6],
+    allowedHairStyles: [0, 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 16, 17, 19, 20, 21, 22, 24, 25]
+  },
+  latam_es: {
+    skins: [0, 1, 2, 5, 6, 3],
+    hairColors: [0, 0, 1, 1, 2, 3],
+    hairStyles: [22, 16, 17, 19, 20, 3, 4, 6, 10, 12, 24, 25, 0],
+    facialHairChance: 0.54,
+    facialHairs: [4, 4, 2, 1, 5, 6],
+    eyePool: [0, 2, 5, 8, 9, 4, 3],
+    shapes: [0, 2, 3, 4, 5],
+    accChance: 0.18,
+    accs: [1, 4, 2],
+    allowedSkins: [0, 1, 2, 3, 5, 6],
+    allowedHairColors: [0, 1, 2, 3, 5],
+    allowedHairStyles: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 16, 17, 19, 20, 21, 22, 24, 25]
+  },
+  africa: {
+    skins: [4, 4, 7, 7, 3, 4],
+    hairColors: [0, 0, 0, 0, 1, 3, 6],
+    hairStyles: [3, 3, 4, 4, 11, 11, 24, 22, 8, 13, 9, 10, 6, 0],
+    facialHairChance: 0.56,
+    facialHairs: [1, 2, 4, 6, 5, 7],
+    eyePool: [0, 1, 2, 4, 5, 7, 8, 9],
+    shapes: [2, 3, 5, 0, 4],
+    accChance: 0.16,
+    accs: [1, 4, 3],
+    allowedSkins: [3, 4, 6, 7],
+    allowedHairColors: [0, 1, 3, 6, 7],
+    allowedHairStyles: [0, 3, 4, 6, 8, 9, 10, 11, 13, 16, 19, 22, 24]
+  }
+};
+
+export interface AppearanceOriginSummary {
+  id: AppearancePresetGroup;
+  icon: string;
+  label: string;
+  shortLabel: string;
+  faceDesc: string;
+  hairDesc: string;
+  recommendedHairStyles: number[];
+}
+
+export const APPEARANCE_ORIGIN_PRESETS: AppearanceOriginSummary[] = [
+  {
+    id: 'th',
+    icon: '🇹🇭',
+    label: 'ไทย / อาเซียน',
+    shortLabel: 'ไทย/อาเซียน',
+    faceDesc: 'ผิวขาวเหลืองถึงแทนอุ่น · หน้าเรียว/กรามคม · ส่วนใหญ่หน้าเกลี้ยงหรือตอหนวดจาง',
+    hairDesc: 'ผมดำ/น้ำตาลเข้ม · ทูบล็อก คลาสสิก เฟดควิฟฟ์ ปัดข้าง สกินเฮด',
+    recommendedHairStyles: [14, 15, 23, 16, 19, 21, 9, 2, 0, 4, 24]
+  },
+  {
+    id: 'east_asia',
+    icon: '🇯🇵',
+    label: 'ญี่ปุ่น / เกาหลี / จีน',
+    shortLabel: 'เอเชียตะวันออก',
+    faceDesc: 'ผิวขาว-ขาวเหลือง · กรามคม/หน้าเรียว · แววตาคมหรือสุขุม มักไร้หนวดเครา',
+    hairDesc: 'ผมดำ/น้ำตาลเข้ม/เทาหม่น · ทูบล็อก แสกคอมม่า วูล์ฟคัท แสกกลาง มัลเล็ต',
+    recommendedHairStyles: [14, 15, 23, 18, 7, 2, 12, 5, 16, 21]
+  },
+  {
+    id: 'europe',
+    icon: '🇪🇺',
+    label: 'ยุโรป (อังกฤษ/สเปน/เยอรมัน/ฝรั่งเศส)',
+    shortLabel: 'ยุโรป',
+    faceDesc: 'ผิวขาว-โอลีฟ · ตาสีฟ้า/เขียว/เฮเซลตามสีผม · มักมีตอหนวดจางหรือเคราเต็ม',
+    hairDesc: 'ผมน้ำตาล บลอนด์ทอง แดงอิฐ ดำ · เฟดควิฟฟ์ ครอป ปอมปาดัวร์ ไซด์พาร์ท เซอร์เฟอร์',
+    recommendedHairStyles: [16, 19, 20, 21, 17, 25, 7, 22, 9, 3, 4]
+  },
+  {
+    id: 'latam',
+    icon: '🇧🇷',
+    label: 'อเมริกาใต้ (บราซิล/อาร์เจน)',
+    shortLabel: 'อเมริกาใต้',
+    faceDesc: 'ผิวหลากหลายถึงแทนเข้ม · โหนกแก้มชัด · เคราแพะ ตอหนวดจาง หรือเคราเต็ม',
+    hairDesc: 'ผมดำ/น้ำตาล/ไฮไลต์ทอง · ลอนคลื่น หยิกฟู เบิรสต์เฟด เดรดล็อก มัดจุก คาดผม',
+    recommendedHairStyles: [22, 3, 24, 11, 8, 10, 6, 16, 17, 12, 4]
+  },
+  {
+    id: 'me_arab',
+    icon: '🇸🇦',
+    label: 'อาหรับ / เปอร์เซีย / แอฟริกาเหนือ',
+    shortLabel: 'อาหรับ/เปอร์เซีย',
+    faceDesc: 'ผิวขาวอมน้ำตาล-แทน · คิ้วเข้มกรามคม · เด่นเรื่องเคราเต็ม เคราหนาเข้ม ตอหนวด',
+    hairDesc: 'ผมดำสนิท/น้ำตาลเข้ม · อันเดอร์คัต สลิคแบ็ก ปอมปาดัวร์ ดรอปเฟด สกินเฮด',
+    recommendedHairStyles: [9, 17, 20, 22, 16, 19, 4, 3, 6, 13]
+  },
+  {
+    id: 'africa',
+    icon: '🌍',
+    label: 'แอฟริกา (ไนจีเรีย/เซเนกัล)',
+    shortLabel: 'แอฟริกา',
+    faceDesc: 'ผิวเข้ม-น้ำตาลเข้ม · กรามเหลี่ยมคม · เคราแพะ เคราจอนยาว หรือเคราเต็ม',
+    hairDesc: 'ผมดำธรรมชาติ/ย้อมทอง · หยิกฟู เดรดล็อก สกินเฮด เบิรสต์เฟด โมฮอว์ก หัวโล้น',
+    recommendedHairStyles: [3, 4, 11, 24, 22, 8, 13, 9, 10, 6]
+  }
+];
+
+export function resolveAppearanceOrigin(
+  natCode?: string | null,
+  foreignRegion?: ForeignNameRegion | null
+): AppearanceOriginId {
+  const code = (natCode || '').trim().toUpperCase();
+  if (code === 'TH') return 'th';
+  if (code === 'JP' || code === 'KR' || code === 'CN') return 'east_asia';
+  if (code === 'VN' || code === 'ID' || code === 'MY' || code === 'SG' || code === 'PH' || code === 'MM' || code === 'KH') {
+    return 'asean';
+  }
+  if (code === 'SA' || code === 'AE' || code === 'QA' || code === 'IR' || code === 'IQ' || code === 'EG' || code === 'MA') {
+    return 'me_arab';
+  }
+  if (code === 'UZ') return 'central_asia';
+  if (code === 'IN') return 'south_asia';
+  if (code === 'ES' || code === 'IT' || code === 'PT') return 'europe_south';
+  if (code === 'FR') return 'france';
+  if (code === 'GB' || code === 'DE' || code === 'NL' || code === 'AU' || code === 'US') return 'europe_north';
+  if (code === 'BR') return 'latam_br';
+  if (code === 'AR' || code === 'CO' || code === 'MX') return 'latam_es';
+  if (code === 'NG' || code === 'SN' || code === 'ZA') return 'africa';
+
+  if (foreignRegion === 'jp' || foreignRegion === 'kr' || foreignRegion === 'cn') return 'east_asia';
+  if (foreignRegion === 'vn' || foreignRegion === 'id' || foreignRegion === 'my_sg' || foreignRegion === 'ph') return 'asean';
+  if (foreignRegion === 'me' || foreignRegion === 'ir') return 'me_arab';
+  if (foreignRegion === 'uz') return 'central_asia';
+  if (foreignRegion === 'in') return 'south_asia';
+  if (foreignRegion === 'es' || foreignRegion === 'it') return 'europe_south';
+  if (foreignRegion === 'fr') return 'france';
+  if (foreignRegion === 'en' || foreignRegion === 'de' || foreignRegion === 'nl' || foreignRegion === 'au') return 'europe_north';
+  if (foreignRegion === 'pt_br') return 'latam_br';
+  if (foreignRegion === 'ar_lat') return 'latam_es';
+  if (foreignRegion === 'af') return 'africa';
+  if (foreignRegion === 'intl') return 'latam_br';
+  return 'th';
+}
+
+export function mapOriginToPresetGroup(origin: AppearanceOriginId): AppearancePresetGroup {
+  if (origin === 'east_asia') return 'east_asia';
+  if (origin === 'me_arab') return 'me_arab';
+  if (origin === 'africa') return 'africa';
+  if (origin === 'latam_br' || origin === 'latam_es') return 'latam';
+  if (origin === 'europe_north' || origin === 'europe_south' || origin === 'france' || origin === 'central_asia') {
+    return 'europe';
+  }
+  return 'th';
+}
+
+export function getPresetGroupProfile(group: AppearancePresetGroup): AppearanceOriginSummary {
+  return APPEARANCE_ORIGIN_PRESETS.find((x) => x.id === group) || APPEARANCE_ORIGIN_PRESETS[0];
+}
+
+function isVisAuthenticForOrigin(vis: number[], origin: AppearanceOriginId): boolean {
+  const prof = ORIGIN_PROFILES[origin] || ORIGIN_PROFILES.th;
+  const ki = vis[0] ?? 2;
+  const hi = vis[1] ?? 0;
+  const hs = (vis[2] ?? 0) % HS_N.length;
+  return (
+    prof.allowedSkins.includes(ki) &&
+    prof.allowedHairColors.includes(hi) &&
+    prof.allowedHairStyles.includes(hs)
+  );
+}
+
+function resolveEffectiveProfile(
+  natCode?: string | null,
+  foreignRegion?: ForeignNameRegion | null,
+  originPreset?: AppearancePresetGroup | null
+): AppearanceOriginProfile {
+  if (originPreset === 'east_asia') return ORIGIN_PROFILES.east_asia;
+  if (originPreset === 'europe') return Math.random() < 0.55 ? ORIGIN_PROFILES.europe_north : ORIGIN_PROFILES.europe_south;
+  if (originPreset === 'latam') return Math.random() < 0.58 ? ORIGIN_PROFILES.latam_br : ORIGIN_PROFILES.latam_es;
+  if (originPreset === 'me_arab') return ORIGIN_PROFILES.me_arab;
+  if (originPreset === 'africa') return ORIGIN_PROFILES.africa;
+  if (originPreset === 'th') return ORIGIN_PROFILES.th;
+
+  const code = (natCode || '').trim().toUpperCase();
+  const origin = resolveAppearanceOrigin(code, foreignRegion);
+  if (origin === 'europe_north' && (code === 'GB' || code === 'NL' || code === 'US') && Math.random() < 0.18) {
+    return ORIGIN_PROFILES.africa;
+  }
+  if (origin === 'france') {
+    return Math.random() < 0.42 ? ORIGIN_PROFILES.africa : ORIGIN_PROFILES.europe_south;
+  }
+  if (origin === 'africa' && code === 'ZA' && Math.random() < 0.14) {
+    return ORIGIN_PROFILES.europe_north;
+  }
+  return ORIGIN_PROFILES[origin] || ORIGIN_PROFILES.th;
+}
+
+export function rndVis(
+  pos: Position,
+  yo?: boolean,
+  opts?: { natCode?: string | null; foreignRegion?: ForeignNameRegion | null; originPreset?: AppearancePresetGroup | null }
+): number[] {
+  const prof = resolveEffectiveProfile(opts?.natCode, opts?.foreignRegion, opts?.originPreset);
+  const fhChance = yo ? (prof === ORIGIN_PROFILES.me_arab ? 0.25 : 0) : prof.facialHairChance;
   return [
-    P([0, 0, 1, 1, 2, 2, 5, 5, 6, 3]),
-    P([0, 0, 0, 1, 1, 2, 4, 5]),
-    P(HANDSOME_HAIR_POOL),
-    yo || R(0, 9) < 7 ? 0 : P([4, 4, 1, 5, 3]),
-    P(HANDSOME_EYE_POOL),
+    P(prof.skins),
+    P(prof.hairColors),
+    P(prof.hairStyles),
+    Math.random() < fhChance ? P(prof.facialHairs) : 0,
+    P(prof.eyePool),
     pos === 'GK' ? 1 : 10,
-    P(HANDSOME_SHAPE_POOL),
-    R(0, 9) < 8 ? 0 : P([1, 4, 2])
+    P(prof.shapes),
+    Math.random() < prof.accChance ? P(prof.accs) : 0
   ];
 }
 
@@ -887,15 +1260,18 @@ export function visOf(q: Partial<Player>, careerP?: PlayerCareerProfile | null):
   const s = q.n || 'นักเตะ';
   const h = [...s].reduce((a, c, i) => ((a * 33) ^ (c.charCodeAt(0) * (i + 1))) >>> 0, 5381);
   const no = q.no || (q.pos === 'GK' ? [1, 13, 22, 25, 30][h % 5] : 2 + (h % 98));
+  const origin = resolveAppearanceOrigin(q.nat);
+  const prof = ORIGIN_PROFILES[origin] || ORIGIN_PROFILES.th;
+  const hasBeard = !(q.age && q.age < 20) && ((h >> 9) % 100) < Math.round(prof.facialHairChance * 100);
   return [
-    h % Math.min(7, SKIN_P.length),
-    (h >> 3) % Math.min(6, HAIR_P.length),
-    HANDSOME_HAIR_POOL[(h >> 6) % HANDSOME_HAIR_POOL.length],
-    (q.age && q.age < 20) || ((h >> 9) % 10 < 7) ? 0 : [4, 1, 5, 3, 2][(h >> 11) % 5],
-    HANDSOME_EYE_POOL[(h >> 13) % HANDSOME_EYE_POOL.length],
+    prof.skins[h % prof.skins.length],
+    prof.hairColors[(h >> 3) % prof.hairColors.length],
+    prof.hairStyles[(h >> 6) % prof.hairStyles.length],
+    hasBeard ? prof.facialHairs[(h >> 11) % prof.facialHairs.length] : 0,
+    prof.eyePool[(h >> 13) % prof.eyePool.length],
     no,
-    HANDSOME_SHAPE_POOL[(h >> 16) % HANDSOME_SHAPE_POOL.length],
-    ((h >> 19) % 10 < 8) ? 0 : [1, 4, 2][(h >> 22) % 3]
+    prof.shapes[(h >> 16) % prof.shapes.length],
+    ((h >> 19) % 10 < 8) ? 0 : prof.accs[(h >> 22) % prof.accs.length]
   ];
 }
 
@@ -1135,7 +1511,7 @@ export function mkPlayer(
     traits: rollPlayerTraits(pos, ro, ov, talent),
     fit: 100,
     inj: 0,
-    vis: rndVis(pos, yo)
+    vis: rndVis(pos, yo, { natCode: resolvedNat, foreignRegion: resolvedRegion })
   };
   initPlayerWellbeing(pl);
   return pl;
@@ -1207,6 +1583,7 @@ export function scoreCaptainCandidate(q: Player, careerP?: PlayerCareerProfile |
     (D.tr === 6 || D.tr === 23 ? 10 : 0) +
     (D.tr === 4 || D.tr === 17 ? 8 : 0) +
     (D.tr === 14 ? 5 : 0) +
+    (D.tr === 26 ? -4 : 0) +
     (D.tr === 1 || D.tr === 7 || D.tr === 15 ? -14 : 0);
   const posBias = q.pos === 'GK' ? -4 : q.pos === 'DF' || q.pos === 'MF' ? 2 : 0;
   return q.ov * 1.15 + ageScore + (D.d.comp + D.d.det) * 0.14 + traitBonus + persBonus + posBias;
@@ -1265,7 +1642,7 @@ export function scoreSetPieceCandidate(
     (D.d.comp || 60) * 0.95 +
     D.d.pw * 0.25 +
     (D.sig === 'fin' ? 10 : 0) +
-    (D.tr === 17 || D.tr === 4 ? 14 : D.tr === 6 || D.tr === 23 ? 8 : D.tr === 7 || D.tr === 22 ? -6 : 0) +
+    (D.tr === 17 || D.tr === 4 ? 14 : D.tr === 26 ? 10 : D.tr === 6 || D.tr === 23 ? 8 : D.tr === 7 || D.tr === 22 ? -6 : 0) +
     (hasTrait(q, 'setpiece_specialist', careerP) ? 12 : 0) +
     q.ov * 0.25
   );
@@ -2708,8 +3085,22 @@ export function trainCareerSignatureDrill(d: GameState): { ok: boolean; msg: str
   return { ok: true, msg: `🔥 ติวเข้มอาวุธประจำตัว "${SIGL[sigKey] || sigKey}" +1 (โบนัสรวม +${curBonus + 1})! (-${cost} ★)` };
 }
 
+export function getPlayerPersonalityId(q: Pick<Player, 'n' | 'customPers'>): number {
+  if (q.customPers != null && q.customPers >= 0 && q.customPers < PLAYER_PERSONALITIES.length) {
+    return q.customPers;
+  }
+  const nm = q.n || 'นักเตะ';
+  let h = 0;
+  for (let i = 0; i < nm.length; i++) h += nm.charCodeAt(i);
+  return h % PLAYER_PERSONALITIES.length;
+}
+
 export const vlu = (q: Player) => Math.round((q.ov * q.ov) / 40);
-export const wagOf = (q: Player) => +((q.ov * q.ov) / 3000).toFixed(1);
+export const wagOf = (q: Pick<Player, 'ov' | 'n' | 'customPers'>) => {
+  const tr = getPlayerPersonalityId(q);
+  const persMult = tr === 24 ? 0.75 : 1;
+  return +(((q.ov * q.ov) / 3000) * persMult).toFixed(1);
+};
 
 export function ensureCon(q: Player) {
   if (!q.con) {

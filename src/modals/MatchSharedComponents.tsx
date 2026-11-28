@@ -1250,6 +1250,8 @@ export const MatchTimelinePanel = React.memo<{
         return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">⚡</span>;
       case 'blessed':
         return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">✨</span>;
+      case 'god_power':
+        return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">⚡</span>;
       case 'sub':
         return <StatIconBadge kind="subIn" size="xs" title="เปลี่ยนตัว" />;
       case 'miss':
@@ -1296,6 +1298,8 @@ export const MatchTimelinePanel = React.memo<{
         return 'โหมดปาฏิหาริย์';
       case 'blessed':
         return 'พรเทพ';
+      case 'god_power':
+        return 'พลังเทพ +50';
       case 'miss':
         return 'ยิงพลาด';
     }
@@ -3743,6 +3747,8 @@ const getBlessingEmoji = (tag?: string): string => {
       return '🛡️';
     case 'ใจสู้':
       return '🔥';
+    case 'พลังเทพ +50':
+      return '⚡';
     default:
       return '✨';
   }
@@ -4028,11 +4034,12 @@ export const MatchPitchOverlays = React.memo<{
           {leftBlessed.map((bl) => {
             const blPlayer = leftTeamOrig.sq.find((q) => q.n === bl.id);
             const blEmoji = getBlessingEmoji(bl.tag);
+            const isGod = bl.tag.includes('พลังเทพ');
             return (
               <span
                 key={bl.id}
                 className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold leading-tight ${cornerShadow}`}
-                title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${leftTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
+                title={`${blEmoji} ${isGod ? 'พลังเทพฟ้าผ่า' : 'พร'}: ${bl.tag} · ${bl.id} (#${bl.no} ${leftTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
               >
                 {blPlayer && (
                   <MatchPlayerThumb
@@ -4043,16 +4050,16 @@ export const MatchPitchOverlays = React.memo<{
                     trimColor={blPlayer.pos === 'GK' ? undefined : leftTrim}
                     size="xs"
                     dark
-                    ringClassName="ring-amber-300/85"
+                    ringClassName={isGod ? 'ring-sky-300/95' : 'ring-amber-300/85'}
                   />
                 )}
-                <span className="tabular text-[#fde047] font-black leading-none">
+                <span className={`tabular font-black leading-none ${isGod ? 'text-sky-300' : 'text-[#fde047]'}`}>
                   #{bl.no}
                 </span>
-                <span className="text-amber-100 leading-none whitespace-nowrap">
+                <span className={`leading-none whitespace-nowrap ${isGod ? 'text-cyan-100' : 'text-amber-100'}`}>
                   {blEmoji} {bl.tag}
                 </span>
-                <span className="text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular text-amber-200/95 leading-none">
+                <span className={`text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular leading-none ${isGod ? 'text-sky-200' : 'text-amber-200/95'}`}>
                   {bl.minsLeft}&apos;
                 </span>
               </span>
@@ -4098,19 +4105,20 @@ export const MatchPitchOverlays = React.memo<{
           {rightBlessed.map((bl) => {
             const blPlayer = rightTeamOrig.sq.find((q) => q.n === bl.id);
             const blEmoji = getBlessingEmoji(bl.tag);
+            const isGod = bl.tag.includes('พลังเทพ');
             return (
               <span
                 key={bl.id}
                 className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold leading-tight ${cornerShadow}`}
-                title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${rightTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
+                title={`${blEmoji} ${isGod ? 'พลังเทพฟ้าผ่า' : 'พร'}: ${bl.tag} · ${bl.id} (#${bl.no} ${rightTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
               >
-                <span className="text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular text-amber-200/95 leading-none">
+                <span className={`text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular leading-none ${isGod ? 'text-sky-200' : 'text-amber-200/95'}`}>
                   {bl.minsLeft}&apos;
                 </span>
-                <span className="text-amber-100 leading-none whitespace-nowrap">
+                <span className={`leading-none whitespace-nowrap ${isGod ? 'text-cyan-100' : 'text-amber-100'}`}>
                   {blEmoji} {bl.tag}
                 </span>
-                <span className="tabular text-[#fde047] font-black leading-none">
+                <span className={`tabular font-black leading-none ${isGod ? 'text-sky-300' : 'text-[#fde047]'}`}>
                   #{bl.no}
                 </span>
                 {blPlayer && (
@@ -4122,7 +4130,7 @@ export const MatchPitchOverlays = React.memo<{
                     trimColor={blPlayer.pos === 'GK' ? undefined : rightTrim}
                     size="xs"
                     dark
-                    ringClassName="ring-amber-300/85"
+                    ringClassName={isGod ? 'ring-sky-300/95' : 'ring-amber-300/85'}
                   />
                 )}
               </span>

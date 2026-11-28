@@ -3,7 +3,7 @@ import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
 import { RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, LEGACY_FOREIGN_CLUB_RENAMES, inferForeignTeamRegion, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { getDefaultSponsorSeed, pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles, localizeForeignTeams } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, getPlayerPersonalityId, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles, localizeForeignTeams } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
@@ -94,7 +94,7 @@ export function rate(
     const isClutchMoment = Boolean(big || (matchMin && matchMin >= 70));
     const slotSp = sl[idx]?.sp;
 
-    // Personality effects (0..23)
+    // Personality effects (0..26)
     if (Dq.tr === 4 && isClutchMoment) {
       traitAt += 0.45;
       traitDf += 0.35;
@@ -140,6 +140,14 @@ export function rate(
     } else if (Dq.tr === 23) {
       traitAt += 0.25;
       traitDf += 0.25;
+    } else if (Dq.tr === 24 && isHome === false) {
+      traitAt += 0.42;
+      traitDf += 0.42;
+    } else if (Dq.tr === 25 && s && t.id === s.me && (s.mor ?? 55) < 52) {
+      traitAt += 0.36;
+      traitDf += 0.36;
+    } else if (Dq.tr === 26) {
+      traitAt += 0.55;
     }
 
     if (hasTrait(q, 'super_sub', cpForTrait) && subsEntered?.includes(q.n)) {
@@ -361,7 +369,9 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
       if (hasTrait(q, 'long_shot_lover', careerP)) traitBoost += 0.16;
       if (hasTrait(q, 'selfish_shooter', careerP)) traitBoost += 0.24;
       if (hasTrait(q, 'acrobatic_finisher', careerP)) traitBoost += 0.2;
-      if (DT(q, careerP).tr === 9) traitBoost += 0.14;
+      const tr = DT(q, careerP).tr;
+      if (tr === 9) traitBoost += 0.14;
+      if (tr === 26) traitBoost += 0.28;
       if (t.setPieces?.penalty === q.n) traitBoost += 0.16;
       if (t.setPieces?.freekick === q.n) traitBoost += 0.1;
       const wVal = Math.max(1, Math.round(b * traitBoost * Math.pow(sc / 70, 2)));
@@ -494,9 +504,11 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     playedSlots[tm.id] = slotMap;
 
     // Simulate cards (realistic ~1-3 yellows per team by pressing & match heat, plus rare second yellows / straight reds)
+    const oppTeam = tm.id === h.id ? a : h;
+    const oppHasJoker = xi(oppTeam).some((q) => DT(q, s?.p).tr === 25);
     const pool = currentLineup.filter((q) => q.pos !== 'GK');
     const pressLvl = tm.press ?? 1;
-    const cardRoll = pressLvl === 2 ? 0.62 : pressLvl === 0 ? 0.30 : 0.45;
+    const cardRoll = (pressLvl === 2 ? 0.62 : pressLvl === 0 ? 0.30 : 0.45) + (oppHasJoker ? 0.14 : 0);
     const numYellows =
       (Math.random() < cardRoll ? 1 : 0) +
       (Math.random() < cardRoll * 0.52 ? 1 : 0) +
@@ -509,7 +521,7 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
           const D = DT(q, s?.p);
           const role = slotMap[q.n] || q.ro;
           let w = q.pos === 'DF' || (EQ[role] || role) === 'CDM' ? 2.4 : q.pos === 'MF' ? 1.6 : 0.9;
-          if (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22) w += 3.2;
+          if (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22 || D.tr === 26) w += D.tr === 26 ? 3.5 : 3.2;
           if (D.d.pos < 58) w += 0.8;
           if (D.tr === 0 || D.tr === 6 || D.tr === 17 || D.tr === 21 || D.tr === 23) w = Math.max(0.6, w - 1.0);
           if (hasTrait(q, 'slide_tackler', s?.p)) w += 1.8;
@@ -538,7 +550,7 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
       if ((matchY[culprit.n] || 0) >= 1) {
         const isReckless =
           hasTrait(culprit, 'slide_tackler', s?.p) ||
-          [1, 7, 15, 22].includes(DT(culprit, s?.p).tr);
+          [1, 7, 15, 22, 26].includes(DT(culprit, s?.p).tr);
         const y2rChance = teamReds < 2 ? (isReckless ? 0.48 : 0.28) : 0;
         if (Math.random() < y2rChance) {
           matchY[culprit.n] = 2;
@@ -561,7 +573,7 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     if (pool.length && teamReds < 2 && Math.random() < (big ? 0.036 : pressLvl === 2 ? 0.026 : 0.016)) {
       const rough = pool.filter((q) => {
         const tr = DT(q, s?.p).tr;
-        return tr === 1 || tr === 7 || tr === 15 || tr === 22 || hasTrait(q, 'slide_tackler', s?.p);
+        return tr === 1 || tr === 7 || tr === 15 || tr === 22 || tr === 26 || hasTrait(q, 'slide_tackler', s?.p);
       });
       const culprit = rough.length ? P(rough) : P(pool.filter((q) => q.pos === 'DF' || q.pos === 'MF').length ? pool.filter((q) => q.pos === 'DF' || q.pos === 'MF') : pool);
       if (!cards.some((c) => c.t === tm.id && c.who === culprit.n && (c.type === 'R' || c.type === 'Y2R'))) {
@@ -578,6 +590,17 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   const bg = !!(s && (s.pc || s.pa || (s.derby && (h.id === s.me || a.id === s.me))));
   const H = rate(h, s, bg, undefined, undefined, undefined, true);
   const G = rate(a, s, bg, undefined, undefined, undefined, false);
+  // Demon intimidation aura (😈 ปีศาจ) directly shakes opponent's composure & power
+  const hDemons = Math.min(2, H.x.filter((q) => DT(q, s?.p).tr === 26).length);
+  const aDemons = Math.min(2, G.x.filter((q) => DT(q, s?.p).tr === 26).length);
+  if (hDemons > 0) {
+    G.at -= hDemons * 0.45;
+    G.df -= hDemons * 0.45;
+  }
+  if (aDemons > 0) {
+    H.at -= aDemons * 0.45;
+    H.df -= aDemons * 0.45;
+  }
   if (h.pass === 3 && G.at > H.at) H.at += 3;
   if (a.pass === 3 && H.at > G.at) G.at += 3;
 
@@ -605,6 +628,25 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
     G.at += luckA;
     G.df += Math.round(luckA * 0.7);
     blessedAwayHero = G.x.length ? P(G.x) : null;
+  }
+
+  // God Power Lightning Strike ("พลังเทพ +50") — rare sky bolt hitting a random player on pitch
+  let godStrikeHero: Player | null = null;
+  let godStrikeTeam: Team | null = null;
+  if (Math.random() < 0.11) {
+    const strikeHome = Math.random() < 0.5;
+    const pool = strikeHome ? H.x : G.x;
+    if (pool.length) {
+      godStrikeHero = P(pool);
+      godStrikeTeam = strikeHome ? h : a;
+      if (strikeHome) {
+        H.at += 6.5;
+        H.df += 5.0;
+      } else {
+        G.at += 6.5;
+        G.df += 5.0;
+      }
+    }
   }
 
   const lamH = Math.min(5, 1.35 * Math.exp((H.at - G.df) / 20 + 0.1));
@@ -679,6 +721,15 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
             : `🔥 ฮึดสู้พลิกนรก! ${rallyTeam.name} โดนนำห่างแต่รัวไล่มา ${rallyGoals} ประตูแบบเกือบแซงได้!`
       });
     }
+  }
+
+  if (godStrikeHero && godStrikeTeam) {
+    incidents.push({
+      m: R(18, 82),
+      t: godStrikeTeam.id,
+      kind: 'god_power',
+      text: `⚡ เปรี้ยง!! ฟ้าผ่ากลางสนามโดน ${godStrikeHero.n} (${godStrikeTeam.name}) ได้รับพลังเทพชั่วคราว +50!`
+    });
   }
 
   if (blessedHomeHero && gh > 0) {
@@ -939,6 +990,8 @@ export function extractMatchHighlights(
         lg.text.includes('ปาเนนก้า') ||
         lg.text.includes('ปาฏิหาริย์') ||
         lg.text.includes('สิ่งศักดิ์สิทธิ์') ||
+        lg.text.includes('พลังเทพ') ||
+        lg.text.includes('ฟ้าผ่า') ||
         lg.text.includes('ลื่นล้ม') ||
         lg.text.includes('เตะวืด') ||
         lg.text.includes('เข้าประตูตัวเอง');
@@ -2986,34 +3039,47 @@ export function getVeteranDiscountedPrice(q: Pick<Player, 'ov' | 'age' | 'free'>
   return Math.max(4, Math.round(raw * mult));
 }
 
+export function getFreeAgentSigningFee(q: Pick<Player, 'ov' | 'age' | 'free' | 'nat' | 'n' | 'customPers'>): number {
+  if (!q.free) return 0;
+  const age = q.age || 25;
+  const baseVal = Math.max(12, Math.round((q.ov * q.ov) / 40));
+  const ageMult = age >= 35 ? 0.62 : age >= 33 ? 0.72 : age >= 30 ? 0.85 : age <= 21 ? 1.05 : 1;
+  const persMult = getPlayerPersonalityId(q) === 24 ? 0.75 : 1;
+  const isForeign = Boolean(q.nat && q.nat !== 'TH');
+  if (isForeign) {
+    return Math.max(10, Math.round(baseVal * 0.36 * ageMult * persMult));
+  }
+  return q.ov >= 65 ? Math.max(4, Math.round(baseVal * 0.14 * ageMult * persMult)) : 0;
+}
+
 export function ensureMarketTopForeigners(s: GameState): number {
   if (!Array.isArray(s.mk)) s.mk = [];
   const tier = s.teams?.[s.me]?.tier ?? 0;
-  const minStarOv = tier >= 2 ? 80 : tier === 1 ? 74 : 68;
-  const maxStarOv = tier >= 2 ? 89 : tier === 1 ? 82 : 76;
+  const b0 = BASE[tier] ?? 54;
+  const minStarOv = tier >= 2 ? 79 : tier === 1 ? 73 : 67;
+  const maxStarOv = tier >= 2 ? 91 : tier === 1 ? 85 : 80;
 
-  const existingTop = s.mk.filter((p) => p.nat && p.nat !== 'TH' && p.ov >= minStarOv).length;
-  if (existingTop >= 4) return 0;
-
-  const targetCount = 5;
-  const needed = Math.max(0, targetCount - existingTop);
   const usedNames = new Set<string>([
     ...s.mk.map((p) => p.n),
     ...(s.teams?.[s.me]?.sq || []).map((p) => p.n)
   ]);
-  const starRoles: SubRole[] = ['ST', 'CAM', 'CB', 'LW', 'GK', 'CDM'];
-  const veteranAges = [33, 35, 31, 34, 29, 32];
+
+  const existingTop = s.mk.filter((p) => p.nat && p.nat !== 'TH' && p.ov >= minStarOv).length;
+  const targetTopCount = 14;
+  const neededTop = existingTop >= 12 ? 0 : Math.max(0, targetTopCount - existingTop);
+  const starRoles: SubRole[] = ['ST', 'CAM', 'CB', 'LW', 'GK', 'CDM', 'RW', 'CM', 'LB', 'RB', 'CF', 'LM'];
+  const veteranAges = [33, 28, 35, 31, 26, 34, 29, 32, 24, 30];
   const nationPool = MARQUEE_FOREIGN_NATIONS
     .map((code) => COUNTRY_META_BY_CODE[code])
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
 
   const added: Player[] = [];
-  for (let i = 0; i < needed; i++) {
+  for (let i = 0; i < neededTop; i++) {
     const slot = existingTop + i;
     const ro = starRoles[slot % starRoles.length];
     const pos: Position = LINE[ro] || 'MF';
     const nat = P(nationPool);
-    const ov = clamp(minStarOv + R(1, Math.max(2, maxStarOv - minStarOv)), minStarOv, maxStarOv);
+    const ov = clamp(minStarOv + R(1, Math.max(3, maxStarOv - minStarOv)), minStarOv, maxStarOv);
     const p = mkPlayer(
       pos,
       ov,
@@ -3026,7 +3092,7 @@ export function ensureMarketTopForeigners(s: GameState): number {
     p.pot = clamp(Math.max(ov, p.pot || ov), ov, 95);
     p.talent = clamp(R(78, 95), 75, 96);
     p.traits = rollPlayerTraits(pos, ro, ov, p.talent);
-    const isFree = i === 0 || (p.age >= 34 && Math.random() < 0.55);
+    const isFree = i % 2 === 0 || (p.age >= 33 && Math.random() < 0.55);
     if (isFree) {
       p.free = 1;
       p.price = 0;
@@ -3034,13 +3100,50 @@ export function ensureMarketTopForeigners(s: GameState): number {
       p.free = 0;
       p.price = getVeteranDiscountedPrice(p);
     }
-    p.askWg = +(((p.ov * p.ov) / 3000) * (p.age >= 33 ? 0.85 : 0.95)).toFixed(1);
+    p.askWg = +(((p.ov * p.ov) / 3000) * (p.age >= 33 ? 0.88 : 1)).toFixed(1);
     p.tries = 0;
     p.locked = 0;
     usedNames.add(p.n);
     added.push(p);
   }
 
+  // Ensure existing saves also have a wide pool of domestic & foreign players to browse
+  const worldCountries = Object.values(COUNTRY_META_BY_CODE);
+  const minMarketSize = 58;
+  const currentTotal = s.mk.length + added.length;
+  if (currentTotal < minMarketSize) {
+    const fillCount = minMarketSize - currentTotal;
+    for (let i = 0; i < fillCount; i++) {
+      const ro = ALL_SUB_ROLES[(i + currentTotal) % ALL_SUB_ROLES.length];
+      const pos: Position = LINE[ro] || 'MF';
+      const isForeign = Math.random() < 0.44;
+      const nat = isForeign ? P(worldCountries) : null;
+      const yo = ro !== 'GK' && i % 5 === 2;
+      const ovTarget = clamp(b0 + R(-3, 15), 40, 88);
+      const p = mkPlayer(
+        pos,
+        ovTarget,
+        yo,
+        ro,
+        nat ? { foreignRegion: nat.region, natCode: nat.code, excludeNames: usedNames } : { excludeNames: usedNames }
+      );
+      const isFree = i % 2 === 0 || Math.random() < 0.42;
+      if (isFree) {
+        p.free = 1;
+        p.price = 0;
+      } else {
+        p.free = 0;
+        p.price = getVeteranDiscountedPrice(p);
+      }
+      p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
+      p.tries = 0;
+      p.locked = 0;
+      usedNames.add(p.n);
+      added.push(p);
+    }
+  }
+
+  if (!added.length) return 0;
   const posRank: Record<Position, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
   s.mk = [...s.mk, ...added].sort((a, b) => posRank[a.pos] - posRank[b.pos] || b.ov - a.ov);
   return added.length;
@@ -3049,46 +3152,63 @@ export function ensureMarketTopForeigners(s: GameState): number {
 export function mkMarket(s: GameState) {
   const b0 = BASE[s.teams[s.me].tier];
   const worldCountries = Object.values(COUNTRY_META_BY_CODE);
-  const rolePool: Player[] = ALL_SUB_ROLES.map((role, i) => {
+  const usedNames = new Set<string>((s.teams?.[s.me]?.sq || []).map((p) => p.n));
+
+  // Generate 2-3 varied players per sub-role across domestic & foreign nations (~36 players)
+  const rolePool: Player[] = [];
+  ALL_SUB_ROLES.forEach((role, roleIdx) => {
     const pos = LINE[role] || 'MF';
-    const yo = role !== 'GK' && i % 5 === 3;
-    const isForeign = Math.random() < 0.32;
-    const nat = isForeign ? P(worldCountries) : null;
-    const p = mkPlayer(
-      pos,
-      b0 + R(-1, 12),
-      yo,
-      role,
-      nat ? { foreignRegion: nat.region, natCode: nat.code } : undefined
-    );
-    p.price = getVeteranDiscountedPrice(p);
-    if (i === 0 || (i % 6 === 2 && Math.random() < 0.45)) {
-      p.free = 1;
-      p.price = 0;
+    const copies = pos === 'GK' ? 2 : roleIdx % 2 === 0 ? 3 : 2;
+    for (let c = 0; c < copies; c++) {
+      const yo = role !== 'GK' && (c === 1 && roleIdx % 3 === 1);
+      const isForeign = c > 0 ? Math.random() < 0.46 : Math.random() < 0.28;
+      const nat = isForeign ? P(worldCountries) : null;
+      const ovDelta = c === 0 ? R(-4, 6) : c === 1 ? R(3, 13) : R(8, 18);
+      const p = mkPlayer(
+        pos,
+        clamp(b0 + ovDelta, 38, 88),
+        yo,
+        role,
+        nat ? { foreignRegion: nat.region, natCode: nat.code, excludeNames: usedNames } : { excludeNames: usedNames }
+      );
+      const isFree = (roleIdx + c) % 4 === 0 || (c === 1 && Math.random() < 0.35);
+      if (isFree) {
+        p.free = 1;
+        p.price = 0;
+      } else {
+        p.free = 0;
+        p.price = getVeteranDiscountedPrice(p);
+      }
+      p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
+      p.tries = 0;
+      p.locked = 0;
+      usedNames.add(p.n);
+      rolePool.push(p);
     }
-    p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
-    p.tries = 0;
-    p.locked = 0;
-    return p;
   });
 
-  // Guarantee free agents across all 4 core lines so every position is signable even when transfer window closes
-  const extraFreeAgents: Player[] = POS.map((pos, idx) => {
-    const isForeign = idx === 1 || idx === 3 || Math.random() < 0.35;
-    const nat = isForeign ? P(worldCountries) : null;
-    const p = mkPlayer(
-      pos,
-      b0 + R(-2, 9),
-      false,
-      SPW(pos),
-      nat ? { foreignRegion: nat.region, natCode: nat.code } : undefined
-    );
-    p.free = 1;
-    p.price = 0;
-    p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
-    p.tries = 0;
-    p.locked = 0;
-    return p;
+  // Guarantee a rich pool of free agents across all 4 core lines (20 players: 5 per line, Thai + foreign)
+  const extraFreeAgents: Player[] = [];
+  POS.forEach((pos) => {
+    for (let idx = 0; idx < 5; idx++) {
+      const isForeign = idx >= 2;
+      const nat = isForeign ? P(worldCountries) : null;
+      const ovDelta = idx === 0 ? R(-3, 4) : idx === 1 ? R(2, 8) : idx === 2 ? R(0, 7) : idx === 3 ? R(5, 12) : R(9, 17);
+      const p = mkPlayer(
+        pos,
+        clamp(b0 + ovDelta, 38, 87),
+        idx === 1 && pos !== 'GK' && Math.random() < 0.45,
+        SPW(pos),
+        nat ? { foreignRegion: nat.region, natCode: nat.code, excludeNames: usedNames } : { excludeNames: usedNames }
+      );
+      p.free = 1;
+      p.price = 0;
+      p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
+      p.tries = 0;
+      p.locked = 0;
+      usedNames.add(p.n);
+      extraFreeAgents.push(p);
+    }
   });
 
   const posRank: Record<Position, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
@@ -4281,10 +4401,13 @@ export function calcPlayerPerf(
     (perks.includes('adaptable') ? 0.15 : 0);
   const persBonus =
     ((D.tr === 4 || D.tr === 16) && (s.pc || s.pa || s.derby) ? 0.28 : 0) +
+    (D.tr === 26 && gl > 0 ? 0.34 : 0) +
     (D.tr === 5 || D.tr === 22 ? (Math.random() < 0.65 ? 0.35 : -0.25) : 0) +
+    (D.tr === 25 && (my <= op || (s.mor ?? 55) < 55) ? 0.24 : 0) +
     ((D.tr === 9 || D.tr === 17) && my <= op ? 0.22 : 0) +
     ((D.tr === 11 || D.tr === 12 || D.tr === 20) && my > op ? 0.22 : 0) +
     (D.tr === 14 && op <= 1 ? 0.2 : 0) +
+    (D.tr === 24 && !home ? 0.28 : 0) +
     (D.tr === 23 ? 0.16 : 0) -
     (D.tr === 19 && my < op ? 0.18 : 0);
   const fatigueRatingAdj = perks.includes('iron_will') && en < 65 ? 0.22 : (en - 70) / 140;
@@ -4474,7 +4597,7 @@ export function runPlayerWeek(s: GameState) {
   const recBonus = Math.round((D.d.rec - 65) / 8);
   const tolBonus = Math.round((D.d.tol - 65) / 14);
   const baseFatigue = p.sat ? -8 : perks.includes('engine') ? -16 : -22;
-  const persFitBonus = D.tr === 2 || D.tr === 6 || D.tr === 18 || D.tr === 23 ? 3 : D.tr === 7 || D.tr === 19 ? -3 : 0;
+  const persFitBonus = D.tr === 2 || D.tr === 6 || D.tr === 18 || D.tr === 23 ? 3 : D.tr === 7 || D.tr === 19 || D.tr === 26 ? -3 : 0;
   const healEnBonus = perks.includes('quick_healer') ? 6 : 0;
   const fatigueCost = Math.min(-4, baseFatigue + staBonus + tolBonus + persFitBonus);
   p.en = clamp((p.en ?? 100) + fatigueCost + ac.en + recBonus + healEnBonus + R(0, 7), 20, 100);
@@ -4703,7 +4826,7 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
     .filter((c): c is NonNullable<typeof c> => Boolean(c));
   const foreignChance = m.focus === 'foreign' ? 1 : m.focus === 'wonderkid' || m.focus === 'free' ? 0.45 : 0.35;
 
-  return Array.from({ length: 3 }, (_, idx) => {
+  return Array.from({ length: 6 }, (_, idx) => {
     let pos: Position = P(POS);
     let forceRo: SubRole | undefined;
     let yo = false;
@@ -5514,13 +5637,13 @@ export function resolveShortlistEntry(s: GameState, entry: ShortlistEntry): {
   const mkIdx = (s.mk || []).findIndex((q) => q.n === entry.n);
   if (mkIdx >= 0) {
     const q = s.mk[mkIdx];
-    return { status: 'mk', player: q, idx: mkIdx, estPrice: q.free ? 0 : q.price || Math.max(5, vlu(q)) };
+    return { status: 'mk', player: q, idx: mkIdx, estPrice: q.free ? getFreeAgentSigningFee(q) : q.price || Math.max(5, vlu(q)) };
   }
   const scResults = s.scout?.results || [];
   const scIdx = scResults.findIndex((q) => q.n === entry.n);
   if (scIdx >= 0) {
     const q = scResults[scIdx];
-    return { status: 'scout', player: q, idx: scIdx, estPrice: q.free ? 0 : q.price || Math.max(5, vlu(q)) };
+    return { status: 'scout', player: q, idx: scIdx, estPrice: q.free ? getFreeAgentSigningFee(q) : q.price || Math.max(5, vlu(q)) };
   }
   if (entry.clubTeamId != null) {
     const prefTeam = s.teams.find((t) => t.id === entry.clubTeamId && t.id !== s.me);
@@ -5545,7 +5668,7 @@ export function resolveShortlistEntry(s: GameState, entry: ShortlistEntry): {
     status: 'unavailable',
     player: entry.snapshot,
     idx: -1,
-    estPrice: entry.snapshot.free ? 0 : entry.snapshot.price || Math.max(5, vlu(entry.snapshot))
+    estPrice: entry.snapshot.free ? getFreeAgentSigningFee(entry.snapshot) : entry.snapshot.price || Math.max(5, vlu(entry.snapshot))
   };
 }
 
@@ -6465,8 +6588,8 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
         const val = Math.max(5, q.price || vlu(q));
         const isFree = !!q.free;
         const doLoan = !isFree && buyerLoanCount < 4 && (q.age <= 24 || Math.random() < 0.25) && Math.random() < 0.32;
-        const fee = isFree ? 0 : doLoan ? Math.max(2, Math.round(val * 0.18)) : Math.round(val * (0.9 + Math.random() * 0.22));
-        if (!isFree && buyer.budget != null && buyer.budget < fee) {
+        const fee = isFree ? getFreeAgentSigningFee(q) : doLoan ? Math.max(2, Math.round(val * 0.18)) : Math.round(val * (0.9 + Math.random() * 0.22));
+        if (fee > 0 && buyer.budget != null && buyer.budget < fee) {
           continue;
         }
         s.mk.splice(chosen.idx, 1);
@@ -6523,7 +6646,7 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
           pushFeed(
             s,
             'ตลาดลีก',
-            `📰 ${buyer.name} ${isFree ? 'เซ็นฟรี' : doLoan ? 'ยืมตัว' : 'คว้าตัว'} ${incoming.n} (OVR ${incoming.ov})${fee > 0 ? ` มูลค่า ${fmtMoneyNum(fee)}` : ''}`,
+            `📰 ${buyer.name} ${isFree ? (fee > 0 ? 'เซ็นฟรีเอเยนต์' : 'เซ็นฟรี') : doLoan ? 'ยืมตัว' : 'คว้าตัว'} ${incoming.n} (OVR ${incoming.ov})${fee > 0 ? ` ${isFree ? 'ค่าเซ็น' : 'มูลค่า'} ${fmtMoneyNum(fee)}` : ''}`,
             ''
           );
         }
@@ -7164,7 +7287,7 @@ export function afterMatchDay(
         : (pi ? Math.round(aiFacilityBonus * 0.72) : aiFacilityBonus + (prevFit < 78 ? 5 : prevFit < 88 ? 2 : 0)) + aiRecoveryWeek;
       const boxToBoxStamMult = hasTrait(q, 'box_to_box_engine', s.p) ? 0.8 : 1;
       const consRec = Dq.tr === 6 || Dq.tr === 18 || Dq.tr === 21 || Dq.tr === 23 ? 3 : 0;
-      const persStamMult = Dq.tr === 2 || Dq.tr === 18 ? 0.72 : Dq.tr === 7 || Dq.tr === 19 ? 1.18 : 1;
+      const persStamMult = Dq.tr === 2 || Dq.tr === 18 ? 0.72 : Dq.tr === 26 ? 1.24 : Dq.tr === 7 || Dq.tr === 19 ? 1.18 : 1;
       const matchOrRestDelta = pi
         ? -Math.round(R(7, 12) * persStamMult * boxToBoxStamMult) - ps * (mine && mg ? 3 : 2) + Math.round((Dq.d.sta - 68) / 8) + earlySubRest
         : R(10, 17) + Math.round((Dq.d.rec - 68) / 7) + consRec;
@@ -7262,7 +7385,8 @@ export function afterMatchDay(
     }
     const avgFitAfter = myFitCount ? myFitAfterSum / myFitCount : 80;
     const fitDeltaAvg = myFitCount ? Math.round((myFitAfterSum - myFitBeforeSum) / myFitCount) : 0;
-    const morDelta = progMeta.morBonus + (coachStyle === 'motivator' ? 1 : 0) + (plan.intensity === 'heavy' && avgFitAfter < 68 ? -1 : 0);
+    const jokerMorCushion = (s.mor ?? 50) < 58 && me.sq.some((q) => DT(q, s.p).tr === 25) ? 2 : 0;
+    const morDelta = progMeta.morBonus + (coachStyle === 'motivator' ? 1 : 0) + (plan.intensity === 'heavy' && avgFitAfter < 68 ? -1 : 0) + jokerMorCushion;
     if (morDelta !== 0) s.mor = clamp((s.mor ?? 50) + morDelta, 0, 100);
     s.trainingPlan = {
       ...plan,
@@ -8456,7 +8580,7 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
       k === 0
         ? pickWeighted((z) => {
             const tr = DT(z, s?.p).tr;
-            return tr === 1 || tr === 7 || tr === 15 || tr === 22 ? 3 : 1;
+            return tr === 1 || tr === 7 || tr === 15 || tr === 22 || tr === 26 ? 3 : 1;
           })
         : k === 3
           ? pickWeighted((z) => (105 - DT(z, s?.p).d.tol) / 12)

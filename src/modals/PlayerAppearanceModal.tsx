@@ -1,13 +1,36 @@
 import React, { useMemo, useState } from 'react';
 import { Scissors, Sparkles, RotateCcw } from 'lucide-react';
-import type { GameState, Player, PlayerCareerProfile } from '../types/game';
-import { SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N } from '../data/thaiFootballData';
+import type { GameState, Player, PlayerCareerProfile, Team } from '../types/game';
+import {
+  SKIN_P,
+  HAIR_P,
+  HS_N,
+  FH_N,
+  FS_N,
+  EY_N,
+  ACC_N,
+  getCountryMetaByCode,
+  getForeignTeamCountryMeta
+} from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, rndVis, syncMe, tc } from '../engine/playerCore';
+import {
+  APPEARANCE_ORIGIN_PRESETS,
+  getPresetGroupProfile,
+  getShirtNo,
+  mapOriginToPresetGroup,
+  resolveAppearanceOrigin,
+  rndVis,
+  syncMe,
+  tc,
+  visOf,
+  type AppearancePresetGroup
+} from '../engine/playerCore';
 import { PlayerFace, resolveGkKitPalette } from '../components/SvgVisuals';
 
 export interface PlayerAppearanceModalProps {
   state: GameState;
+  targetPlayer?: Player | null;
+  targetTeam?: Team | null;
   onClose: () => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
@@ -15,20 +38,62 @@ export interface PlayerAppearanceModalProps {
 
 export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
   state,
+  targetPlayer = null,
+  targetTeam = null,
   onClose,
   onUpdateState,
   onToast
 }) => {
   const p = state.p;
-  const meTeam = state.teams[state.me];
-  const meSq = meTeam?.sq.find((q) => q.me || q.n === p?.name);
-  const initK = p?.k && SKIN_P.includes(p.k) ? p.k : SKIN_P[2];
-  const initH = p?.h && HAIR_P.includes(p.h) ? p.h : HAIR_P[0];
-  const initHs = ((p?.hs ?? 0) % HS_N.length + HS_N.length) % HS_N.length;
-  const initFh = ((p?.fh ?? 0) % FH_N.length + FH_N.length) % FH_N.length;
-  const initEy = ((p?.ey ?? 0) % EY_N.length + EY_N.length) % EY_N.length;
-  const initFs = ((p?.fs ?? 0) % FS_N.length + FS_N.length) % FS_N.length;
-  const initAcc = ((p?.acc ?? 0) % ACC_N.length + ACC_N.length) % ACC_N.length;
+  const meTeam = targetTeam ?? state.teams[state.me];
+  const isCareerMe =
+    !targetPlayer ||
+    (state.mode === 'p' && (Boolean(targetPlayer.me) || targetPlayer.n === p?.name));
+  const meSq =
+    targetPlayer ||
+    meTeam?.sq.find((q) => q.me || q.n === p?.name) ||
+    null;
+
+  const baseVis = useMemo(() => {
+    if (isCareerMe && p) {
+      const ki = p.k && SKIN_P.includes(p.k) ? SKIN_P.indexOf(p.k) : 2;
+      const hi = p.h && HAIR_P.includes(p.h) ? HAIR_P.indexOf(p.h) : 0;
+      return [
+        ki,
+        hi,
+        ((p.hs ?? 0) % HS_N.length + HS_N.length) % HS_N.length,
+        ((p.fh ?? 0) % FH_N.length + FH_N.length) % FH_N.length,
+        ((p.ey ?? 0) % EY_N.length + EY_N.length) % EY_N.length,
+        p.no || meSq?.no || 10,
+        ((p.fs ?? 0) % FS_N.length + FS_N.length) % FS_N.length,
+        ((p.acc ?? 0) % ACC_N.length + ACC_N.length) % ACC_N.length
+      ];
+    }
+    if (meSq) {
+      return visOf(meSq, null);
+    }
+    return [2, 0, 0, 0, 0, 10, 0, 0];
+  }, [isCareerMe, p, meSq]);
+
+  const initK = SKIN_P[baseVis[0]] || SKIN_P[2];
+  const initH = HAIR_P[baseVis[1]] || HAIR_P[0];
+  const initHs = ((baseVis[2] ?? 0) % HS_N.length + HS_N.length) % HS_N.length;
+  const initFh = ((baseVis[3] ?? 0) % FH_N.length + FH_N.length) % FH_N.length;
+  const initEy = ((baseVis[4] ?? 0) % EY_N.length + EY_N.length) % EY_N.length;
+  const initFs = ((baseVis[6] ?? 0) % FS_N.length + FS_N.length) % FS_N.length;
+  const initAcc = ((baseVis[7] ?? 0) % ACC_N.length + ACC_N.length) % ACC_N.length;
+
+  const foreignTeamMeta =
+    meTeam && (meTeam.tier >= 3 || meTeam.foreign === 1)
+      ? getForeignTeamCountryMeta(meTeam.name)
+      : null;
+  const resolvedNatCode =
+    meSq?.nat ||
+    foreignTeamMeta?.code ||
+    'TH';
+  const natMeta = getCountryMetaByCode(resolvedNatCode) || getCountryMetaByCode('TH');
+  const defaultOriginId = resolveAppearanceOrigin(resolvedNatCode, foreignTeamMeta?.region);
+  const defaultPresetGroup = mapOriginToPresetGroup(defaultOriginId);
 
   const [skinHex, setSkinHex] = useState<string>(initK);
   const [hairHex, setHairHex] = useState<string>(initH);
@@ -37,10 +102,34 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
   const [ey, setEy] = useState<number>(initEy);
   const [fs, setFs] = useState<number>(initFs);
   const [acc, setAcc] = useState<number>(initAcc);
+  const [activeOrigin, setActiveOrigin] = useState<AppearancePresetGroup>(defaultPresetGroup);
   const [activeTab, setActiveTab] = useState<'hair' | 'face'>('hair');
 
+  const activePresetMeta = getPresetGroupProfile(activeOrigin);
+  const recommendedHairSet = useMemo(
+    () => new Set(activePresetMeta.recommendedHairStyles),
+    [activePresetMeta]
+  );
+
+  const subjectName = isCareerMe && p ? p.name : meSq?.n || 'นักเตะ';
+  const subjectPos = isCareerMe && p ? p.pos : meSq?.pos || 'MF';
+  const subjectRole = isCareerMe && p ? p.sp : meSq?.ro || 'CM';
+  const subjectAge = isCareerMe && p ? p.age : meSq?.age || 22;
+
+  const shirtNo =
+    (isCareerMe && p ? p.no : undefined) ||
+    meSq?.no ||
+    (meTeam ? getShirtNo(meTeam, { n: subjectName, pos: subjectPos, ro: subjectRole }) : 10);
+
+  const skinIdx = Math.max(0, SKIN_P.indexOf(skinHex));
+  const hairIdx = Math.max(0, HAIR_P.indexOf(hairHex));
+  const currentVisTuple = useMemo(
+    () => [skinIdx, hairIdx, hs, fh, ey, shirtNo, fs, acc],
+    [skinIdx, hairIdx, hs, fh, ey, shirtNo, fs, acc]
+  );
+
   const previewProfile: PlayerCareerProfile | null = useMemo(() => {
-    if (!p) return null;
+    if (!isCareerMe || !p) return null;
     return {
       ...p,
       k: skinHex,
@@ -51,25 +140,25 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
       fs,
       acc
     };
-  }, [p, skinHex, hairHex, hs, fh, ey, fs, acc]);
+  }, [isCareerMe, p, skinHex, hairHex, hs, fh, ey, fs, acc]);
 
-  if (!p || !meTeam || !previewProfile) return null;
+  if ((isCareerMe && !p) || (!isCareerMe && !meSq)) return null;
 
-  const isGK = p.pos === 'GK' || p.sp === 'GK';
-  const kit1 = tc(meTeam, state, false);
-  const kit2 = tc(meTeam, state, true);
-  const gkPal = isGK ? resolveGkKitPalette(kit1, kit2, p.c) : null;
+  const isGK = subjectPos === 'GK' || subjectRole === 'GK';
+  const kit1 = meTeam ? tc(meTeam, state, false) : p?.c || '#158049';
+  const kit2 = meTeam ? tc(meTeam, state, true) : '#f5c242';
+  const gkPal = isGK ? resolveGkKitPalette(kit1, kit2, isCareerMe ? p?.c : undefined) : null;
   const faceKit = gkPal ? gkPal.kit : kit1;
   const faceTrim = gkPal ? gkPal.trim : kit2;
-  const shirtNo = p.no || meSq?.no || getShirtNo(meTeam, { n: p.name, pos: p.pos, ro: p.sp });
 
   const previewPlayer: Partial<Player> = {
     ...(meSq || {}),
-    n: p.name,
-    pos: p.pos,
-    ro: p.sp,
+    n: subjectName,
+    pos: subjectPos,
+    ro: subjectRole,
     no: shirtNo,
-    me: 1
+    me: isCareerMe ? 1 : meSq?.me,
+    vis: currentVisTuple
   };
 
   const hasChanged =
@@ -81,9 +170,7 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
     fs !== initFs ||
     acc !== initAcc;
 
-  const handleRandomLook = () => {
-    SFX.tap();
-    const rolled = rndVis(p.pos, p.age < 20);
+  const applyRolledVis = (rolled: number[]) => {
     setSkinHex(SKIN_P[rolled[0]] || SKIN_P[2]);
     setHairHex(HAIR_P[rolled[1]] || HAIR_P[0]);
     setHs(rolled[2] % HS_N.length);
@@ -91,6 +178,36 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
     setEy(rolled[4] % EY_N.length);
     setFs((rolled[6] ?? 0) % FS_N.length);
     setAcc((rolled[7] ?? 0) % ACC_N.length);
+  };
+
+  const handleSelectOrigin = (origin: AppearancePresetGroup) => {
+    SFX.tap();
+    setActiveOrigin(origin);
+    const rolled = rndVis(subjectPos, subjectAge < 20, { originPreset: origin });
+    applyRolledVis(rolled);
+  };
+
+  const handleRollNationalityLook = () => {
+    SFX.tap();
+    setActiveOrigin(defaultPresetGroup);
+    const rolled = rndVis(subjectPos, subjectAge < 20, {
+      natCode: resolvedNatCode,
+      foreignRegion: foreignTeamMeta?.region
+    });
+    applyRolledVis(rolled);
+  };
+
+  const handleRandomLook = () => {
+    SFX.tap();
+    const useExactNat = activeOrigin === defaultPresetGroup && resolvedNatCode !== 'TH';
+    const rolled = rndVis(
+      subjectPos,
+      subjectAge < 20,
+      useExactNat
+        ? { natCode: resolvedNatCode, foreignRegion: foreignTeamMeta?.region }
+        : { originPreset: activeOrigin }
+    );
+    applyRolledVis(rolled);
   };
 
   const handleReset = () => {
@@ -102,22 +219,47 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
     setEy(initEy);
     setFs(initFs);
     setAcc(initAcc);
+    setActiveOrigin(defaultPresetGroup);
   };
 
   const handleSave = () => {
     SFX.tap();
     onUpdateState((d) => {
-      if (!d.p) return;
-      d.p.k = skinHex;
-      d.p.h = hairHex;
-      d.p.hs = hs;
-      d.p.fh = fh;
-      d.p.ey = ey;
-      d.p.fs = fs;
-      d.p.acc = acc;
-      syncMe(d);
+      if (isCareerMe && d.p) {
+        d.p.k = skinHex;
+        d.p.h = hairHex;
+        d.p.hs = hs;
+        d.p.fh = fh;
+        d.p.ey = ey;
+        d.p.fs = fs;
+        d.p.acc = acc;
+        syncMe(d);
+        const sqPl = d.teams[d.me]?.sq.find((q) => q.me || q.n === d.p?.name);
+        if (sqPl) sqPl.visCustom = 1;
+        return;
+      }
+      let pl: Player | undefined;
+      if (targetTeam && d.teams[targetTeam.id]) {
+        pl = d.teams[targetTeam.id].sq.find((q) => q.n === subjectName);
+      }
+      if (!pl) {
+        for (const t of d.teams) {
+          const found = t.sq.find((q) => q.n === subjectName);
+          if (found) {
+            pl = found;
+            break;
+          }
+        }
+      }
+      if (!pl) {
+        pl = d.mk.find((q) => q.n === subjectName) || d.yth.find((q) => q.n === subjectName);
+      }
+      if (pl) {
+        pl.vis = [skinIdx, hairIdx, hs, fh, ey, pl.no || shirtNo, fs, acc];
+        pl.visCustom = 1;
+      }
     });
-    onToast(`💈 ปรับลุคใหม่เรียบร้อย! (${HS_N[hs]})`);
+    onToast(`💈 ปรับลุค ${subjectName} เรียบร้อย! (${HS_N[hs]})`);
     onClose();
   };
 
@@ -134,8 +276,16 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
               <h2 className="text-xs sm:text-sm mland:text-xs font-extrabold font-display text-[var(--ink)] truncate">
                 ห้องแต่งตัว &amp; ร้านตัดผมนักเตะ
               </h2>
-              <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                {p.name} · #{shirtNo} {meTeam.name}
+              <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1">
+                {natMeta && (
+                  <span title={`สัญชาติ${natMeta.country}`}>
+                    {natMeta.flag} {natMeta.country}
+                  </span>
+                )}
+                <span aria-hidden="true">·</span>
+                <span className="truncate">
+                  {subjectName} · #{shirtNo} {meTeam?.name || (meSq?.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขาย')}
+                </span>
               </p>
             </div>
           </div>
@@ -212,7 +362,7 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
                 className="btn btn-xs sm:btn-sm btn-secondary w-full whitespace-nowrap"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>สุ่มลุคเท่</span>
+                <span>สุ่มลุค{activePresetMeta.shortLabel}</span>
               </button>
               {hasChanged && (
                 <button
@@ -229,6 +379,55 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
 
           {/* Right Selection Panel */}
           <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3 mland:p-2 overflow-y-auto space-y-3 mland:space-y-2">
+            {/* Regional / Nationality Appearance Presets */}
+            <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2 mland:space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]">
+                  🌍 สไตล์ใบหน้า &amp; ทรงผมตามสัญชาติ / ภูมิภาค
+                </span>
+                {resolvedNatCode !== 'TH' && natMeta && (
+                  <button
+                    type="button"
+                    onClick={handleRollNationalityLook}
+                    className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:brightness-110 cursor-pointer"
+                  >
+                    🎲 สุ่มตรงสัญชาติ {natMeta.flag} {natMeta.country}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {APPEARANCE_ORIGIN_PRESETS.map((preset) => {
+                  const isActive = activeOrigin === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleSelectOrigin(preset.id)}
+                      className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors inline-flex items-center gap-1 ${
+                        isActive
+                          ? 'bg-[var(--g)] text-white shadow-xs'
+                          : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                      }`}
+                    >
+                      <span>{preset.icon}</span>
+                      <span>{preset.shortLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="text-[10px] mland:text-[8.5px] leading-snug text-[var(--mut)] space-y-0.5">
+                <div>
+                  <b className="text-[var(--ink)]">ใบหน้า {activePresetMeta.icon} {activePresetMeta.label}:</b>{' '}
+                  {activePresetMeta.faceDesc}
+                </div>
+                <div>
+                  <b className="text-[var(--ink)]">ทรงผมยอดนิยม:</b> {activePresetMeta.hairDesc}
+                </div>
+              </div>
+            </div>
+
             {activeTab === 'hair' ? (
               <>
                 {/* Hair Color */}
@@ -264,15 +463,24 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
 
                 {/* Visual Hairstyle Grid (All styles with live face preview) */}
                 <div className="space-y-1.5 pt-2 border-t border-[var(--line)]/65">
-                  <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">
-                    เลือกทรงผม ({HS_N.length} ทรง)
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">
+                      เลือกทรงผม ({HS_N.length} ทรง)
+                    </span>
+                    <span className="text-[9.5px] mland:text-[8px] font-semibold text-[#8a5b00] dark:text-[var(--lamp)]">
+                      ★ = แนะนำสำหรับสไตล์{activePresetMeta.shortLabel}
+                    </span>
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 mland:grid-cols-5 gap-2 mland:gap-1.5">
                     {HS_N.map((label, idx) => {
                       const active = hs === idx;
-                      const sampleProfile: PlayerCareerProfile = {
-                        ...previewProfile,
-                        hs: idx
+                      const isRecommended = recommendedHairSet.has(idx);
+                      const sampleProfile: PlayerCareerProfile | null = previewProfile
+                        ? { ...previewProfile, hs: idx }
+                        : null;
+                      const samplePlayer: Partial<Player> = {
+                        ...previewPlayer,
+                        vis: [skinIdx, hairIdx, idx, fh, ey, shirtNo, fs, acc]
                       };
                       return (
                         <button
@@ -282,15 +490,25 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
                             SFX.tap();
                             setHs(idx);
                           }}
-                          className={`p-1.5 mland:p-1 rounded-xl border flex flex-col items-center gap-1 cursor-pointer transition-all ${
+                          className={`relative p-1.5 mland:p-1 rounded-xl border flex flex-col items-center gap-1 cursor-pointer transition-all ${
                             active
                               ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]/55 shadow-xs'
-                              : 'bg-[var(--surface-2)]/50 border-[var(--line)] hover:border-[var(--g)]'
+                              : isRecommended
+                                ? 'bg-[var(--lamp-soft)]/30 border-[var(--lamp)]/45 hover:border-[var(--g)]'
+                                : 'bg-[var(--surface-2)]/50 border-[var(--line)] hover:border-[var(--g)]'
                           }`}
                         >
+                          {isRecommended && (
+                            <span
+                              title={`ทรงผมแนะนำสำหรับสไตล์${activePresetMeta.shortLabel}`}
+                              className="absolute top-1 right-1 text-[8px] mland:text-[7px] font-extrabold text-[#9a6700] dark:text-[var(--lamp)] leading-none"
+                            >
+                              ★
+                            </span>
+                          )}
                           <div className="[&>svg]:w-[42px] [&>svg]:h-[45px] mland:[&>svg]:w-[34px] mland:[&>svg]:h-[36px]">
                             <PlayerFace
-                              player={previewPlayer}
+                              player={samplePlayer}
                               team={meTeam}
                               state={state}
                               careerProfile={sampleProfile}
@@ -387,7 +605,9 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
         {/* Footer */}
         <footer className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface)] border-t border-[var(--line)] flex items-center justify-between gap-2">
           <span className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
-            เปลี่ยนได้ฟรีตลอดอาชีพนักเตะ และอัปเดตในการ์ดทันที
+            {isCareerMe
+              ? 'เปลี่ยนได้ฟรีตลอดอาชีพนักเตะ และอัปเดตในการ์ดทันที'
+              : `บันทึกหน้าตาและทรงผมให้ ${subjectName} และอัปเดตในการ์ดทันที`}
           </span>
           <div className="flex items-center gap-2 shrink-0">
             <button
