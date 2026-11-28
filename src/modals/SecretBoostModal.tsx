@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   FastForward,
+  Fingerprint,
   Flame,
   HeartPulse,
   Lock,
@@ -37,11 +38,27 @@ const VIP_PASSCODE = '1150';
 
 type ScannerStatus = 'idle' | 'scanning' | 'denied' | 'granted';
 
-const VipOfficeScannerGate: React.FC<{
+export const VipOfficeScannerGate: React.FC<{
   onUnlock: () => void;
   onClose: () => void;
   onToast: (msg: string) => void;
-}> = ({ onUnlock, onClose, onToast }) => {
+  heading?: string;
+  subHeading?: string;
+  unlockToast?: string;
+  grantedLabel?: string;
+  icon?: 'crown' | 'fingerprint';
+  zIndexClass?: string;
+}> = ({
+  onUnlock,
+  onClose,
+  onToast,
+  heading = 'เข้าสู่ห้องควบคุม VIP',
+  subHeading = 'ยืนยันรหัสผู้ดูแล',
+  unlockToast = '🔓 ปลดล็อกห้องควบคุม VIP สำเร็จ',
+  grantedLabel = 'ยืนยันสิทธิ์สำเร็จ กำลังเปิดแผงควบคุม...',
+  icon = 'crown',
+  zIndexClass = 'z-[65]'
+}) => {
   const [pin, setPin] = useState('');
   const [showDigits, setShowDigits] = useState(false);
   const [status, setStatus] = useState<ScannerStatus>('idle');
@@ -80,7 +97,7 @@ const VipOfficeScannerGate: React.FC<{
           SFX.win();
           vibrate(35);
           timerRef.current = window.setTimeout(() => {
-            onToast('🔓 ปลดล็อกห้องควบคุม VIP สำเร็จ');
+            onToast(unlockToast);
             onUnlock();
           }, 380);
         } else {
@@ -96,7 +113,7 @@ const VipOfficeScannerGate: React.FC<{
         }
       }, 240);
     },
-    [onToast, onUnlock, status]
+    [onToast, onUnlock, status, unlockToast]
   );
 
   const pushDigit = useCallback(
@@ -169,7 +186,7 @@ const VipOfficeScannerGate: React.FC<{
     },
     granted: {
       tone: 'text-[var(--g)]',
-      label: 'ยืนยันสิทธิ์สำเร็จ กำลังเปิดแผงควบคุม...'
+      label: grantedLabel
     }
   }[status];
 
@@ -180,7 +197,7 @@ const VipOfficeScannerGate: React.FC<{
   ];
 
   return (
-    <div className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 mland:p-2 overflow-hidden">
+    <div className={`fixed inset-0 ${zIndexClass} bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 mland:p-2 overflow-hidden`}>
       <div
         className={`w-full max-w-[520px] max-h-[calc(var(--app-dvh,1dvh)*92)] rounded-2xl bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden ${
           status === 'denied' ? 'office-pin-shake' : ''
@@ -190,11 +207,15 @@ const VipOfficeScannerGate: React.FC<{
         <div className="shrink-0 px-4 py-3 mland:px-3.5 mland:py-2 border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)] flex items-center justify-center shrink-0">
-              <Crown className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+              {icon === 'fingerprint' ? (
+                <Fingerprint className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+              ) : (
+                <Crown className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+              )}
             </div>
             <div className="min-w-0">
               <h3 className="font-bold text-sm mland:text-xs font-display truncate">
-                เข้าสู่ห้องควบคุม VIP
+                {heading}
               </h3>
             </div>
           </div>
@@ -224,7 +245,7 @@ const VipOfficeScannerGate: React.FC<{
                 ) : (
                   <Lock className="w-4 h-4 text-[#9a6700] dark:text-[var(--lamp)] shrink-0" />
                 )}
-                <span>ยืนยันรหัสผู้ดูแล</span>
+                <span>{subHeading}</span>
               </div>
               <p className={`text-[11px] mland:text-[10px] font-medium leading-snug ${statusMeta.tone}`}>
                 {statusMeta.label}

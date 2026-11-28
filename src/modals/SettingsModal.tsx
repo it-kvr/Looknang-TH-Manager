@@ -12,7 +12,6 @@ import {
   Minimize2,
   Monitor,
   Moon,
-  Package,
   Plus,
   Save,
   SlidersHorizontal,
@@ -36,7 +35,7 @@ import {
 import { exportSaveCode, cleanImportJson, readSaveFileText } from '../engine/saveCodec';
 import { firstEmptySlot, getSlotCount, loadGameFromSlot, MAX_SLOTS, setSlotCount } from '../engine/playerCore';
 import { GAME_AUTO_FOLDER_NAME, saveGameToAutoFolder } from '../engine/saveFolder';
-import { applyActiveModToRuntimeData, applyModToTeamsArray, getActiveMod } from '../engine/mods';
+import { applyActiveModToRuntimeData, applyModToTeamsArray } from '../engine/mods';
 import { SaveFolderModal } from './SaveFolderModal';
 import { ModManagerModal } from './ModManagerModal';
 
@@ -114,6 +113,9 @@ export const SettingsModal: React.FC<{
   state: GameState;
   slot?: number;
   vipAuthorized?: boolean;
+  modAuthorized?: boolean;
+  onUnlockMod?: () => void;
+  onLockMod?: () => void;
   onClose: () => void;
   onExitToMenu: () => void;
   onSaveNow?: () => void;
@@ -126,6 +128,9 @@ export const SettingsModal: React.FC<{
   state,
   slot = 1,
   vipAuthorized = false,
+  modAuthorized = false,
+  onUnlockMod,
+  onLockMod,
   onClose,
   onExitToMenu,
   onSaveNow,
@@ -145,7 +150,6 @@ export const SettingsModal: React.FC<{
   const [slotTick, setSlotTick] = useState(0);
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [showModModal, setShowModModal] = useState(false);
-  const [modTick, setModTick] = useState(0);
   const [folderInitialTab, setFolderInitialTab] = useState<'folder' | 'code'>('folder');
   const [savingToFolder, setSavingToFolder] = useState(false);
   const [fsActive, setFsActive] = useState<boolean>(() => Boolean(getFullscreenElement()));
@@ -455,9 +459,25 @@ export const SettingsModal: React.FC<{
             {/* Display & App */}
             <section className="pb-3.5 mland:pb-2 space-y-2.5 mland:space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-xs sm:text-[13px] mland:text-[10.5px] font-bold text-[var(--ink)]">
+                <div className="flex items-center gap-1.5 text-xs sm:text-[13px] mland:text-[10.5px] font-bold text-[var(--ink)]">
                   <Monitor className="w-4 h-4 mland:w-3.5 mland:h-3.5 text-[var(--g)] shrink-0" />
                   <span>หน้าจอและแอปพลิเคชัน</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setShowModModal(true);
+                    }}
+                    aria-label="สแกนลายนิ้วมือ"
+                    title="สแกนลายนิ้วมือ"
+                    className={`w-6 h-6 mland:w-5 mland:h-5 rounded-md inline-flex items-center justify-center cursor-pointer transition-all shrink-0 ${
+                      modAuthorized
+                        ? 'text-[var(--g)] bg-[var(--g-soft)] hover:brightness-110'
+                        : 'text-[var(--mut)]/35 hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                    }`}
+                  >
+                    <Fingerprint className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                  </button>
                 </div>
                 <span className="text-[11px] mland:text-[9px] text-[var(--mut)] font-semibold">
                   {(st.theme ?? 'light') === '' ? 'ตามระบบ' : (st.theme ?? 'light') === 'light' ? 'สว่าง' : 'มืด'}
@@ -562,46 +582,6 @@ export const SettingsModal: React.FC<{
               </button>
 
               <PWAInstallButton variant="settings" onToast={onToast} />
-
-              {(() => {
-                void modTick;
-                const activeMod = getActiveMod();
-                return (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      setShowModModal(true);
-                    }}
-                    className="w-full py-2 mland:py-1.5 px-1 flex items-center justify-between gap-2.5 text-left rounded-lg hover:bg-[var(--surface-2)]/45 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
-                      <div
-                        className={`w-7.5 h-7.5 mland:w-6 mland:h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-                          activeMod
-                            ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]'
-                            : 'bg-[var(--surface-2)]/75 text-[var(--mut)]'
-                        }`}
-                      >
-                        <Package className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] truncate leading-snug">
-                          จัดการ Mod ลีกและสโมสร (.json)
-                        </div>
-                        <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate leading-snug">
-                          {activeMod
-                            ? `เปิดใช้อยู่: ${activeMod.name}`
-                            : 'นำเข้าแพ็กชื่อลีก/ทีม หรือแก้ไขชื่อสโมสรและสีเสื้อ'}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="btn btn-xs btn-secondary shrink-0 whitespace-nowrap">
-                      {activeMod ? 'จัดการ Mod' : 'ตั้งค่า Mod'}
-                    </span>
-                  </button>
-                );
-              })()}
             </section>
 
             {/* Save Management */}
@@ -924,16 +904,17 @@ export const SettingsModal: React.FC<{
       {showModModal && (
         <ModManagerModal
           state={state}
+          authorized={modAuthorized}
+          onAuthorize={onUnlockMod}
+          onLock={onLockMod}
           onApplyModToState={(mod) => {
             onUpdateState?.((d) => {
               applyActiveModToRuntimeData(mod);
               applyModToTeamsArray(d.teams, mod, d);
             });
-            setModTick((t) => t + 1);
           }}
           onClose={() => {
             setShowModModal(false);
-            setModTick((t) => t + 1);
           }}
           onToast={onToast}
         />

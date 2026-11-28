@@ -14,10 +14,11 @@ import { OvrBadge } from './OvrBadge';
 import { AnimatedMoney, MoneyDeltaPill, NumericDeltaPill, useNumericDelta, type MoneyDeltaState } from './AnimatedMoney';
 import { EffectText } from './DeltaText';
 import { TeamReadinessBadge } from './TeamReadinessBadge';
+import { getGameBrandDisplay } from '../engine/mods';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 
 export type NextMatchDescriptor = {
-  kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
+  kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'po';
   homeId: number;
   awayId: number;
   isDerby: boolean;
@@ -26,6 +27,9 @@ export type NextMatchDescriptor = {
 export const AppEntrySplash = React.memo<{
   onEnterGame: () => void;
 }>(({ onEnterGame }) => {
+  const brand = getGameBrandDisplay();
+  const [logoErr, setLogoErr] = useState(false);
+
   return (
     <div className="relative h-full w-full flex items-center justify-center overflow-hidden bg-[#040c08] stage-viewport">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#040c08]">
@@ -40,34 +44,49 @@ export const AppEntrySplash = React.memo<{
       </div>
 
       <div className="relative z-10 w-full max-w-md mx-auto rounded-3xl mland:rounded-2xl border border-white/15 bg-[#07130d]/88 shadow-[0_24px_64px_rgba(0,0,0,0.75)] px-6 py-7 mland:px-6 mland:py-4 flex flex-col items-center text-center gap-4 mland:gap-2.5">
-        <div className="w-16 h-16 mland:w-12 mland:h-12 rounded-2xl bg-white/10 border border-white/18 flex items-center justify-center shadow-xl">
-          <svg viewBox="0 0 40 40" className="w-11 h-11 mland:w-8 mland:h-8" aria-hidden="true">
-            <defs>
-              <linearGradient id="enter_pitch_crest" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#123a26" />
-                <stop offset="1" stopColor="#22794b" />
-              </linearGradient>
-              <radialGradient id="enter_flood_crest" cx="0.5" cy="0.15" r="0.65">
-                <stop offset="0" stopColor="#fde68a" stopOpacity="0.72" />
-                <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_pitch_crest)" />
-            <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_flood_crest)" />
-            <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.88">
-              <path d="M5 24h30" />
-              <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
-            </g>
-            <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
-          </svg>
+        <div className="w-16 h-16 mland:w-12 mland:h-12 rounded-2xl bg-white/10 border border-white/18 flex items-center justify-center shadow-xl overflow-hidden">
+          {brand.logoUrl && !logoErr ? (
+            <img
+              src={brand.logoUrl}
+              alt={brand.title}
+              onError={() => setLogoErr(true)}
+              className="w-12 h-12 mland:w-9 mland:h-9 object-contain rounded-xl"
+            />
+          ) : (
+            <svg viewBox="0 0 40 40" className="w-11 h-11 mland:w-8 mland:h-8" aria-hidden="true">
+              <defs>
+                <linearGradient id="enter_pitch_crest" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#123a26" />
+                  <stop offset="1" stopColor="#22794b" />
+                </linearGradient>
+                <radialGradient id="enter_flood_crest" cx="0.5" cy="0.15" r="0.65">
+                  <stop offset="0" stopColor="#fde68a" stopOpacity="0.72" />
+                  <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_pitch_crest)" />
+              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_flood_crest)" />
+              <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.88">
+                <path d="M5 24h30" />
+                <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
+              </g>
+              <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
+            </svg>
+          )}
         </div>
 
         <div className="space-y-1 mland:space-y-0.5">
           <h1 className="text-3xl sm:text-4xl mland:text-2xl font-extrabold font-display tracking-wide leading-none text-white">
-            ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
+            {brand.isCustomTitle ? (
+              brand.title
+            ) : (
+              <>
+                ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
+              </>
+            )}
           </h1>
           <p className="text-xs sm:text-sm mland:text-[11px] font-medium text-emerald-100/80">
-            เกมจำลองคุมสโมสร &amp; นักเตะอาชีพไทย
+            {brand.subtitle}
           </p>
         </div>
 
@@ -438,19 +457,23 @@ export const AppTopHud = React.memo<{
                 <>
                   <FastForward className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" aria-hidden="true" />
                   <span>
-                    {nextMatchInfo.kind === 'asia'
-                      ? 'ข้ามถ้วยทวีป'
-                      : nextMatchInfo.kind === 'sc'
-                        ? 'ข้ามแชมเปี้ยนส์คัพ'
-                        : nextMatchInfo.kind === 'lc'
-                          ? 'ข้ามลีกคัพ'
-                          : nextMatchInfo.kind === 'dc'
-                            ? 'ข้ามถ้วยดิวิชั่น'
-                            : nextMatchInfo.kind === 'cup'
-                              ? 'ข้ามถ้วยปชช.'
-                              : `ข้ามนัดที่ ${state.md + 1}`}
+                    {nextMatchInfo.kind === 'po'
+                      ? 'ข้ามเพลย์ออฟ'
+                      : nextMatchInfo.kind === 'asia'
+                        ? 'ข้ามถ้วยทวีป'
+                        : nextMatchInfo.kind === 'sc'
+                          ? 'ข้ามแชมเปี้ยนส์คัพ'
+                          : nextMatchInfo.kind === 'lc'
+                            ? 'ข้ามลีกคัพ'
+                            : nextMatchInfo.kind === 'dc'
+                              ? 'ข้ามถ้วยดิวิชั่น'
+                              : nextMatchInfo.kind === 'cup'
+                                ? 'ข้ามถ้วยปชช.'
+                                : `ข้ามนัดที่ ${state.md + 1}`}
                   </span>
                 </>
+              ) : nextMatchInfo.kind === 'po' ? (
+                '🔥 แข่งเพลย์ออฟ'
               ) : nextMatchInfo.kind === 'asia' ? (
                 '🌏 แข่งถ้วยทวีป'
               ) : nextMatchInfo.kind === 'sc' ? (

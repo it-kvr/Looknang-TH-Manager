@@ -572,8 +572,15 @@ export function getForeignClubStadiumName(teamName?: string): string {
 }
 
 export function getForeignTeamCountryMeta(
-  teamName?: string
+  teamName?: string,
+  leagueCode?: string
 ): { flag: string; country: string; region: ForeignNameRegion; confed: ForeignConfed; code: string } | null {
+  if (leagueCode) {
+    const byCode = COUNTRY_META_BY_CODE[leagueCode.trim().toUpperCase()];
+    if (byCode) {
+      return { flag: byCode.flag, country: byCode.country, region: byCode.region, confed: byCode.confed, code: byCode.code };
+    }
+  }
   if (!teamName) return null;
   const n = teamName.trim();
   const exact = FOREIGN_CLUB_BY_NAME[n];
@@ -702,7 +709,7 @@ export const LEGACY_THAI_STANDALONE_RENAMES: Record<string, string> = {
 export const AN = FOREIGN_CLUB_CATALOG.map((c) => c.name);
 
 export const RN = ['รอบ 16 ทีม', 'รอบ 8 ทีม', 'รอบรองชนะเลิศ', 'รอบชิงชนะเลิศ'];
-export const TN = ['ลีกระดับจังหวัด', 'ลีกในประเทศ ดิวิชั่น 2', 'ลีกในประเทศ ดิวิชั่น 1', 'สโมสรนานาชาติ'];
+export const TN = ['ไทยลีก 3', 'ไทยลีก 2', 'ไทยลีก 1', 'ลีกทั่วโลก'];
 export const BASE = [40, 54, 68, 72];
 export const POS: Position[] = ['GK', 'DF', 'MF', 'FW'];
 export const ATT: [StatKey, string][] = [['sh', 'ยิง'], ['ps', 'จ่าย'], ['dr', 'เลี้ยง'], ['tk', 'แย่ง'], ['ph', 'กาย']];

@@ -7,6 +7,7 @@ import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK, squadWage, wagOf } from '../engine/playerCore';
 import { ovColor, ovTextColorClass, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
 import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans, isPlayerShortlisted, toggleShortlistPlayer } from '../engine/simulation';
+import { getLeagueLogoUrl, getWorldLeagueDisplay } from '../engine/mods';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -547,19 +548,38 @@ export const TeamInspectorModal: React.FC<{
             <div className="min-w-0">
               <div className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
                 <span className="truncate">{team.name}</span>
+                {team.shortName && team.shortName !== team.name && (
+                  <span className="text-[10px] mland:text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)] shrink-0">
+                    {team.shortName}
+                  </span>
+                )}
                 {isMeTeam && <MyTeamBadge size="md" />}
               </div>
               <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap">
-                <span>
-                  {team.tier >= 3
-                    ? (() => {
-                        const meta = getForeignTeamCountryMeta(team.origName || team.name);
-                        return meta
-                          ? `${CONFED_META[meta.confed].short} · ${meta.flag} สโมสร${meta.country}`
-                          : 'สโมสรนานาชาติ';
-                      })()
-                    : TN[team.tier] || 'สโมสรนานาชาติ'}
-                </span>
+                {(() => {
+                  const meta = team.tier >= 3 ? getForeignTeamCountryMeta(team.origName || team.name) : null;
+                  const leagueLogo = getLeagueLogoUrl(team.tier < 3 ? team.tier : meta?.code || 'tier_3');
+                  const worldLeague = team.modLeagueName || (meta ? getWorldLeagueDisplay(meta.code, `สโมสร${meta.country}`) : undefined);
+                  return (
+                    <span className="inline-flex items-center gap-1">
+                      {leagueLogo && (
+                        <img
+                          src={leagueLogo}
+                          alt=""
+                          className="w-3.5 h-3.5 object-contain shrink-0 rounded-xs"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
+                      <span>
+                        {team.tier >= 3
+                          ? meta
+                            ? `${CONFED_META[meta.confed].short} · ${meta.flag} ${worldLeague || `สโมสร${meta.country}`}`
+                            : team.modLeagueName || 'สโมสรนานาชาติ'
+                          : team.modLeagueName || TN[team.tier] || 'สโมสรนานาชาติ'}
+                      </span>
+                    </span>
+                  );
+                })()}
                 {rank ? <span>· อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
                 <span>·</span>
                 <WdlRecordBadges w={team.w} d={team.d} l={team.l} size="2xs" />

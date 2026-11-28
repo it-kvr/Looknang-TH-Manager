@@ -54,7 +54,7 @@ import {
 
 export const MatchModal = React.memo<{
   state: GameState;
-  kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
+  kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt' | 'po';
   homeId: number;
   awayId: number;
   isDerby: boolean;
@@ -12923,32 +12923,36 @@ export const MatchModal = React.memo<{
   const compTitle =
     kind === 'nt'
       ? compTitleOverride || '🇹🇭 ช้างศึกทีมชาติไทย · แมตช์นานาชาติ'
-      : kind === 'asia'
-        ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
-        : kind === 'sc'
-          ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · ชิงชนะเลิศ`
-          : kind === 'lc'
-            ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${RN[state.lc?.r ?? 0] || `รอบ ${(state.lc?.r ?? 0) + 1}`}`
-            : kind === 'dc'
-              ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
-              : kind === 'cup'
-                ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-                : `⚽ ${TN[homeOrig.tier]} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
+      : kind === 'po'
+        ? `🔥 ${state.po?.userPair?.label || 'รอบเพลย์ออฟเลื่อนชั้น / ชิงแชมป์ T3'}`
+        : kind === 'asia'
+          ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
+          : kind === 'sc'
+            ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · ชิงชนะเลิศ`
+            : kind === 'lc'
+              ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${RN[state.lc?.r ?? 0] || `รอบ ${(state.lc?.r ?? 0) + 1}`}`
+              : kind === 'dc'
+                ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
+                : kind === 'cup'
+                  ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
+                  : `⚽ ${TN[homeOrig.tier]} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
 
   const compShortTitle =
     kind === 'nt'
       ? compTitleOverride || '🇹🇭 ทีมชาติไทย'
-      : kind === 'asia'
-        ? `🌏 ทวีป · ${RN[state.ac?.r ?? 0] || 'คัดเลือก'}`
-        : kind === 'sc'
-          ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.short}`
-          : kind === 'lc'
-            ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.short} · ${RN[state.lc?.r ?? 0] || `ร.${(state.lc?.r ?? 0) + 1}`}`
-            : kind === 'dc'
-              ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.short} · ${RN[state.dc?.r ?? 0] || `ร.${(state.dc?.r ?? 0) + 1}`}`
-              : kind === 'cup'
-                ? `🏆 ถ้วย · ${RN[state.cup.r] || `ร.${state.cup.r + 1}`}`
-                : `⚽ ${TN[homeOrig.tier]} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
+      : kind === 'po'
+        ? '🔥 เพลย์ออฟ'
+        : kind === 'asia'
+          ? `🌏 ทวีป · ${RN[state.ac?.r ?? 0] || 'คัดเลือก'}`
+          : kind === 'sc'
+            ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.short}`
+            : kind === 'lc'
+              ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.short} · ${RN[state.lc?.r ?? 0] || `ร.${(state.lc?.r ?? 0) + 1}`}`
+              : kind === 'dc'
+                ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.short} · ${RN[state.dc?.r ?? 0] || `ร.${(state.dc?.r ?? 0) + 1}`}`
+                : kind === 'cup'
+                  ? `🏆 ถ้วย · ${RN[state.cup.r] || `ร.${state.cup.r + 1}`}`
+                  : `⚽ ${TN[homeOrig.tier]} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
 
   const cycleMatchSpeed = useCallback(() => {
     const order: readonly (0.25 | 0.5 | 1 | 2 | 5)[] = [0.25, 0.5, 1, 2, 5];

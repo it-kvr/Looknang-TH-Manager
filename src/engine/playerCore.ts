@@ -75,7 +75,7 @@ export function localizeForeignTeams(teams?: Team[] | null): boolean {
       tm.name = renamedClub;
       changed = true;
     }
-    const meta = getForeignTeamCountryMeta(tm.name);
+    const meta = getForeignTeamCountryMeta(tm.name, tm.leagueCode);
     const region = meta?.region || inferForeignTeamRegion(tm.name) || 'intl';
     const renameMap = new Map<string, string>();
 
@@ -195,15 +195,18 @@ export function genClubNames(): string[][] {
     }
     return copy;
   };
+  // Real-world domestic pyramid sizes: T3 = 24 (2 zones x 12), T2 = 18, T1 = 16
+  const tierCounts = [24, 18, 16];
   const suffixDecks: string[][] = [
-    // Tier 0: 5 standalone Thai monikers + 11 varied provincial suffixed names (capped per suffix)
-    ['', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ซิตี้', 'ซิตี้', 'เอสซี', 'เอสซี', 'ยูไนเต็ด', 'ทาวน์', 'ยูธ', 'คลับ'],
-    // Tier 1: 6 standalone regional monikers + 10 varied regional suffixed names
-    ['', '', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ยูไนเต็ด', 'ยูไนเต็ด', 'ซิตี้', 'ซิตี้', 'เอสซี', 'แอธเลติก', 'คลับ'],
-    // Tier 2: 7 standalone powerhouse monikers + 9 sleek top-flight club names
+    // Tier 0 (24 clubs): 8 standalone + 16 varied provincial suffixed names
+    ['', '', '', '', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ซิตี้', 'ซิตี้', 'ซิตี้', 'เอสซี', 'เอสซี', 'เอสซี', 'ยูไนเต็ด', 'ยูไนเต็ด', 'ทาวน์', 'ยูธ', 'คลับ', 'สปอร์ต'],
+    // Tier 1 (18 clubs): 6 standalone + 12 varied regional suffixed names
+    ['', '', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ยูไนเต็ด', 'ยูไนเต็ด', 'ซิตี้', 'ซิตี้', 'เอสซี', 'เอสซี', 'แอธเลติก', 'คลับ'],
+    // Tier 2 (16 clubs): 7 standalone + 9 sleek top-flight club names
     ['', '', '', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ยูไนเต็ด', 'ยูไนเต็ด', 'ซิตี้', 'ซิตี้', 'เอสซี', 'คลับ']
   ];
   return [0, 1, 2].map((t) => {
+    const targetCount = tierCounts[t] ?? 16;
     const basePool = shuffle(NG[t]);
     const monikerPool = shuffle(TIER_STANDALONE_CLUBS[t] || []);
     const slots = shuffle(suffixDecks[t]);
@@ -212,7 +215,7 @@ export function genClubNames(): string[][] {
     let monikerIdx = 0;
 
     for (const sx of slots) {
-      if (out.length >= 16) break;
+      if (out.length >= targetCount) break;
       if (!sx && monikerIdx < monikerPool.length) {
         const cand = monikerPool[monikerIdx++];
         if (!u.has(cand)) {
@@ -233,9 +236,16 @@ export function genClubNames(): string[][] {
       }
     }
 
-    while (out.length < 16 && baseIdx < basePool.length) {
+    while (out.length < targetCount && baseIdx < basePool.length) {
       const base = basePool[baseIdx++];
       const cand = `${base} ${P(SFX0[t].filter(Boolean))}`.trim();
+      if (!u.has(cand)) {
+        u.add(cand);
+        out.push(cand);
+      }
+    }
+    while (out.length < targetCount) {
+      const cand = `${P(NG[t])} ${P(SFX0[t].filter(Boolean))}`.trim();
       if (!u.has(cand)) {
         u.add(cand);
         out.push(cand);
@@ -1686,7 +1696,17 @@ export function mkTeam(
   tier: number,
   id: number,
   diff = R(-7, 7),
-  opts?: { foreign?: boolean; nameRegion?: ForeignNameRegion; natCode?: string; kcOverride?: [string, string]; allowImport?: boolean; keepName?: boolean }
+  opts?: {
+    foreign?: boolean;
+    nameRegion?: ForeignNameRegion;
+    natCode?: string;
+    kcOverride?: [string, string];
+    allowImport?: boolean;
+    keepName?: boolean;
+    squadSize?: number;
+    zone?: number;
+    leagueCode?: string;
+  }
 ): Team {
   const kp = KIT_P[(id + tier * 5) % KIT_P.length];
   const hasSpace = name.includes(' ');
@@ -1710,20 +1730,27 @@ export function mkTeam(
     slotRolesByPos[pos].push(naturalRo);
   });
 
-  const meta = opts?.foreign ? getForeignTeamCountryMeta(name) : null;
+  const meta = opts?.foreign ? getForeignTeamCountryMeta(name, opts?.leagueCode) : null;
   const foreignRegion = opts?.nameRegion || (opts?.foreign ? meta?.region || inferForeignTeamRegion(name) || 'intl' : undefined);
   const natCode = opts?.natCode || (opts?.foreign ? meta?.code : undefined);
   const allowImport = opts?.allowImport ?? Boolean(opts?.foreign);
 
   const baseOv = BASE[tier] + diff;
-  const sq: Player[] = (
-    [
-      ['GK', 3],
-      ['DF', 8],
-      ['MF', 7],
-      ['FW', 5]
-    ] as [Position, number][]
-  ).flatMap(([p, c]) => {
+  const squadLayout: [Position, number][] =
+    opts?.squadSize === 14
+      ? [
+          ['GK', 2],
+          ['DF', 4],
+          ['MF', 4],
+          ['FW', 4]
+        ]
+      : [
+          ['GK', 3],
+          ['DF', 8],
+          ['MF', 7],
+          ['FW', 5]
+        ];
+  const sq: Player[] = squadLayout.flatMap(([p, c]) => {
     const preferredRoles = slotRolesByPos[p];
     return Array.from({ length: c }, (_, idx) => {
       const forceRo = idx < preferredRoles.length ? preferredRoles[idx] : undefined;
@@ -1741,6 +1768,8 @@ export function mkTeam(
     id,
     name: name + (sx ? ' ' + sx : ''),
     tier,
+    ...(opts?.zone !== undefined ? { zone: opts.zone } : {}),
+    ...(opts?.leagueCode ? { leagueCode: opts.leagueCode } : {}),
     kc: opts?.kcOverride ? [opts.kcOverride[0], opts.kcOverride[1]] : [kp[0], kp[1]],
     sq,
     form: ph.form,

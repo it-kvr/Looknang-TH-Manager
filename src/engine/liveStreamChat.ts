@@ -64,7 +64,7 @@ export function getMatchBroadcastChannel(opts: {
   if (opts.kind === 'sc') {
     return { name: 'ThaiChampions Sports HD', short: 'ThaiChampions HD', badge: 'ลิขสิทธิ์ซูเปอร์คัพ' };
   }
-  if (opts.kind === 'cup' || opts.kind === 'lc' || opts.kind === 'dc') {
+  if (opts.kind === 'cup' || opts.kind === 'lc' || opts.kind === 'dc' || opts.kind === 'po') {
     return CUP_CHANNELS[seed % CUP_CHANNELS.length];
   }
   if (opts.tier >= 2) {

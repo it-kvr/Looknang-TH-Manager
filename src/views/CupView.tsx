@@ -4,7 +4,7 @@ import type { ArchivedMatchReport, MatchHighlightClip, Player, Team, GameState, 
 import { fmtMoney } from '../utils/math';
 import { RN, TN, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { ASIA_CUP_PRIZE, EXTRA_CUP_META, FA_CUP_PRIZE, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
-import { getCupDisplayName } from '../engine/mods';
+import { getCupConfig } from '../engine/mods';
 import { xi } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
@@ -94,17 +94,23 @@ export const CupView = React.memo<{
   }, [state.teams]);
 
   const competitions = useMemo(() => {
-    const faName = getCupDisplayName('fa', 'ถ้วยประชาชน');
-    const lcName = getCupDisplayName('leagueCup', EXTRA_CUP_META.lc.name);
-    const dcName = getCupDisplayName('divCup', EXTRA_CUP_META.dc.name);
-    const scName = getCupDisplayName('superCup', EXTRA_CUP_META.sc.name);
+    const faCfg = getCupConfig('fa', { name: 'ถ้วยประชาชน', short: 'ถ้วยประชาชน', icon: '🏆', prize: FA_CUP_PRIZE });
+    const lcCfg = getCupConfig('leagueCup', { name: EXTRA_CUP_META.lc.name, short: EXTRA_CUP_META.lc.short, icon: EXTRA_CUP_META.lc.icon, prize: EXTRA_CUP_META.lc.prize });
+    const dcCfg = getCupConfig('divCup', { name: EXTRA_CUP_META.dc.name, short: EXTRA_CUP_META.dc.short, icon: EXTRA_CUP_META.dc.icon, prize: EXTRA_CUP_META.dc.prize });
+    const scCfg = getCupConfig('superCup', { name: EXTRA_CUP_META.sc.name, short: EXTRA_CUP_META.sc.short, icon: EXTRA_CUP_META.sc.icon, prize: EXTRA_CUP_META.sc.prize });
     const isWorldClubSeason = (state.season ?? 1) % 2 === 0;
     const asiaDefault = isWorldClubSeason ? 'ชิงแชมป์สโมสรโลก' : 'ชิงแชมป์สโมสรทวีป';
-    const asiaName = getCupDisplayName('asia', asiaDefault);
+    const asiaCfg = getCupConfig('asia', {
+      name: asiaDefault,
+      short: isWorldClubSeason ? 'สโมสรโลก' : 'ถ้วยทวีป',
+      icon: isWorldClubSeason ? '🌐' : '🌏',
+      prize: ASIA_CUP_PRIZE
+    });
 
     const list: {
       id: CupTabId;
       icon: string;
+      logoUrl?: string;
       short: string;
       title: string;
       subtitle: string;
@@ -117,66 +123,71 @@ export const CupView = React.memo<{
     }[] = [
       {
         id: 'fa',
-        icon: '🏆',
-        short: faName,
-        title: `${faName} (16 ทีม)`,
+        icon: faCfg.icon,
+        logoUrl: faCfg.logoUrl,
+        short: faCfg.short,
+        title: `${faCfg.name} (16 ทีม)`,
         subtitle: 'รวมสโมสรทุกระดับลีก แข่งน็อกเอาต์นัดเดียวรู้ผล',
         scheduleHint: 'นัด 6, 13, 20, 27',
-        prize: FA_CUP_PRIZE,
+        prize: faCfg.prize,
         queued: Boolean(state.pc),
-        notStartedMsg: `รายการ${faName}จะเริ่มประกบคู่ในฤดูกาลนี้`,
+        notStartedMsg: `รายการ${faCfg.name}จะเริ่มประกบคู่ในฤดูกาลนี้`,
         data: state.cup
       },
       {
         id: 'lc',
-        icon: EXTRA_CUP_META.lc.icon,
-        short: lcName === EXTRA_CUP_META.lc.name ? EXTRA_CUP_META.lc.short : lcName,
-        title: `${lcName} (16 ทีม)`,
+        icon: lcCfg.icon,
+        logoUrl: lcCfg.logoUrl,
+        short: lcCfg.short,
+        title: `${lcCfg.name} (16 ทีม)`,
         subtitle: 'ศึกน็อกเอาต์สปีดเกมดุเดือด แข่งขันกลางสัปดาห์',
         scheduleHint: 'นัด 4, 11, 18, 25',
-        prize: EXTRA_CUP_META.lc.prize,
+        prize: lcCfg.prize,
         queued: Boolean(state.plc),
-        notStartedMsg: `รายการ ${lcName} จะเปิดฉากในฤดูกาลนี้`,
+        notStartedMsg: `รายการ ${lcCfg.name} จะเปิดฉากในฤดูกาลนี้`,
         data: state.lc
       },
       {
         id: 'dc',
-        icon: EXTRA_CUP_META.dc.icon,
-        short: dcName === EXTRA_CUP_META.dc.name ? EXTRA_CUP_META.dc.short : dcName,
-        title: `${dcName} (16 ทีม)`,
+        icon: dcCfg.icon,
+        logoUrl: dcCfg.logoUrl,
+        short: dcCfg.short,
+        title: `${dcCfg.name} (16 ทีม)`,
         subtitle: 'เวทีชิงโล่สำหรับสโมสรลีกจังหวัด & ลีกในประเทศ 2',
         scheduleHint: 'นัด 5, 12, 19, 26',
-        prize: EXTRA_CUP_META.dc.prize,
+        prize: dcCfg.prize,
         queued: Boolean(state.pdc),
-        notStartedMsg: `รายการ ${dcName} จะเปิดฉากในฤดูกาลนี้`,
+        notStartedMsg: `รายการ ${dcCfg.name} จะเปิดฉากในฤดูกาลนี้`,
         data: state.dc
       },
       {
         id: 'sc',
-        icon: EXTRA_CUP_META.sc.icon,
-        short: scName === EXTRA_CUP_META.sc.name ? EXTRA_CUP_META.sc.short : scName,
-        title: scName,
-        subtitle: `แชมป์ลีกสูงสุดปะทะแชมป์${faName} นัดชิงถ้วยเปิดฤดูกาล`,
+        icon: scCfg.icon,
+        logoUrl: scCfg.logoUrl,
+        short: scCfg.short,
+        title: scCfg.name,
+        subtitle: `แชมป์ลีกสูงสุดปะทะแชมป์${faCfg.name} นัดชิงถ้วยเปิดฤดูกาล`,
         scheduleHint: 'นัด 2',
-        prize: EXTRA_CUP_META.sc.prize,
+        prize: scCfg.prize,
         queued: Boolean(state.psc),
         isSingleFinal: true,
-        notStartedMsg: `ศึก ${scName} จะเริ่มชิงชัยในช่วงนัดที่ 2`,
+        notStartedMsg: `ศึก ${scCfg.name} จะเริ่มชิงชัยในช่วงนัดที่ 2`,
         data: state.sc
       },
       {
         id: 'asia',
-        icon: isWorldClubSeason ? '🌐' : '🌏',
-        short: asiaName === asiaDefault ? (isWorldClubSeason ? 'สโมสรโลก' : 'ถ้วยทวีป') : asiaName,
-        title: `${asiaName} (16 ทีม)`,
+        icon: asiaCfg.icon,
+        logoUrl: asiaCfg.logoUrl,
+        short: asiaCfg.short,
+        title: `${asiaCfg.name} (16 ทีม)`,
         subtitle:
           isWorldClubSeason
             ? 'ยอดทีมไทยดวลสโมสรชั้นนำจากยุโรป อเมริกา แอฟริกา และเอเชีย'
             : 'ตัวแทนลีกสูงสุดไทยดวลยอดทีมต่างแดนทั่วเอเชียและโอเชียเนีย',
         scheduleHint: 'นัด 3, 10, 17, 24',
-        prize: ASIA_CUP_PRIZE,
+        prize: asiaCfg.prize,
         queued: Boolean(state.pa),
-        notStartedMsg: `รายการ${asiaName}จะเปิดฉากในฤดูกาลนี้`,
+        notStartedMsg: `รายการ${asiaCfg.name}จะเปิดฉากในฤดูกาลนี้`,
         data: state.ac
       }
     ];
@@ -277,7 +288,11 @@ export const CupView = React.memo<{
                     : 'bg-[var(--surface)]/75 border-[var(--line)] hover:border-[var(--g)]/55 hover:bg-[var(--surface)]'
               }`}
             >
-              <span className="text-base sm:text-lg mland:text-sm leading-none shrink-0">{comp.icon}</span>
+              {comp.logoUrl ? (
+                <img src={comp.logoUrl} alt="" className="w-5 h-5 mland:w-4 mland:h-4 object-contain shrink-0 rounded-xs" />
+              ) : (
+                <span className="text-base sm:text-lg mland:text-sm leading-none shrink-0">{comp.icon}</span>
+              )}
               <div className="min-w-0 flex-1">
                 <div className={`text-xs mland:text-[10px] font-bold truncate leading-tight ${isActive ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                   {comp.short}
@@ -303,7 +318,11 @@ export const CupView = React.memo<{
       <section className="shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mland:gap-1.5">
         <div className="min-w-0 space-y-0.5">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base sm:text-lg mland:text-sm leading-none shrink-0">{activeComp.icon}</span>
+            {activeComp.logoUrl ? (
+              <img src={activeComp.logoUrl} alt="" className="w-6 h-6 mland:w-5 mland:h-5 object-contain shrink-0 rounded-xs" />
+            ) : (
+              <span className="text-base sm:text-lg mland:text-sm leading-none shrink-0">{activeComp.icon}</span>
+            )}
             <h3 className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate">
               {activeComp.title}
             </h3>

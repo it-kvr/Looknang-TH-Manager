@@ -16,6 +16,7 @@ import {
   resolveStateSponsorBrand,
   type ShirtSponsorBrand
 } from '../data/sponsorBrands';
+import { getClubModLogoUrl } from '../engine/mods';
 
 export const renderCrestPattern = (pat: number, uid: string, c1: string, c2: string) => (
   <>
@@ -223,6 +224,30 @@ export const ClubCrest: React.FC<{
   isMyClub?: boolean;
 }> = React.memo(({ name, size = 24, team, club, isMyClub }) => {
   const uid = React.useId().replace(/:/g, '');
+  const customLogo =
+    (isMyClub && club?.logoUrl ? club.logoUrl : undefined) ||
+    team?.logoUrl ||
+    getClubModLogoUrl(team?.origName || name);
+  const [imgErr, setImgErr] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgErr(false);
+  }, [customLogo]);
+
+  if (customLogo && !imgErr) {
+    return (
+      <img
+        src={customLogo}
+        alt=""
+        width={size}
+        height={size}
+        onError={() => setImgErr(true)}
+        className="shrink-0 object-contain rounded-sm"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
   const spec = resolveCrestSpec(name, team, club, isMyClub);
   const hasStars = spec.stars > 0;
   const starLayouts = hasStars ? CREST_STAR_LAYOUTS[spec.stars] || [] : [];

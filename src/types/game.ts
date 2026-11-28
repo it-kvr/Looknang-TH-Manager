@@ -8,7 +8,7 @@ export type SubRole =
 export type StatKey = 'sh' | 'ps' | 'dr' | 'tk' | 'ph';
 export type Mentality = 'X' | 'A' | 'B' | 'D' | 'Z';
 export type GameMode = 'm' | 'p';
-export type MatchKind = 'league' | 'cup' | 'ac' | 'lc' | 'sc' | 'dc' | 'nt';
+export type MatchKind = 'league' | 'cup' | 'ac' | 'lc' | 'sc' | 'dc' | 'nt' | 'po';
 export type MainTab = 't' | 's' | 'q' | 'r' | 'k' | 'f' | 'u' | 'c' | 'p';
 export interface NavIntent {
   tab: MainTab;
@@ -180,6 +180,26 @@ export interface Player {
   careTalkMd?: number;
   carePhysMd?: number;
   origName?: string;
+  origModSnap?: {
+    n: string;
+    nat?: string;
+    pos: Position;
+    ro: SubRole;
+    age: number;
+    no?: number;
+    ov: number;
+    pot: number;
+    talent?: number;
+    fit: number;
+    ht?: number;
+    wt?: number;
+    foot?: PreferredFoot;
+    customA?: CoreAttrs;
+    customD?: Record<string, number>;
+    price?: number;
+    wg?: number;
+    traits?: string[];
+  };
 }
 
 export interface WellbeingFactor {
@@ -313,6 +333,13 @@ export interface Team {
   origKc?: [string, string];
   origStadium?: string;
   stadiumName?: string;
+  logoUrl?: string;
+  shortName?: string;
+  modLeagueName?: string;
+  origFans?: number;
+  origBudget?: number;
+  zone?: number;
+  leagueCode?: string;
 }
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
@@ -360,6 +387,7 @@ export interface ClubIdentity {
   managerStyle?: CoachStyleId;
   managerOutfit?: CoachOutfitId;
   managerRandomOutfitPerMatch?: boolean;
+  logoUrl?: string;
 }
 
 export interface PlayerCareerProfile {
@@ -538,6 +566,32 @@ export interface AsiaCupState {
   alive: boolean;
   done: boolean;
   log: string[];
+}
+
+export interface DomesticPlayoffState {
+  round: number; // 0 = semi-finals, 1 = finals, 2 = finished
+  done: boolean;
+  userPair?: {
+    comp: 't2' | 't3_promo' | 't3_champ';
+    slot: number;
+    homeId: number;
+    awayId: number;
+    label: string;
+  };
+  t2: {
+    r: number;
+    pairs: [number, number][];
+    winnerId?: number;
+    log: string[];
+  };
+  t3: {
+    r: number;
+    promoPairs: [number, number][];
+    promoWinnerId?: number;
+    champPair?: [number, number];
+    champWinnerId?: number;
+    log: string[];
+  };
 }
 
 export interface FeedItem {
@@ -951,7 +1005,7 @@ export interface ArchivedStreamComment {
 }
 
 export interface ArchivedMatchReport {
-  kind?: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
+  kind?: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt' | 'po';
   roundLabel?: string;
   h: number;
   a: number;
@@ -1031,19 +1085,24 @@ export interface GameState {
   yth: Player[];
   fx: [number, number][][];
   fxo?: Record<number, [number, number][][]>;
+  fxZones?: Record<number, [number, number][][]>;
+  fxWorld?: Record<string, [number, number][][]>;
   pc: boolean;
   pa?: boolean;
   plc?: boolean;
   psc?: boolean;
   pdc?: boolean;
+  ppo?: boolean;
   cup: CupState;
   ac?: AsiaCupState;
   lc?: CupState;
   sc?: CupState;
   dc?: CupState;
+  po?: DomesticPlayoffState;
   aq?: number[];
   aqs?: number;
   asia?: number[];
+  worldChampions?: Record<string, number[]>;
   prevLeagueChampId?: number;
   prevCupChampId?: number;
   p?: PlayerCareerProfile;
@@ -1259,14 +1318,63 @@ export interface AppSettings {
   autoSubMatch?: boolean;
 }
 
+export interface ModGameBrand {
+  title?: string;
+  subtitle?: string;
+  logoUrl?: string;
+}
+
+export type ModCupKey = 'fa' | 'leagueCup' | 'divCup' | 'superCup' | 'asia';
+
+export interface ModCupConfig {
+  name?: string;
+  short?: string;
+  icon?: string;
+  logoUrl?: string;
+  prize?: number;
+}
+
 export interface ModClubOverride {
   name?: string;
+  shortName?: string;
   stadium?: string;
+  leagueName?: string;
+  countryCode?: string;
+  logoUrl?: string;
   c1?: string;
   c2?: string;
   c3?: string;
   kit?: number;
   awayKit?: number;
+  budgetK?: number;
+  fans?: number;
+  ovrTarget?: number;
+}
+
+export interface ModPlayerOverride {
+  clubKey?: string;
+  origName?: string;
+  name?: string;
+  nat?: string;
+  pos?: Position;
+  ro?: SubRole;
+  age?: number;
+  no?: number;
+  ov?: number;
+  pot?: number;
+  talent?: number;
+  fit?: number;
+  sh?: number;
+  ps?: number;
+  dr?: number;
+  tk?: number;
+  ph?: number;
+  price?: number;
+  wage?: number;
+  foot?: PreferredFoot;
+  ht?: number;
+  wt?: number;
+  traits?: string[];
 }
 
 export interface ModRealismSettings {
@@ -1283,17 +1391,17 @@ export interface GameModPack {
   version?: string;
   description?: string;
   updatedAt?: number;
+  sourceUrl?: string;
+  gameBrand?: ModGameBrand;
   realism?: ModRealismSettings;
   tierNames?: Partial<Record<0 | 1 | 2 | 3, string>>;
-  cupNames?: {
-    fa?: string;
-    leagueCup?: string;
-    divCup?: string;
-    superCup?: string;
-    asia?: string;
-  };
+  worldLeagueNames?: Record<string, string>;
+  leagueLogos?: Record<string, string>;
+  cupNames?: Partial<Record<ModCupKey, string>>;
+  cupMeta?: Partial<Record<ModCupKey, ModCupConfig>>;
   clubOverrides: Record<string, ModClubOverride>;
   playerOverrides?: Record<string, string>;
+  playerDataOverrides?: Record<string, ModPlayerOverride>;
 }
 
 export interface PlayerArchetype {

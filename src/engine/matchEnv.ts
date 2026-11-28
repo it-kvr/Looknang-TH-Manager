@@ -14,7 +14,7 @@ import {
 import type { GameState, MatchEnvironment, MatchPitchPuddle, PitchPerimeterBrand, StadiumStyleId, Team } from '../types/game';
 import { getActivePartnerDeals, getFacilityCondition } from './simulation';
 
-export type MatchFixtureKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
+export type MatchFixtureKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt' | 'po';
 
 function findCountryMetaByNameOrTeam(name?: string) {
   const n = (name || '').trim();
@@ -301,7 +301,7 @@ export function getStadiumDisplayName(
   if (kind === 'sc') {
     return 'สนามราชมังคลากีฬาสถาน (สนามกลาง)';
   }
-  const foreignMeta = homeOrig.tier >= 3 || homeOrig.foreign === 1 ? getForeignTeamCountryMeta(homeOrig.origName || homeOrig.name) : null;
+  const foreignMeta = homeOrig.tier >= 3 || homeOrig.foreign === 1 ? getForeignTeamCountryMeta(homeOrig.origName || homeOrig.name, homeOrig.leagueCode) : null;
   if (homeOrig.stadiumName?.trim()) {
     return foreignMeta ? `${homeOrig.stadiumName.trim()} (${foreignMeta.flag} ${foreignMeta.country})` : homeOrig.stadiumName.trim();
   }

@@ -337,17 +337,19 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   const compLabel =
     kind === 'nt'
       ? compSubtitle || '🇹🇭 ทีมชาติไทย · แมตช์ทีมชาติ'
-      : kind === 'asia'
-        ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
-        : kind === 'sc'
-          ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · นัดชิงชนะเลิศ`
-          : kind === 'lc'
-            ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${RN[state.lc?.r ?? 0] || `รอบ ${(state.lc?.r ?? 0) + 1}`}`
-            : kind === 'dc'
-              ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
-              : kind === 'cup'
-                ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-                : `⚽ ${TN[homeTeam.tier]} · นัดที่ ${state.md + 1}/${state.fx.length}`;
+      : kind === 'po'
+        ? `🔥 ${state.po?.userPair?.label || 'รอบเพลย์ออฟเลื่อนชั้น / ชิงแชมป์ T3'}`
+        : kind === 'asia'
+          ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
+          : kind === 'sc'
+            ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · นัดชิงชนะเลิศ`
+            : kind === 'lc'
+              ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${RN[state.lc?.r ?? 0] || `รอบ ${(state.lc?.r ?? 0) + 1}`}`
+              : kind === 'dc'
+                ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
+                : kind === 'cup'
+                  ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
+                  : `⚽ ${TN[homeTeam.tier]} · นัดที่ ${state.md + 1}/${state.fx.length}`;
 
 
   const handleQuickSwap = (targetName: string) => {

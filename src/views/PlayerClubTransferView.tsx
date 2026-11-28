@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { GameState, Player, SubRole, Team } from '../types/game';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { TN, AR_T, LINE } from '../data/thaiFootballData';
+import { getT3ZoneLabel } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import {
   ovMe,
@@ -65,7 +66,7 @@ export const PlayerClubTransferView = React.memo<{
     () =>
       meTeam
         ? state.teams
-            .filter((t) => t.tier === meTeam.tier)
+            .filter((t) => t.tier === meTeam.tier && (meTeam.tier !== 0 || (t.zone ?? 0) === (meTeam.zone ?? 0)))
             .slice()
             .sort((a, b) => b.pts - a.pts || b.gf - b.ga - (a.gf - a.ga) || b.gf - a.gf)
         : [],
@@ -76,7 +77,7 @@ export const PlayerClubTransferView = React.memo<{
     if (!p || !meTeam) return { top5: [], myRank: 0, total: 0 };
     const rows: { player: Player; team: Team }[] = [];
     state.teams
-      .filter((t) => t.tier === meTeam.tier)
+      .filter((t) => t.tier === meTeam.tier && (meTeam.tier !== 0 || (t.zone ?? 0) === (meTeam.zone ?? 0)))
       .forEach((t) => {
         t.sq.forEach((q) => {
           if (q.pos === p.pos) rows.push({ player: q, team: t });
@@ -86,6 +87,7 @@ export const PlayerClubTransferView = React.memo<{
     const myRank = rows.findIndex((r) => r.player.me || (r.team.id === meTeam.id && r.player.n === p.name)) + 1;
     return { top5: rows.slice(0, 5), myRank, total: rows.length };
   }, [state.teams, meTeam, p]);
+  const domesticClubCount = useMemo(() => state.teams.filter((t) => t.tier < 3).length, [state.teams]);
 
   const ntEval = useMemo(() => evaluateNationalTeamCallup(state), [state]);
 
@@ -106,7 +108,7 @@ export const PlayerClubTransferView = React.memo<{
         const altFitRole = !primaryFit ? myAltRoles.find((r) => slots.includes(r)) || null : null;
         const fitsFormation = primaryFit || Boolean(altFitRole);
         const needsPosition = samePos.length <= 3 || ov >= topSame;
-        const reqOv = t.tier === 0 ? 68 : t.tier === 1 ? 58 : 48;
+        const reqOv = t.tier === 2 ? 68 : t.tier === 1 ? 58 : 48;
         const fitBonus = primaryFit ? 2.5 : altFitRole ? 2.0 : 0;
         const needBonus = samePos.length <= 3 ? 2 : 0;
         const versBonus = Math.min(3, myAltRoles.length * 1.1);
@@ -215,7 +217,7 @@ export const PlayerClubTransferView = React.memo<{
       onToast(`${targetTeam.name} เพิ่งปฏิเสธคำขอในสัปดาห์นี้ รอหลังแข่งนัดถัดไปหรืออัปเกรดฟอร์มก่อนยื่นใหม่`);
       return;
     }
-    const reqRep = targetTeam.tier === 0 ? 14 : targetTeam.tier === 1 ? 8 : 4;
+    const reqRep = targetTeam.tier === 2 ? 14 : targetTeam.tier === 1 ? 8 : 4;
     if ((p.rep ?? 10) < reqRep && score < -4) {
       SFX.tap();
       setRejectedClubs((prev) => ({ ...prev, [targetTeam.id]: curTurnKey }));
@@ -279,7 +281,7 @@ export const PlayerClubTransferView = React.memo<{
             <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate flex items-center gap-1.5 group-hover:text-[var(--g)] transition-colors">
               <span className="truncate">{meTeam.name}</span>
               <span className="text-[11px] mland:text-[9px] font-semibold text-[var(--g)] shrink-0">
-                อันดับ {clubLeaguePos}/{divisionTable.length} · {TN[meTeam.tier]}
+                อันดับ {clubLeaguePos}/{divisionTable.length} · {TN[meTeam.tier]}{meTeam.tier === 0 ? ` (${getT3ZoneLabel(meTeam.zone)})` : ''}
               </span>
             </div>
             <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1.5">
@@ -521,7 +523,7 @@ export const PlayerClubTransferView = React.memo<{
                     ติดทีมชาติแล้ว: <b className="text-[var(--ink)]">{p.ntCaps || 0} นัด · {p.ntGoals || 0} ประตู</b>
                   </span>
                   <span>
-                    เกณฑ์ประเมิน 48 สโมสรไทย (โควต้า {ntEval.pos} {ntEval.posQuota} คน
+                    เกณฑ์ประเมิน {domesticClubCount} สโมสรไทย (โควต้า {ntEval.pos} {ntEval.posQuota} คน
                     {ntEval.utilityPath ? ` · สายเสริม ${ntEval.utilityPath.pos} #${ntEval.utilityPath.rank}/${ntEval.utilityPath.quota}` : ''})
                   </span>
                 </div>
@@ -537,7 +539,7 @@ export const PlayerClubTransferView = React.memo<{
                     onClick={() => { SFX.tap(); setBoardTab('national'); }}
                     className={`seg-btn text-[11px] mland:text-[9px] ${boardTab === 'national' ? 'seg-btn-active' : ''}`}
                   >
-                    🇹🇭 แข่งขันติดทีมชาติ (48 ทีม)
+                    🇹🇭 แข่งขันติดทีมชาติ ({domesticClubCount} ทีม)
                   </button>
                   <button
                     type="button"
@@ -777,6 +779,11 @@ export const PlayerClubTransferView = React.memo<{
                         <div className="min-w-0">
                           <div className="font-bold text-xs mland:text-[10px] truncate flex items-center gap-1.5">
                             <span className="truncate">{team.name}</span>
+                            {team.tier === 0 && (
+                              <span className="text-[9px] font-semibold text-[var(--mut)] shrink-0">
+                                ({team.zone === 1 ? 'กลาง-ใต้' : 'เหนือ-อีสาน'})
+                              </span>
+                            )}
                             {primaryFit ? (
                               <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--g)] shrink-0" title={`ระบบ ${team.form} มีตำแหน่ง ${p.sp}`}>
                                 🎯 ตรงแผน

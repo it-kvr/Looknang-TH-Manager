@@ -14,12 +14,13 @@ import { P, clamp, capMoney, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, saveSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK, localizeForeignTeams, localizeDomesticThaiTeams } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, ensureAsia, ensureMarketTopForeigners, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, ensureAsia, ensureMarketTopForeigners, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable, ensureDomesticPyramidStructure, ensureWorldLeaguesFixtures, advanceOtherLeaguesOnMatchday, initDomesticPlayoffs, resolveUserPlayoffMatch, roundRobin } from './engine/simulation';
 import { resolveStateSponsorBrand } from './data/sponsorBrands';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { formatPersonalityShiftFeed, getActiveFavBoost, getTeamFavoritePlayers, updateTeamWellbeingAfterMatchday, type MatchdayWellbeingCtx } from './engine/wellbeing';
+import { getCupConfig } from './engine/mods';
 import { AppEntrySplash, AppToast, AppTopHud, AppNavDock, PortraitRotateNotice, type NextMatchDescriptor } from './components/AppShellSections';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -56,8 +57,8 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [inspectPlayer, setInspectPlayer] = useState<{ player: Player; team: Team | null; initialTab?: 'info' | 'history' | 'missions' } | null>(null);
   const [inspectTeamId, setInspectTeamId] = useState<number | null>(null);
-  const [preMatch, setPreMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
-  const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean; matchEnv?: MatchEnvironment } | null>(null);
+  const [preMatch, setPreMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'po'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
+  const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'po'; homeId: number; awayId: number; isDerby: boolean; matchEnv?: MatchEnvironment } | null>(null);
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
   const [seasonStatsTarget, setSeasonStatsTarget] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -65,6 +66,7 @@ export default function App() {
   const [showGodBlessing, setShowGodBlessing] = useState(false);
   const [showDilemmaModal, setShowDilemmaModal] = useState(false);
   const [vipAuthorized, setVipAuthorized] = useState(false);
+  const [modAuthorized, setModAuthorized] = useState(false);
   const [managerCareerModal, setManagerCareerModal] = useState<'career' | 'nt' | null>(null);
   const [ntPreMatchFixture, setNtPreMatchFixture] = useState<NationalTeamMatchRecord | null>(null);
   const [ntActiveMatch, setNtActiveMatch] = useState<{
@@ -325,7 +327,17 @@ export default function App() {
     flushPendingSave();
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
     const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier, money: capMoney(loaded.money) };
-    ensureAsia(normalized);
+    ensureDomesticPyramidStructure(normalized, { topUpCounts: false, rebalanceZones: false });
+    ensureWorldLeaguesFixtures(normalized);
+    if (!normalized.fxZones) {
+      const mtLoaded = normalized.teams[normalized.me]?.tier ?? 0;
+      const myZ = normalized.teams[normalized.me]?.zone ?? 0;
+      const z0Ids = normalized.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 0).map((t) => t.id);
+      const z1Ids = normalized.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 1).map((t) => t.id);
+      normalized.fxZones = {};
+      if (z0Ids.length >= 2) normalized.fxZones[0] = mtLoaded === 0 && myZ === 0 ? normalized.fx : roundRobin(z0Ids);
+      if (z1Ids.length >= 2) normalized.fxZones[1] = mtLoaded === 0 && myZ === 1 ? normalized.fx : roundRobin(z1Ids);
+    }
     localizeForeignTeams(normalized.teams);
     localizeDomesticThaiTeams(normalized.teams, normalized);
     ensureSeasonExtraCups(normalized);
@@ -381,6 +393,14 @@ export default function App() {
         return { kind: 'cup' as const, homeId: state.cup.ids[pairIdx], awayId: state.cup.ids[pairIdx + 1], isDerby: false };
       }
     }
+    if (state.ppo && state.po?.userPair) {
+      return {
+        kind: 'po' as const,
+        homeId: state.po.userPair.homeId,
+        awayId: state.po.userPair.awayId,
+        isDerby: false
+      };
+    }
     if (state.md < state.fx.length) {
       const pair = state.fx[state.md].find((p) => p.includes(state.me));
       if (pair) {
@@ -388,14 +408,16 @@ export default function App() {
       }
     }
     return null;
-  }, [state?.pa, state?.ac, state?.psc, state?.sc, state?.plc, state?.lc, state?.pdc, state?.dc, state?.pc, state?.cup, state?.md, state?.fx, state?.me]);
+  }, [state?.pa, state?.ac, state?.psc, state?.sc, state?.plc, state?.lc, state?.pdc, state?.dc, state?.pc, state?.cup, state?.ppo, state?.po, state?.md, state?.fx, state?.me]);
   const nextMatchInfoRef = useRef(nextMatchInfo);
   nextMatchInfoRef.current = nextMatchInfo;
 
   const myLeagueRank = useMemo(() => {
     if (!state) return 1;
-    const myTier = state.teams[state.me]?.tier ?? 0;
-    const sorted = sortTable(state.teams.filter((t) => t.tier === myTier));
+    const meT = state.teams[state.me];
+    const myTier = meT?.tier ?? 0;
+    const myZone = myTier === 0 ? (meT?.zone ?? 0) : undefined;
+    const sorted = sortTable(state.teams.filter((t) => t.tier === myTier && (myTier !== 0 || (t.zone ?? 0) === myZone)));
     const idx = sorted.findIndex((t) => t.id === state.me);
     return idx >= 0 ? idx + 1 : 1;
   }, [state?.teams, state?.me]);
@@ -412,7 +434,7 @@ export default function App() {
 
   const applyFinishedMatchToDraft = (
     d: GameState,
-    matchInfo: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean },
+    matchInfo: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'po'; homeId: number; awayId: number; isDerby: boolean },
     payload: FinishedMatchPayload
   ): { shouldConfetti: boolean; missionToast: string | null; talentToast: string | null; personalityToast: string | null } => {
     const { kind, homeId, awayId, isDerby } = matchInfo;
@@ -719,13 +741,15 @@ export default function App() {
         c.ids = nx;
         c.r++;
         d.pc = false;
+        const faCfg = getCupConfig('fa', { name: 'ถ้วยประชาชน', short: 'บอลถ้วย', icon: '🏆', prize: FA_CUP_PRIZE });
+        const faTrophyTitle = faCfg.name === 'ถ้วยประชาชน' ? 'แชมป์ถ้วยประชาชน' : `แชมป์${faCfg.name}`;
         if (!nx.includes(d.me)) {
           c.alive = false;
-          d.news = `🏆 ตกรอบถ้วยประชาชน (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
-          pushFeed(d, 'บอลถ้วย', d.news, 'urg');
+          d.news = `${faCfg.icon} ตกรอบ${faCfg.name} (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          pushFeed(d, faCfg.short, d.news, 'urg');
         } else {
-          d.news = `🏆 ผ่านเข้ารอบถ้วยประชาชน! (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
-          pushFeed(d, 'บอลถ้วย', d.news, 'ok');
+          d.news = `${faCfg.icon} ผ่านเข้ารอบ${faCfg.name}! (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          pushFeed(d, faCfg.short, d.news, 'ok');
         }
         if (nx.length === 1) {
           c.done = true;
@@ -733,22 +757,22 @@ export default function App() {
           if (winTeam) {
             winTeam.trophies = winTeam.trophies || [];
             if (!winTeam.trophies.some((tr) => tr.season === d.season && tr.type === 'cup')) {
-              winTeam.trophies.push({ season: d.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
+              winTeam.trophies.push({ season: d.season, title: faTrophyTitle, type: 'cup' });
             }
             adjustTeamFans(winTeam, Math.round(ensureTeamFans(winTeam) * 0.1));
           }
           if (nx[0] === d.me) {
             d.trophies = d.trophies || [];
             if (!d.trophies.some((tr) => tr.season === d.season && tr.type === 'cup')) {
-              d.trophies.push({ season: d.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
+              d.trophies.push({ season: d.season, title: faTrophyTitle, type: 'cup' });
             }
             if (d.mode === 'm') {
-              d.money += FA_CUP_PRIZE;
-              logFin(d, 'รางวัลแชมป์ถ้วยประชาชน', FA_CUP_PRIZE);
+              d.money += faCfg.prize;
+              logFin(d, `รางวัล${faTrophyTitle}`, faCfg.prize);
               d.mgrRep = (d.mgrRep || 50) + 75;
             } else if (d.p) {
               const meSq = me.sq.find((q) => q.me);
-              appendPlayerCareerLog(meSq, `🏆 ซีซั่น ${d.season}: คว้าแชมป์ถ้วยประชาชนกับ ${me.name}`, d.p);
+              appendPlayerCareerLog(meSq, `${faCfg.icon} ซีซั่น ${d.season}: คว้า${faTrophyTitle}กับ ${me.name}`, d.p);
             }
             shouldConfetti = true;
           }
@@ -788,13 +812,31 @@ export default function App() {
         }
         syncCupParticipantWellbeing(cupWellbeing);
         recordMatchMissions();
+        if (d.md >= d.fx.length && !d.po && !d.pa && !d.pc && !d.plc && !d.pdc && !d.psc) {
+          initDomesticPlayoffs(d);
+        }
         return { shouldConfetti, missionToast, talentToast, personalityToast };
       }
 
       if (kind === 'lc' || kind === 'sc' || kind === 'dc') {
         ensureSeasonExtraCups(d);
         const c = kind === 'lc' ? d.lc! : kind === 'sc' ? d.sc! : d.dc!;
-        const meta = EXTRA_CUP_META[kind];
+        const baseMeta = EXTRA_CUP_META[kind];
+        const modCupKey = kind === 'lc' ? 'leagueCup' : kind === 'sc' ? 'superCup' : 'divCup';
+        const cupCfg = getCupConfig(modCupKey, {
+          name: baseMeta.name,
+          short: baseMeta.short,
+          icon: baseMeta.icon,
+          prize: baseMeta.prize
+        });
+        const meta = {
+          ...baseMeta,
+          name: cupCfg.name,
+          short: cupCfg.short,
+          icon: cupCfg.icon,
+          prize: cupCfg.prize,
+          trophyTitle: cupCfg.name === baseMeta.name ? baseMeta.trophyTitle : `แชมป์${cupCfg.name}`
+        };
         const roundBefore = c.r;
         const roundLabel = kind === 'sc' ? 'ชิงชนะเลิศ' : RN[c.r] || `รอบ ${c.r + 1}`;
         const nx: number[] = [];
@@ -912,6 +954,9 @@ export default function App() {
         }
         syncCupParticipantWellbeing(extraWellbeing);
         recordMatchMissions();
+        if (d.md >= d.fx.length && !d.po && !d.pa && !d.pc && !d.plc && !d.pdc && !d.psc) {
+          initDomesticPlayoffs(d);
+        }
         return { shouldConfetti, missionToast, talentToast, personalityToast };
       }
 
@@ -957,15 +1002,24 @@ export default function App() {
         c.r++;
         d.pa = false;
         const isWorldCupClub = (d.season ?? 1) % 2 === 0;
-        const cupLabel = isWorldCupClub ? 'ชิงแชมป์สโมสรโลก' : 'บอลถ้วยทวีป';
-        const cupShortTag = isWorldCupClub ? 'สโมสรโลก' : 'ถ้วยทวีป';
-        const cupTrophyTitle = isWorldCupClub ? 'แชมป์สโมสรโลก' : 'แชมป์สโมสรทวีป';
+        const defaultAsiaName = isWorldCupClub ? 'ชิงแชมป์สโมสรโลก' : 'ชิงแชมป์สโมสรทวีป';
+        const asiaCfg = getCupConfig('asia', {
+          name: defaultAsiaName,
+          short: isWorldCupClub ? 'สโมสรโลก' : 'ถ้วยทวีป',
+          icon: isWorldCupClub ? '🌐' : '🌏',
+          prize: ASIA_CUP_PRIZE
+        });
+        const hasModAsia = asiaCfg.name !== defaultAsiaName;
+        const cupLabel = hasModAsia ? asiaCfg.name : (isWorldCupClub ? 'ชิงแชมป์สโมสรโลก' : 'บอลถ้วยทวีป');
+        const cupShortTag = hasModAsia ? asiaCfg.short : (isWorldCupClub ? 'สโมสรโลก' : 'ถ้วยทวีป');
+        const cupTrophyTitle = hasModAsia ? `แชมป์${asiaCfg.name}` : (isWorldCupClub ? 'แชมป์สโมสรโลก' : 'แชมป์สโมสรทวีป');
+        const cupIcon = asiaCfg.icon || (isWorldCupClub ? '🌐' : '🌏');
         if (!nx.includes(d.me)) {
           c.alive = false;
-          d.news = `${isWorldCupClub ? '🌐' : '🌏'} ตกรอบ${cupLabel} (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          d.news = `${cupIcon} ตกรอบ${cupLabel} (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
           pushFeed(d, cupShortTag, d.news, 'urg');
         } else {
-          d.news = `${isWorldCupClub ? '🌐' : '🌏'} เข้ารอบ${cupLabel}! (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          d.news = `${cupIcon} เข้ารอบ${cupLabel}! (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
           pushFeed(d, cupShortTag, d.news, 'ok');
         }
         if (nx.length === 1) {
@@ -984,12 +1038,12 @@ export default function App() {
               d.trophies.push({ season: d.season, title: cupTrophyTitle, type: 'asia' });
             }
             if (d.mode === 'm') {
-              d.money += ASIA_CUP_PRIZE;
-              logFin(d, `รางวัล${cupTrophyTitle}`, ASIA_CUP_PRIZE);
+              d.money += asiaCfg.prize;
+              logFin(d, `รางวัล${cupTrophyTitle}`, asiaCfg.prize);
               d.mgrRep = (d.mgrRep || 50) + 120;
             } else if (d.p) {
               const meSq = me.sq.find((q) => q.me);
-              appendPlayerCareerLog(meSq, `${isWorldCupClub ? '🌐' : '🌏'} ซีซั่น ${d.season}: คว้า${cupTrophyTitle}กับ ${me.name}`, d.p);
+              appendPlayerCareerLog(meSq, `${cupIcon} ซีซั่น ${d.season}: คว้า${cupTrophyTitle}กับ ${me.name}`, d.p);
             }
             shouldConfetti = true;
           }
@@ -1029,6 +1083,71 @@ export default function App() {
         }
         syncCupParticipantWellbeing(asiaWellbeing);
         recordMatchMissions();
+        if (d.md >= d.fx.length && !d.po && !d.pa && !d.pc && !d.plc && !d.pdc && !d.psc) {
+          initDomesticPlayoffs(d);
+        }
+        return { shouldConfetti, missionToast, talentToast, personalityToast };
+      }
+
+      if (kind === 'po') {
+        const poLabel = d.po?.userPair?.label || 'รอบเพลย์ออฟ';
+        const poComp = d.po?.userPair?.comp;
+        const poRoundBefore = d.po?.round ?? 0;
+        const poWin = pickWinner(H, A, resObj, d);
+        tallyCupMatchPlayers('cup', H, A, resObj);
+        updateTeamsFanbaseOnMatch(H, payload.gh, A, payload.ga, { kind: 'cup', big: true });
+        d.cupLog = d.cupLog || [];
+        d.cupLog.push({
+          md: d.md,
+          comp: 'cup',
+          r: poRoundBefore,
+          ...buildArchivedReport('po', poLabel)
+        });
+        resolveUserPlayoffMatch(d, { homeId, awayId, r: resObj, pen: payload.pen });
+        if (poWin.id === d.me && (poRoundBefore === 1 || poComp === 't3_champ' || d.po?.done)) {
+          shouldConfetti = true;
+          if (d.mode === 'm') {
+            d.mgrRep = (d.mgrRep || 50) + (poComp === 't3_champ' ? 40 : 55);
+          }
+        }
+        applyLiveInjuries();
+        me.sq.forEach((q) => {
+          if ((q.sus || 0) > 0) q.sus = q.sus! - 1;
+          if ((q.inj || 0) > 0 && !liveInjNames.includes(q.n)) q.inj = Math.max(0, q.inj - 1);
+          if (q.me && d.p) {
+            d.p.sus = q.sus || 0;
+            d.p.inj = q.inj || 0;
+          }
+        });
+        applyMatchCards(d, H, A, payload.cards);
+        applyPositionAdaptation(d, H, A, resObj);
+        if (d.mode === 'm') {
+          if (homeId === d.me) {
+            const poTicket = calcHomeTicketRevenue(d, me, { ignorePromo: true });
+            if (poTicket > 0) {
+              d.money += poTicket;
+              logFin(d, `ค่าตั๋วเข้าชมเกมเหย้าเพลย์ออฟ (${resolveTicketPlan(d).label})`, poTicket);
+            }
+          }
+          applyLiveStreamMatchSettlement(d, me, opp, {
+            kind: 'cup',
+            isHome: homeId === d.me,
+            isDerby,
+            myGoals: homeId === d.me ? payload.gh : payload.ga,
+            oppGoals: homeId === d.me ? payload.ga : payload.gh,
+            viewers: payload.streamViewers,
+            peakViewers: payload.streamPeakViewers
+          });
+        }
+        if (d.mode === 'p' && payload.pf) {
+          const perfOut = creditPlayerPerf(d, payload.pf);
+          if (perfOut?.talentToast) talentToast = perfOut.talentToast;
+        }
+        syncCupParticipantWellbeing([
+          { team: H, ctx: buildUserSideWellbeingCtx(H, payload.gh, payload.ga, true) },
+          { team: A, ctx: buildUserSideWellbeingCtx(A, payload.ga, payload.gh, true) }
+        ]);
+        recordMatchMissions();
         return { shouldConfetti, missionToast, talentToast, personalityToast };
       }
 
@@ -1062,25 +1181,7 @@ export default function App() {
         wellbeingByTeam[ta.id] = buildSimWellbeingCtx(ta, r.ga, r.gh, r);
       });
 
-      if (d.fxo) {
-        Object.values(d.fxo).forEach((rounds) => {
-          const rd = rounds[d.md];
-          if (!rd) return;
-          rd.forEach(([fidH, fidA]) => {
-            const th = d.teams[fidH];
-            const ta = d.teams[fidA];
-            const r = simMatch(th, ta, d);
-            applyMatchResult(th, r.gh, ta, r.ga);
-            tallyMatchPlayers(th, ta, r);
-            applyPositionAdaptation(d, th, ta, r);
-            applyAiClubMatchMissions(d, th, ta, r);
-            roundCards.push({ h: th, a: ta, cards: r.cards });
-            r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
-            wellbeingByTeam[th.id] = buildSimWellbeingCtx(th, r.gh, r.ga, r);
-            wellbeingByTeam[ta.id] = buildSimWellbeingCtx(ta, r.ga, r.gh, r);
-          });
-        });
-      }
+      // Remaining domestic zones/tiers & 33 World Leagues are advanced proportionally via advanceOtherLeaguesOnMatchday after d.md++
 
       const myGoals = homeId === d.me ? payload.gh : payload.ga;
       const oppGoals = homeId === d.me ? payload.ga : payload.gh;
@@ -1175,7 +1276,9 @@ export default function App() {
       }
       d.schedRes = d.schedRes || {};
       d.schedRes[d.md] = buildArchivedReport('league', `นัดที่ ${d.md + 1}`);
+      const prevMd = d.md;
       d.md++;
+      advanceOtherLeaguesOnMatchday(d, prevMd, d.md);
       if (d.mode !== 'm' && payload.pf) {
         const perfOut = creditPlayerPerf(d, payload.pf);
         if (perfOut?.talentToast) talentToast = perfOut.talentToast;
@@ -1191,6 +1294,9 @@ export default function App() {
       recordMatchMissions();
       d.money = capMoney(d.money);
       recordFinanceSnapshot(d);
+      if (d.md >= d.fx.length && !d.po && !d.pa && !d.pc && !d.plc && !d.pdc && !d.psc) {
+        initDomesticPlayoffs(d);
+      }
       return { shouldConfetti, missionToast, talentToast, personalityToast };
   };
 
@@ -1248,7 +1354,7 @@ export default function App() {
     }
   }, [showToast]);
 
-  const runInstantNextMatch = useCallback((fixture: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean }) => {
+  const runInstantNextMatch = useCallback((fixture: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'po'; homeId: number; awayId: number; isDerby: boolean }) => {
     const curState = stateRef.current;
     if (!curState) return;
     const wasOnLeagueHome = curState.v === 't' && (curState.tv ?? 0) === 0;
@@ -1889,6 +1995,9 @@ export default function App() {
           state={state}
           slot={slot}
           vipAuthorized={vipAuthorized}
+          modAuthorized={modAuthorized}
+          onUnlockMod={() => setModAuthorized(true)}
+          onLockMod={() => setModAuthorized(false)}
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => {
             flushPendingSave();

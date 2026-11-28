@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import type { GameState, Player, TrophyRecord } from '../types/game';
 import { TN } from '../data/thaiFootballData';
+import { getT3ZoneLabel } from '../data/leagueStructures';
 import { SFX, triggerConfetti } from '../utils/audioTheme';
 import { finishSeasonComputation, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { xi } from '../engine/playerCore';
@@ -288,7 +289,10 @@ export const SeasonEndModal: React.FC<{
                 ) : (
                   <Award className="w-3.5 h-3.5 shrink-0" />
                 )}
-                <span>สรุปปิดฤดูกาลที่ {state.season} · {TN[summary.mt]}</span>
+                <span>
+                  สรุปปิดฤดูกาลที่ {state.season} · {TN[summary.mt]}
+                  {summary.mt === 0 ? ` (${getT3ZoneLabel(me.zone)})` : ''}
+                </span>
               </div>
 
               {isCelebration && (
@@ -441,10 +445,21 @@ export const SeasonEndModal: React.FC<{
               <div className="font-extrabold text-sm mland:text-xs flex items-center gap-1 truncate text-[var(--ink)]">
                 {isPromoted && <TrendingUp className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />}
                 {isRelegated && <TrendingDown className="w-3.5 h-3.5 text-[var(--red)] shrink-0" />}
-                <span className="truncate">{TN[summary.nt]}</span>
+                <span className="truncate">
+                  {TN[summary.nt]}
+                  {summary.nt === 0 ? ` (${getT3ZoneLabel(me.zone)})` : ''}
+                </span>
               </div>
-              <div className={`text-[10.5px] mland:text-[9px] font-bold ${isPromoted ? 'text-[var(--g)]' : isRelegated ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
-                {isPromoted ? 'เลื่อนชั้นสำเร็จ!' : isRelegated ? 'ตกชั้น 1 ระดับ' : summary.ch ? 'ป้องกันแชมป์ต่อ' : 'อยู่ลีกเดิม'}
+              <div className={`text-[10.5px] mland:text-[9px] font-bold truncate ${isPromoted ? 'text-[var(--g)]' : isRelegated ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
+                {state.po?.t2?.winnerId === state.me || state.po?.t3?.promoWinnerId === state.me
+                  ? 'ชนะเพลย์ออฟเลื่อนชั้น!'
+                  : isPromoted
+                    ? 'เลื่อนชั้นสำเร็จ!'
+                    : isRelegated
+                      ? 'ตกชั้น 1 ระดับ'
+                      : summary.ch
+                        ? 'ป้องกันแชมป์ต่อ'
+                        : 'อยู่ลีกเดิม'}
               </div>
             </div>
 

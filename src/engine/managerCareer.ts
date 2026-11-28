@@ -750,13 +750,20 @@ export function switchManagerClub(
   });
 
   if (opts.timing === 'midseason') {
-    if (ntTier !== oldTier) {
+    const oldZone = oldTeam?.zone ?? 0;
+    const newZone = newTeam.zone ?? 0;
+    if (oldTier === 0) {
+      s.fxZones = s.fxZones || {};
+      s.fxZones[oldZone] = s.fx;
+    } else if (ntTier !== oldTier) {
       s.fxo = s.fxo || {};
       s.fxo[oldTier] = s.fx;
-      if (s.fxo[ntTier]) {
-        s.fx = s.fxo[ntTier];
-        delete s.fxo[ntTier];
-      }
+    }
+    if (ntTier === 0 && s.fxZones?.[newZone]) {
+      s.fx = s.fxZones[newZone];
+    } else if (ntTier !== oldTier && s.fxo?.[ntTier]) {
+      s.fx = s.fxo[ntTier];
+      delete s.fxo[ntTier];
     }
     // Reconcile cup participation flags with the new club's survival status
     if (s.cup && (!s.cup.alive || !s.cup.ids.includes(newTeamId))) s.pc = false;

@@ -27,6 +27,15 @@ import {
 } from 'lucide-react';
 import type { ArchivedMatchReport, MainTab, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, CONFED_META, getForeignTeamCountryMeta, getTeamTrainingPlan, syncTrainingFocusToPlan, type ForeignConfed } from '../data/thaiFootballData';
+import {
+  DOMESTIC_LEAGUE_SPECS,
+  T3_ZONE_NAMES,
+  WORLD_LEAGUE_SPECS,
+  getRankZoneBadge,
+  getSeasonCalendarMds,
+  getT3ZoneLabel,
+  getWorldLeagueSpec
+} from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { EffectText } from '../components/DeltaText';
@@ -58,6 +67,7 @@ import {
   isTeamFavoritePlayer
 } from '../engine/wellbeing';
 import type { FacilityKey } from '../types/game';
+import { getLeagueLogoUrl, getWorldLeagueDisplay } from '../engine/mods';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -88,10 +98,16 @@ export const LeagueView = React.memo<{
   const [newsFilter, setNewsFilter] = useState<'all' | 'staff' | 'club' | 'feed'>('all');
   const [prizeModalTier, setPrizeModalTier] = useState<number | null>(null);
   const [cupInitialStats, setCupInitialStats] = useState(false);
+  const [t3Zone, setT3Zone] = useState<0 | 1>(() => (me.zone === 1 ? 1 : 0));
+  const [worldViewMode, setWorldViewMode] = useState<'table' | 'scout'>('table');
   const [worldConfed, setWorldConfed] = useState<'all' | ForeignConfed>('all');
   const [worldCountry, setWorldCountry] = useState<string>('ALL');
+  const [worldLeagueCode, setWorldLeagueCode] = useState<string>(() => WORLD_LEAGUE_SPECS[0]?.code || 'GB');
 
-  const tb = useMemo(() => sortTable(state.teams.filter((t) => t.tier === vt)), [state.teams, vt]);
+  const tb = useMemo(
+    () => sortTable(state.teams.filter((t) => t.tier === vt && (vt !== 0 || (t.zone ?? 0) === t3Zone))),
+    [state.teams, vt, t3Zone]
+  );
   const myLeaguePos = useMemo(() => {
     const idx = tb.findIndex((t) => t.id === state.me);
     return idx >= 0 ? idx + 1 : null;
@@ -99,7 +115,7 @@ export const LeagueView = React.memo<{
   const ms = useMemo(() => teamStats(me, state), [me, state]);
 
   const nextMatchResolved = useMemo(() => {
-    type NextKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
+    type NextKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'po';
 
     const findCupPair = (
       cupObj: GameState['cup'] | undefined,
@@ -119,6 +135,14 @@ export const LeagueView = React.memo<{
       findCupPair(state.lc, state.plc, 'lc') ||
       findCupPair(state.dc, state.pdc, 'dc') ||
       findCupPair(state.cup, state.pc, 'cup') ||
+      (state.ppo && state.po?.userPair
+        ? {
+            kind: 'po' as NextKind,
+            homeId: state.po.userPair.homeId,
+            awayId: state.po.userPair.awayId,
+            isDerby: false
+          }
+        : null) ||
       (() => {
         if (state.md < state.fx.length) {
           const pair = state.fx[state.md].find((p) => p.includes(state.me));
@@ -129,7 +153,7 @@ export const LeagueView = React.memo<{
         return { kind: 'league' as NextKind, homeId: -1, awayId: -1, isDerby: false };
       })()
     );
-  }, [state.ac, state.pa, state.sc, state.psc, state.lc, state.plc, state.dc, state.pdc, state.cup, state.pc, state.md, state.fx, state.me]);
+  }, [state.ac, state.pa, state.sc, state.psc, state.lc, state.plc, state.dc, state.pdc, state.cup, state.pc, state.ppo, state.po, state.md, state.fx, state.me]);
 
   const nextMatchOppStats = useMemo(() => {
     const { homeId, awayId } = nextMatchResolved;
@@ -194,7 +218,9 @@ export const LeagueView = React.memo<{
               ? `${EXTRA_CUP_META.dc.icon} นัดหน้า · ${EXTRA_CUP_META.dc.name} ${state.dc ? RN[state.dc.r] || `รอบ ${state.dc.r + 1}` : ''}`
               : kind === 'cup'
                 ? `🏆 นัดหน้า · ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-                : `⚽ นัดหน้า · นัดที่ ${state.md + 1}/${state.fx.length} (${isHome ? 'เกมเหย้า' : 'เกมเยือน'})`;
+                : kind === 'po'
+                  ? `🔥 นัดหน้า · ${state.po?.userPair?.label || 'รอบเพลย์ออฟ'}`
+                  : `⚽ นัดหน้า · นัดที่ ${state.md + 1}/${state.fx.length} (${isHome ? 'เกมเหย้า' : 'เกมเยือน'})`;
 
     return (
       <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2.5 mland:space-y-1.5">
@@ -1232,7 +1258,7 @@ export const LeagueView = React.memo<{
   const worldClubsBundle = useMemo(() => {
     const rawForeign = state.teams.filter((t) => t.tier >= 3);
     const enriched = rawForeign.map((t) => {
-      const meta = getForeignTeamCountryMeta(t.name);
+      const meta = getForeignTeamCountryMeta(t.name, t.leagueCode);
       const st = teamStats(t, state);
       const totalVal = t.sq.reduce((s, q) => s + Math.max(vlu(q), q.price || 0), 0);
       return { team: t, meta, st, totalVal };
@@ -1255,38 +1281,103 @@ export const LeagueView = React.memo<{
     return { total: enriched.length, countries, filtered };
   }, [state, worldConfed, worldCountry]);
 
+  const worldLeaguesFiltered = useMemo(
+    () => WORLD_LEAGUE_SPECS.filter((w) => worldConfed === 'all' || w.confed === worldConfed),
+    [worldConfed]
+  );
+
+  const activeWorldSpec = useMemo(() => {
+    const direct = getWorldLeagueSpec(worldLeagueCode);
+    if (direct && (worldConfed === 'all' || direct.confed === worldConfed)) return direct;
+    return worldLeaguesFiltered[0] || WORLD_LEAGUE_SPECS[0];
+  }, [worldLeagueCode, worldConfed, worldLeaguesFiltered]);
+
+  const worldLeagueTable = useMemo(() => {
+    if (!activeWorldSpec) return [];
+    const teamsInLeague = state.teams.filter(
+      (t) =>
+        t.tier >= 3 &&
+        (t.leagueCode === activeWorldSpec.code ||
+          (!t.leagueCode && getForeignTeamCountryMeta(t.name)?.code === activeWorldSpec.code))
+    );
+    return sortTable(teamsInLeague);
+  }, [state.teams, activeWorldSpec]);
+
+  const rankBadgeFromTone = (tone: ReturnType<typeof getRankZoneBadge>['tone']) => {
+    switch (tone) {
+      case 'champ':
+        return 'bg-amber-500 text-white';
+      case 'acl_elite':
+      case 'promo':
+        return 'bg-[var(--g)] text-white';
+      case 'acl2':
+      case 'playoff':
+        return 'bg-sky-600 text-white';
+      case 'rel_po':
+        return 'bg-orange-500 text-white';
+      case 'rel':
+        return 'bg-[var(--red)] text-white';
+      default:
+        return 'text-[var(--mut)]';
+    }
+  };
+
   const renderStandings = () => (
     <div className="flex-1 min-h-0 grid grid-cols-[1.42fr_0.88fr] gap-2.5 mland:gap-2 overflow-hidden">
       <div className="space-y-1.5 mland:space-y-1 h-full flex flex-col min-h-0">
         {vt >= 3 ? (
           <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
             <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/55 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2 text-[10.5px] sm:text-xs mland:text-[9px]">
-              <div className="font-bold text-[var(--ink)] truncate flex items-center gap-1.5">
+              <div className="font-bold text-[var(--ink)] truncate flex items-center gap-1.5 min-w-0">
                 <span>🌐</span>
-                <span className="truncate">ทำเนียบสโมสรนานาชาติ</span>
+                <span className="truncate">
+                  {worldViewMode === 'table' && activeWorldSpec
+                    ? `${activeWorldSpec.flag} ${getWorldLeagueDisplay(activeWorldSpec.code, activeWorldSpec.name)}`
+                    : 'ทำเนียบสโมสรนานาชาติ'}
+                </span>
                 <span className="text-[var(--mut)] font-semibold shrink-0 tabular">
-                  · {worldClubsBundle.filtered.length}/{worldClubsBundle.total} สโมสร · {worldClubsBundle.countries.length} ประเทศ
+                  {worldViewMode === 'table' && activeWorldSpec
+                    ? `· ${worldLeagueTable.length} ทีม · ${activeWorldSpec.matchdays} นัด`
+                    : `· ${worldClubsBundle.filtered.length}/${worldClubsBundle.total} สโมสร · ${worldClubsBundle.countries.length} ประเทศ`}
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
-                  else onUpdateState((d) => { d.lg = me.tier; });
-                }}
-                className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
-              >
-                ↩ กลับลีกฉัน
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="seg-bar">
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); setWorldViewMode('table'); }}
+                    className={`seg-btn py-0.5 px-2 text-[10px] mland:text-[8.5px] ${worldViewMode === 'table' ? 'seg-btn-active' : ''}`}
+                  >
+                    ตารางคะแนน
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); setWorldViewMode('scout'); }}
+                    className={`seg-btn py-0.5 px-2 text-[10px] mland:text-[8.5px] ${worldViewMode === 'scout' ? 'seg-btn-active' : ''}`}
+                  >
+                    ทำเนียบพลัง
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
+                    else onUpdateState((d) => { d.lg = me.tier; });
+                  }}
+                  className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  ↩ กลับลีกฉัน
+                </button>
+              </div>
             </div>
 
-            {/* Confederation + Country Filter Bar */}
+            {/* Confederation + League/Country Filter Bar */}
             <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/30 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-1.5">
               <div className="seg-bar overflow-x-auto max-w-full">
                 {(
                   [
-                    ['all', '🌐 ทั้งหมด'],
+                    ['all', '🌐 ทั้งหมด (33)'],
                     ['asia', `${CONFED_META.asia.icon} ${CONFED_META.asia.short}`],
                     ['europe', `${CONFED_META.europe.icon} ${CONFED_META.europe.short}`],
                     ['americas', `${CONFED_META.americas.icon} ${CONFED_META.americas.short}`],
@@ -1300,6 +1391,12 @@ export const LeagueView = React.memo<{
                       SFX.tap();
                       setWorldConfed(cid);
                       setWorldCountry('ALL');
+                      if (cid !== 'all') {
+                        const firstInConfed = WORLD_LEAGUE_SPECS.find((w) => w.confed === cid);
+                        if (firstInConfed && getWorldLeagueSpec(worldLeagueCode)?.confed !== cid) {
+                          setWorldLeagueCode(firstInConfed.code);
+                        }
+                      }
                     }}
                     className={`seg-btn py-1 mland:py-0.5 px-2 text-[10.5px] mland:text-[8.5px] whitespace-nowrap ${
                       worldConfed === cid ? 'seg-btn-active hover:text-white!' : ''
@@ -1310,109 +1407,271 @@ export const LeagueView = React.memo<{
                 ))}
               </div>
 
-              <select
-                aria-label="กรองตามประเทศ"
-                value={worldCountry}
-                onChange={(e) => {
-                  SFX.tap();
-                  setWorldCountry(e.target.value);
-                }}
-                className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
-              >
-                <option value="ALL">ทุกประเทศ ({worldClubsBundle.countries.length})</option>
-                {worldClubsBundle.countries
-                  .filter((c) => worldConfed === 'all' || c.confed === worldConfed)
-                  .map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.flag} {c.country} ({c.count})
+              {worldViewMode === 'table' ? (
+                <select
+                  aria-label="เลือกลีกต่างประเทศ"
+                  value={activeWorldSpec?.code || ''}
+                  onChange={(e) => {
+                    SFX.tap();
+                    setWorldLeagueCode(e.target.value);
+                  }}
+                  className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)] max-w-[230px]"
+                >
+                  {worldLeaguesFiltered.map((sp) => (
+                    <option key={sp.code} value={sp.code}>
+                      {sp.flag} {getWorldLeagueDisplay(sp.code, sp.name)} ({sp.teamCount} ทีม · {sp.matchdays} นัด)
                     </option>
                   ))}
-              </select>
-            </div>
-
-            {/* Table Column Header */}
-            <div className="shrink-0 grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-[9.5px] sm:text-[11px] mland:text-[8px] bg-[var(--surface-2)]/90 text-[var(--mut)] border-b border-[var(--line)] font-bold">
-              <span className="text-center">#</span>
-              <span />
-              <span>สโมสร</span>
-              <span>ประเทศ</span>
-              <span className="text-center font-display font-black text-[var(--g)]">XI</span>
-              <span className="text-center">รุก/รับ</span>
-              <span className="hidden sm:block text-right">มูลค่าทีม</span>
-            </div>
-
-            <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
-              {worldClubsBundle.filtered.map(({ team, meta, st, totalVal }, idx) => (
-                <button
-                  key={team.id}
-                  type="button"
-                  onClick={() => {
+                </select>
+              ) : (
+                <select
+                  aria-label="กรองตามประเทศ"
+                  value={worldCountry}
+                  onChange={(e) => {
                     SFX.tap();
-                    onInspectTeam(team.id);
+                    setWorldCountry(e.target.value);
                   }}
-                  className="w-full grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 text-left text-[11px] sm:text-xs mland:text-[9px] even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75 transition-colors cursor-pointer"
+                  className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
                 >
-                  <span className="text-center tabular font-bold text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                    {idx + 1}
-                  </span>
-                  <div className="flex items-center justify-center [&>svg]:w-[18px] [&>svg]:h-[18px] mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
-                    <ClubCrest name={team.name} size={19} team={team} club={state.club} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-[var(--ink)] truncate leading-tight">{team.name}</div>
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] truncate">
-                      {meta ? `${CONFED_META[meta.confed].icon} ${CONFED_META[meta.confed].short}` : 'นานาชาติ'} · {team.sq.length} คน
-                    </div>
-                  </div>
-                  <div className="truncate text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)]/90 flex items-center gap-1">
-                    {meta ? (
-                      <>
-                        <span>{meta.flag}</span>
-                        <span className="truncate">{meta.country}</span>
-                      </>
-                    ) : (
-                      <span>🌍 นานาชาติ</span>
-                    )}
-                  </div>
-                  <div className="flex justify-center">
-                    <OvrBadge ov={st.ovXi} variant="inline" size="sm" />
-                  </div>
-                  <div className="text-center tabular text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--mut)]">
-                    {st.at}/{st.df}
-                  </div>
-                  <div className="hidden sm:block text-right tabular text-[10.5px] font-bold text-[var(--ink)]">
-                    {fmtMoneyNum(totalVal)}
-                  </div>
-                </button>
-              ))}
+                  <option value="ALL">ทุกประเทศ ({worldClubsBundle.countries.length})</option>
+                  {worldClubsBundle.countries
+                    .filter((c) => worldConfed === 'all' || c.confed === worldConfed)
+                    .map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.country} ({c.count})
+                      </option>
+                    ))}
+                </select>
+              )}
             </div>
+
+            {worldViewMode === 'table' && activeWorldSpec ? (
+              <>
+                {/* League Zone Legend & Rules Note */}
+                <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1 bg-[var(--surface-2)]/20 border-b border-[var(--line)]/60 flex flex-wrap items-center justify-between gap-1.5 text-[9.5px] mland:text-[8px]">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {activeWorldSpec.zones.map((z, idx) => {
+                      const zRank = z.fromRank;
+                      const zb = getRankZoneBadge(3, zRank, worldLeagueTable.length, { leagueCode: activeWorldSpec.code });
+                      return (
+                        <span
+                          key={idx}
+                          className={`inline-flex items-center gap-1 px-1.5 py-[1px] rounded border font-bold ${zb.badgeCls}`}
+                        >
+                          <span>{z.fromRank === z.toRank ? `#${z.fromRank}` : `#${z.fromRank}-${z.toRank}`}</span>
+                          <span>{z.shortLabel}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                  {activeWorldSpec.note && (
+                    <span className="text-[var(--mut)] font-semibold truncate">{activeWorldSpec.note}</span>
+                  )}
+                </div>
+
+                {/* World Standings Column Header */}
+                <div className="shrink-0 grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-[9.5px] sm:text-[11px] mland:text-[8px] bg-[var(--surface-2)]/90 text-[var(--mut)] border-b border-[var(--line)] font-bold">
+                  <span className="text-center">#</span>
+                  <span />
+                  <span className="truncate">สโมสร</span>
+                  <span className="text-center text-[9px] sm:text-[11px] mland:text-[7.5px] whitespace-nowrap">5 นัด</span>
+                  <span className="text-center whitespace-nowrap">แข่ง</span>
+                  <span className="text-center whitespace-nowrap">ชนะ</span>
+                  <span className="text-center whitespace-nowrap">เสมอ</span>
+                  <span className="text-center whitespace-nowrap">แพ้</span>
+                  <span className="text-center whitespace-nowrap">+/-</span>
+                  <span className="text-center text-[var(--ink)] whitespace-nowrap">แต้ม</span>
+                </div>
+
+                <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
+                  {worldLeagueTable.map((t, i) => {
+                    const zb = getRankZoneBadge(3, i + 1, worldLeagueTable.length, { leagueCode: activeWorldSpec.code });
+                    const gd = t.gf - t.ga;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        title={zb.label ? `${t.name} · ${zb.label}` : t.name}
+                        onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
+                        className={`w-full min-h-[26px] sm:min-h-[28px] mland:min-h-[20px] grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1 mland:py-0.5 text-left text-[11px] sm:text-xs mland:text-[9px] leading-none transition-colors cursor-pointer ${
+                          zb.tone !== 'neutral'
+                            ? `${zb.rowCls} hover:brightness-95`
+                            : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
+                        }`}
+                      >
+                        <span className={`text-center tabular font-bold text-[10px] mland:text-[8.5px] rounded-md mland:rounded py-0.5 mland:py-[1px] leading-none ${rankBadgeFromTone(zb.tone)}`}>
+                          {i + 1}
+                        </span>
+                        <div className="flex items-center justify-center [&>svg]:w-[17px] [&>svg]:h-[17px] sm:[&>svg]:w-[19px] sm:[&>svg]:h-[19px] mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                          <ClubCrest name={t.name} size={19} team={t} club={state.club} />
+                        </div>
+                        <div className="min-w-0 pr-0.5 flex items-center gap-1">
+                          <span className="truncate font-semibold text-[var(--ink)]">{t.name}</span>
+                        </div>
+                        <div className="flex items-center justify-center">
+                          {renderFormDots(t.fm)}
+                        </div>
+                        <span className="text-center tabular text-[var(--mut)]">{t.p}</span>
+                        <span className="text-center tabular">{t.w}</span>
+                        <span className="text-center tabular text-[var(--mut)]">{t.d}</span>
+                        <span className="text-center tabular text-[var(--mut)]">{t.l}</span>
+                        <span className={`text-center tabular font-semibold ${gd > 0 ? 'text-[var(--g)]' : gd < 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
+                          {gd > 0 ? `+${gd}` : gd}
+                        </span>
+                        <span className="text-center tabular font-extrabold text-[11px] sm:text-xs mland:text-[9px] rounded-md mland:rounded py-0.5 mland:py-[1px] leading-none bg-[var(--surface-2)]/85 text-[var(--ink)]">
+                          {t.pts}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Power Directory Column Header */}
+                <div className="shrink-0 grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-[9.5px] sm:text-[11px] mland:text-[8px] bg-[var(--surface-2)]/90 text-[var(--mut)] border-b border-[var(--line)] font-bold">
+                  <span className="text-center">#</span>
+                  <span />
+                  <span>สโมสร</span>
+                  <span>ประเทศ</span>
+                  <span className="text-center font-display font-black text-[var(--g)]">XI</span>
+                  <span className="text-center">รุก/รับ</span>
+                  <span className="hidden sm:block text-right">มูลค่าทีม</span>
+                </div>
+
+                <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
+                  {worldClubsBundle.filtered.map(({ team, meta, st, totalVal }, idx) => (
+                    <button
+                      key={team.id}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        onInspectTeam(team.id);
+                      }}
+                      className="w-full grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 text-left text-[11px] sm:text-xs mland:text-[9px] even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75 transition-colors cursor-pointer"
+                    >
+                      <span className="text-center tabular font-bold text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                        {idx + 1}
+                      </span>
+                      <div className="flex items-center justify-center [&>svg]:w-[18px] [&>svg]:h-[18px] mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                        <ClubCrest name={team.name} size={19} team={team} club={state.club} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-[var(--ink)] truncate leading-tight">{team.name}</div>
+                        <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] truncate">
+                          {meta ? `${CONFED_META[meta.confed].icon} ${CONFED_META[meta.confed].short}` : 'นานาชาติ'} · {team.sq.length} คน
+                        </div>
+                      </div>
+                      <div className="truncate text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)]/90 flex items-center gap-1">
+                        {(() => {
+                          const lLogo = meta ? getLeagueLogoUrl(meta.code) : undefined;
+                          const leagueDisplay = team.modLeagueName || (meta ? getWorldLeagueDisplay(meta.code, meta.country) : undefined);
+                          if (meta) {
+                            return (
+                              <>
+                                {lLogo ? (
+                                  <img src={lLogo} alt="" className="w-3.5 h-3.5 object-contain shrink-0 rounded-xs" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                ) : (
+                                  <span>{meta.flag}</span>
+                                )}
+                                <span className="truncate" title={leagueDisplay || meta.country}>
+                                  {team.modLeagueName || (leagueDisplay && leagueDisplay !== meta.country ? leagueDisplay : meta.country)}
+                                </span>
+                              </>
+                            );
+                          }
+                          return <span>{team.modLeagueName || '🌍 นานาชาติ'}</span>;
+                        })()}
+                      </div>
+                      <div className="flex justify-center">
+                        <OvrBadge ov={st.ovXi} variant="inline" size="sm" />
+                      </div>
+                      <div className="text-center tabular text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--mut)]">
+                        {st.at}/{st.df}
+                      </div>
+                      <div className="hidden sm:block text-right tabular text-[10.5px] font-bold text-[var(--ink)]">
+                        {fmtMoneyNum(totalVal)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ) : (
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
           {/* Active League & Season Banner */}
-          <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 bg-[var(--surface-2)]/55 border-b border-[var(--line)]/70 flex items-center justify-between gap-2 text-[10.5px] sm:text-xs mland:text-[9px]">
+          <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 bg-[var(--surface-2)]/55 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-1.5 text-[10.5px] sm:text-xs mland:text-[9px]">
             <div className="font-bold text-[var(--ink)] truncate flex items-center gap-1.5">
-              <span>🏆</span>
-              <span className="truncate">{TN[vt]}</span>
+              {(() => {
+                const tierLogo = getLeagueLogoUrl(vt);
+                return tierLogo ? (
+                  <img
+                    src={tierLogo}
+                    alt=""
+                    className="w-4 h-4 object-contain shrink-0 rounded-xs"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                ) : (
+                  <span>🏆</span>
+                );
+              })()}
+              <span className="truncate">
+                {TN[vt]}
+                {vt === 0 ? ` · ${getT3ZoneLabel(t3Zone)}` : ''}
+              </span>
               <span className="text-[var(--mut)] font-semibold shrink-0">· ซีซั่น {state.season}</span>
             </div>
-            {vt !== me.tier ? (
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
-                  else onUpdateState((d) => { d.lg = me.tier; });
-                }}
-                className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
-              >
-                ↩ กลับลีกฉัน
-              </button>
-            ) : myLeaguePos ? (
-              <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] tabular shrink-0 whitespace-nowrap">
-                อันดับของคุณ #{myLeaguePos}
-              </span>
-            ) : null}
+
+            <div className="flex items-center gap-2 shrink-0">
+              {vt === 0 && (
+                <div className="seg-bar">
+                  {([0, 1] as const).map((zIdx) => {
+                    const isMyZone = me.tier === 0 && (me.zone ?? 0) === zIdx;
+                    return (
+                      <button
+                        key={zIdx}
+                        type="button"
+                        onClick={() => { SFX.tap(); setT3Zone(zIdx); }}
+                        className={`seg-btn py-0.5 px-2 text-[10px] mland:text-[8.5px] inline-flex items-center gap-1 ${
+                          t3Zone === zIdx ? 'seg-btn-active' : ''
+                        }`}
+                      >
+                        <span>{T3_ZONE_NAMES[zIdx]}</span>
+                        {isMyZone && <MyTeamBadge size="2xs" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {vt !== me.tier ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    if (me.tier === 0) setT3Zone(me.zone === 1 ? 1 : 0);
+                    if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
+                    else onUpdateState((d) => { d.lg = me.tier; });
+                  }}
+                  className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  ↩ กลับลีกฉัน
+                </button>
+              ) : myLeaguePos ? (
+                <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] tabular shrink-0 whitespace-nowrap">
+                  อันดับของคุณ #{myLeaguePos}
+                </span>
+              ) : vt === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setT3Zone(me.zone === 1 ? 1 : 0); }}
+                  className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  ↩ กลับโซนฉัน
+                </button>
+              ) : null}
+            </div>
           </div>
           {/* Table Column Header */}
           <div className="shrink-0 grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-[9.5px] sm:text-[11px] mland:text-[8px] bg-[var(--surface-2)]/90 text-[var(--mut)] border-b border-[var(--line)] font-bold">
@@ -1431,28 +1690,21 @@ export const LeagueView = React.memo<{
           {/* Table Body */}
           <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto flex flex-col">
             {tb.map((t, i) => {
-              const isPromo = i < 3 && vt < 2;
-              const isRel = i >= tb.length - 3 && vt > 0;
+              const zb = getRankZoneBadge(vt, i + 1, tb.length);
               const isMe = t.id === state.me;
               const gd = t.gf - t.ga;
-              const rankBadge = isPromo
-                ? 'bg-[var(--g)] text-white'
-                : isRel
-                  ? 'bg-[var(--red)] text-white'
-                  : 'text-[var(--mut)]';
+              const rankBadge = rankBadgeFromTone(zb.tone);
 
               return (
                 <button
                   key={t.id}
                   type="button"
-                  title={t.name}
+                  title={zb.label ? `${t.name} · ${zb.label}` : t.name}
                   onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
                   className={`w-full flex-1 basis-0 min-h-[20px] sm:min-h-[22px] mland:min-h-[14px] grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-0 text-left text-[11px] sm:text-xs mland:text-[9px] leading-none transition-colors cursor-pointer ${
-                    isPromo
-                      ? 'bg-[var(--g-soft)]/25 hover:bg-[var(--g-soft)]/55'
-                      : isRel
-                        ? 'bg-[var(--red-soft)]/20 hover:bg-[var(--red-soft)]/45'
-                        : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
+                    zb.tone !== 'neutral'
+                      ? `${zb.rowCls} hover:brightness-95`
+                      : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
                   }`}
                 >
                   <span className={`text-center tabular font-bold text-[10px] mland:text-[8.5px] rounded-md mland:rounded py-0.5 mland:py-[1px] leading-none ${rankBadge}`}>
@@ -1490,9 +1742,36 @@ export const LeagueView = React.memo<{
         )}
       </div>
 
-      {/* Right Column: Matchday Command Hub (Next Match + Actionable Inbox + Recent Form) */}
+      {/* Right Column: Matchday Command Hub (Next Match + Playoff Bracket + Actionable Inbox + Recent Form) */}
       <div className="space-y-2 mland:space-y-1.5 h-full overflow-y-auto pr-0.5">
         {renderNextMatchCard()}
+        {state.po && (
+          <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-1.5">
+            <div className="font-bold text-xs sm:text-sm mland:text-[11px] flex items-center justify-between gap-2">
+              <span>🔥 รอบเพลย์ออฟ & ชิงแชมป์</span>
+              <span className={`text-[10px] mland:text-[8.5px] font-extrabold ${state.po.done ? 'text-[var(--g)]' : 'text-amber-600 dark:text-[var(--lamp)]'}`}>
+                {state.po.done ? 'สรุปผลแล้ว' : 'กำลังแข่งขัน'}
+              </span>
+            </div>
+            <div className="space-y-1 text-[10.5px] mland:text-[9px] text-[var(--ink)]">
+              {[...state.po.t2.log, ...state.po.t3.log].map((line, idx) => (
+                <div key={idx} className="px-2 py-1 rounded-lg bg-[var(--surface-2)]/70 border border-[var(--line)]/60 truncate">
+                  {line}
+                </div>
+              ))}
+              {!state.po.done && state.po.t2.pairs.length > 0 && state.po.t2.winnerId == null && (
+                <div className="text-[10px] text-[var(--mut)]">
+                  T2 รอบรอง/ชิง: {state.po.t2.pairs.map((p) => `${state.teams[p[0]]?.name || '?'} vs ${state.teams[p[1]]?.name || '?'}`).join(' · ')}
+                </div>
+              )}
+              {!state.po.done && state.po.t3.promoPairs.length > 0 && state.po.t3.promoWinnerId == null && (
+                <div className="text-[10px] text-[var(--mut)]">
+                  T3 ชปล.: {state.po.t3.promoPairs.map((p) => `${state.teams[p[0]]?.name || '?'} vs ${state.teams[p[1]]?.name || '?'}`).join(' · ')}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {renderImportantNewsPanel()}
         <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
           <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center justify-between">
@@ -1582,12 +1861,12 @@ export const LeagueView = React.memo<{
 
   const renderStatsAndAwards = () => {
     const statsTier = vt < 3 ? vt : me.tier;
-    const ts = state.teams.filter((t) => t.tier === statsTier);
+    const ts = state.teams.filter((t) => t.tier === statsTier && (statsTier !== 0 || (t.zone ?? 0) === t3Zone));
     const tbStats = sortTable(ts);
     const ps = ts.flatMap((t) => t.sq.map((q) => ({ q, t })));
     const totalPlayedInTier = ts.reduce((s, t) => s + t.p, 0);
     const maxPlayedInTier = ts.reduce((m, t) => Math.max(m, t.p), 0);
-    const totalRounds = state.fx.length || 30;
+    const totalRounds = DOMESTIC_LEAGUE_SPECS[statsTier === 0 || statsTier === 1 || statsTier === 2 ? statsTier : 2].matchdays;
     const isSeasonDone = maxPlayedInTier >= totalRounds && totalRounds > 0;
     const teamRankMap = new Map<number, number>(tbStats.map((t, idx) => [t.id, idx]));
 
@@ -1840,7 +2119,7 @@ export const LeagueView = React.memo<{
             </span>
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
             <span className="text-xs sm:text-sm mland:text-[10.5px] font-bold text-[var(--g)] truncate">
-              {TN[statsTier]}
+              {TN[statsTier]}{statsTier === 0 ? ` (${getT3ZoneLabel(t3Zone)})` : ''}
             </span>
             <span aria-hidden="true" className="hidden sm:inline text-[var(--mut)]">·</span>
             <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
@@ -1849,6 +2128,20 @@ export const LeagueView = React.memo<{
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {statsTier === 0 && (
+              <div className="seg-bar">
+                {([0, 1] as const).map((zIdx) => (
+                  <button
+                    key={zIdx}
+                    type="button"
+                    onClick={() => { SFX.tap(); setT3Zone(zIdx); }}
+                    className={`seg-btn py-0.5 px-2 text-[10px] mland:text-[8.5px] ${t3Zone === zIdx ? 'seg-btn-active' : ''}`}
+                  >
+                    {T3_ZONE_NAMES[zIdx]}
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -2086,17 +2379,49 @@ export const LeagueView = React.memo<{
         {sub === 0 && vt < 3 && (
           <div className="order-2 flex items-center gap-2 mland:gap-1.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] whitespace-nowrap min-w-0">
             <div className="flex items-center gap-2 mland:gap-1.5">
-              {vt < 2 && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-[var(--g)] inline-block shrink-0" />
-                  <span>1-3 ขึ้นชั้น</span>
-                </span>
+              {vt === 2 && (
+                <>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-amber-500 inline-block shrink-0" />
+                    <span>1 แชมป์/ACLE</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-sky-500 inline-block shrink-0" />
+                    <span>2-3 ACL2</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-[var(--red)] inline-block shrink-0" />
+                    <span>14-16 ตกชั้น</span>
+                  </span>
+                </>
               )}
-              {vt > 0 && (
-                <span className="inline-flex items-center gap-1">
-                  <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-[var(--red)] inline-block shrink-0" />
-                  <span>3 ท้ายตกชั้น</span>
-                </span>
+              {vt === 1 && (
+                <>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-[var(--g)] inline-block shrink-0" />
+                    <span>1-2 ขึ้น T1</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-sky-500 inline-block shrink-0" />
+                    <span>3-6 เพลย์ออฟ</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-[var(--red)] inline-block shrink-0" />
+                    <span>16-18 ตกชั้น</span>
+                  </span>
+                </>
+              )}
+              {vt === 0 && (
+                <>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-amber-500 inline-block shrink-0" />
+                    <span>1 ขึ้น T2/ชิง T3</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-sky-500 inline-block shrink-0" />
+                    <span>2-3 ชปล. เพลย์ออฟ</span>
+                  </span>
+                </>
               )}
             </div>
 
@@ -2120,10 +2445,10 @@ export const LeagueView = React.memo<{
         {sub === 0 || sub === 2 ? (
           <div className="order-1 w-auto seg-bar bg-[var(--surface)] shadow-xs shrink-0 max-w-full overflow-x-auto">
             {[
-              [0, 'จังหวัด'],
-              [1, 'ดิวิชั่น 2'],
-              [2, 'ดิวิชั่น 1'],
-              ...(sub === 0 && worldClubsBundle.total > 0 ? ([[3, '🌏 นานาชาติ']] as const) : [])
+              [0, 'ไทยลีก 3'],
+              [1, 'ไทยลีก 2'],
+              [2, 'ไทยลีก 1'],
+              ...(sub === 0 && worldClubsBundle.total > 0 ? ([[3, '🌏 33 ลีกโลก']] as const) : [])
             ].map(([idx, lbl]) => {
               const tierIdx = Number(idx);
               const isMyTier = tierIdx === me.tier;
@@ -2229,40 +2554,48 @@ export const LeagueView = React.memo<{
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-3 grid grid-cols-2 gap-1.5 mland:gap-1 content-start">
-              {Array.from({ length: 16 }, (_, idx) => {
-                const rank = idx + 1;
-                const amount = getLeaguePrizeMoney(prizeModalTier, rank, 16);
-                const isPromoRank = prizeModalTier < 2 && rank <= 3;
-                const isRelRank = prizeModalTier > 0 && rank >= 14;
-                const isMyCurRank = prizeModalTier === vt && myLeaguePos === rank;
-                return (
-                  <div
-                    key={rank}
-                    className={`px-2.5 py-1.5 mland:py-1 rounded-xl border flex items-center justify-between gap-2 text-xs mland:text-[10.5px] ${
-                      isMyCurRank
-                        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] font-bold'
-                        : rank === 1
-                          ? 'bg-amber-500/10 border-amber-500/35'
-                          : isPromoRank
-                            ? 'bg-[var(--g-soft)]/35 border-[var(--g)]/30'
-                            : isRelRank
-                              ? 'bg-[var(--red-soft)]/25 border-[var(--red)]/25'
-                              : 'bg-[var(--surface-2)]/60 border-[var(--line)]'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 min-w-0 font-bold tabular">
-                      <span>{rank === 1 ? '🏆' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}</span>
-                      <span className="truncate text-[var(--ink)]">
-                        {rank === 1 ? 'แชมป์ลีก' : `อันดับ ${rank}`}
+              {(() => {
+                const modalCount = prizeModalTier === 0 ? 12 : prizeModalTier === 1 ? 18 : 16;
+                return Array.from({ length: modalCount }, (_, idx) => {
+                  const rank = idx + 1;
+                  const amount = getLeaguePrizeMoney(prizeModalTier, rank, modalCount);
+                  const zb = getRankZoneBadge(prizeModalTier, rank, modalCount);
+                  const isMyCurRank =
+                    prizeModalTier === me.tier &&
+                    myLeaguePos === rank &&
+                    vt === me.tier &&
+                    (me.tier !== 0 || (me.zone ?? 0) === t3Zone);
+                  return (
+                    <div
+                      key={rank}
+                      className={`px-2.5 py-1.5 mland:py-1 rounded-xl border flex items-center justify-between gap-2 text-xs mland:text-[10.5px] ${
+                        isMyCurRank
+                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] font-bold'
+                          : zb.tone === 'champ'
+                            ? 'bg-amber-500/10 border-amber-500/35'
+                            : zb.tone === 'promo' || zb.tone === 'acl_elite'
+                              ? 'bg-[var(--g-soft)]/35 border-[var(--g)]/30'
+                              : zb.tone === 'playoff' || zb.tone === 'acl2'
+                                ? 'bg-sky-500/10 border-sky-500/30'
+                                : zb.tone === 'rel'
+                                  ? 'bg-[var(--red-soft)]/25 border-[var(--red)]/25'
+                                  : 'bg-[var(--surface-2)]/60 border-[var(--line)]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5 min-w-0 font-bold tabular">
+                        <span>{rank === 1 ? '🏆' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}</span>
+                        <span className="truncate text-[var(--ink)]">
+                          {rank === 1 ? (prizeModalTier === 0 ? 'แชมป์โซน' : 'แชมป์ลีก') : `อันดับ ${rank}`}
+                        </span>
+                        {isMyCurRank && <MyTeamBadge size="2xs" />}
                       </span>
-                      {isMyCurRank && <MyTeamBadge size="2xs" />}
-                    </span>
-                    <span className="font-extrabold tabular text-[var(--g)] shrink-0">
-                      +{fmtMoney(amount)}
-                    </span>
-                  </div>
-                );
-              })}
+                      <span className="font-extrabold tabular text-[var(--g)] shrink-0">
+                        +{fmtMoney(amount)}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>
@@ -2282,20 +2615,41 @@ export const ScheduleCalendarView = React.memo<{
 }>(({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay, onOpenHighlights, onOpenMatchReport }) => {
   const me = state.teams[state.me];
   const totalMd = state.fx.length || 30;
-  const defaultMonth = state.md >= totalMd ? 4 : Math.min(4, Math.floor(state.md / 6));
+  const cal = useMemo(() => getSeasonCalendarMds(totalMd), [totalMd]);
+
+  const months = useMemo(() => {
+    const chunkCount = totalMd <= 24 ? 4 : 5;
+    const baseSize = Math.floor(totalMd / chunkCount);
+    const rem = totalMd % chunkCount;
+    const out: { idx: number; label: string; range: string; start: number; end: number }[] = [];
+    let cursor = 0;
+    for (let i = 0; i < chunkCount; i++) {
+      const size = baseSize + (i < rem ? 1 : 0);
+      const start = cursor;
+      const end = Math.min(totalMd, cursor + size);
+      out.push({
+        idx: i,
+        label: `เดือน ${i + 1}`,
+        range: `${start + 1}–${end}`,
+        start,
+        end
+      });
+      cursor = end;
+    }
+    return out;
+  }, [totalMd]);
+
+  const defaultMonth = useMemo(() => {
+    if (state.md >= totalMd) return Math.max(0, months.length - 1);
+    const found = months.findIndex((m) => state.md >= m.start && state.md < m.end);
+    return found >= 0 ? found : 0;
+  }, [state.md, totalMd, months]);
+
   const [monthIdx, setMonthIdx] = useState<number>(defaultMonth);
   const currentNextIdx = Math.min(state.md, Math.max(0, totalMd - 1));
   const [roundPreview, setRoundPreview] = useState<number>(currentNextIdx);
   const [leftTab, setLeftTab] = useState<'round' | 'cup'>('round');
   const tw = getTransferWindowInfo(state);
-
-  const months = [
-    { idx: 0, label: 'เดือน 1', range: '1–6', start: 0, end: 6 },
-    { idx: 1, label: 'เดือน 2', range: '7–12', start: 6, end: 12 },
-    { idx: 2, label: 'เดือน 3', range: '13–18', start: 12, end: 18 },
-    { idx: 3, label: 'เดือน 4', range: '19–24', start: 18, end: 24 },
-    { idx: 4, label: 'เดือน 5', range: '25–30', start: 24, end: totalMd }
-  ];
 
   const visibleMdIndices = useMemo(
     () =>
@@ -2305,7 +2659,7 @@ export const ScheduleCalendarView = React.memo<{
             { length: Math.max(0, (months[monthIdx]?.end ?? totalMd) - (months[monthIdx]?.start ?? 0)) },
             (_, i) => (months[monthIdx]?.start ?? 0) + i
           ).filter((i) => i < totalMd),
-    [monthIdx, totalMd]
+    [monthIdx, months, totalMd]
   );
 
   const schedOppStatsMap = useMemo(() => {
@@ -2326,7 +2680,7 @@ export const ScheduleCalendarView = React.memo<{
   const cupLogs = state.cupLog || [];
   const playedCount = Math.min(state.md, totalMd);
   const progressPct = Math.round((playedCount / Math.max(1, totalMd)) * 100);
-  const hasMidweekCup = Boolean(state.pc || state.pa || state.plc || state.psc || state.pdc);
+  const hasMidweekCup = Boolean(state.pc || state.pa || state.plc || state.psc || state.pdc || (state.ppo && state.po?.userPair));
 
   const activeRangeText =
     monthIdx === -1
@@ -2334,13 +2688,13 @@ export const ScheduleCalendarView = React.memo<{
       : `นัดที่ ${(months[monthIdx]?.start ?? 0) + 1}–${Math.min(totalMd, months[monthIdx]?.end ?? totalMd)}`;
 
   const milestoneSchedule = [
-    { icon: '✍🏻', name: 'ตลาดซื้อขายรอบ 1', rounds: 'นัด 1–6' },
-    { icon: '✍🏻', name: 'ตลาดซื้อขายรอบ 2', rounds: 'นัด 15–20' },
-    { icon: EXTRA_CUP_META.sc.icon, name: EXTRA_CUP_META.sc.name, rounds: 'นัด 2' },
-    { icon: '🌏', name: 'บอลถ้วยทวีป', rounds: 'นัด 3, 10, 17, 24' },
-    { icon: EXTRA_CUP_META.lc.icon, name: EXTRA_CUP_META.lc.name, rounds: 'นัด 4, 11, 18, 25' },
-    { icon: EXTRA_CUP_META.dc.icon, name: EXTRA_CUP_META.dc.name, rounds: 'นัด 5, 12, 19, 26' },
-    { icon: '🏆', name: 'ถ้วยประชาชน', rounds: 'นัด 6, 13, 20, 27' }
+    { icon: '✍🏻', name: 'ตลาดซื้อขายรอบ 1', rounds: `นัด ${cal.w1Start + 1}–${cal.w1End}` },
+    { icon: '✍🏻', name: 'ตลาดซื้อขายรอบ 2', rounds: `นัด ${cal.w2Start + 1}–${cal.w2End}` },
+    { icon: EXTRA_CUP_META.sc.icon, name: EXTRA_CUP_META.sc.name, rounds: `นัด ${cal.sc.join(', ')}` },
+    { icon: '🌏', name: 'บอลถ้วยทวีป', rounds: `นัด ${cal.ac.join(', ')}` },
+    { icon: EXTRA_CUP_META.lc.icon, name: EXTRA_CUP_META.lc.name, rounds: `นัด ${cal.lc.join(', ')}` },
+    { icon: EXTRA_CUP_META.dc.icon, name: EXTRA_CUP_META.dc.name, rounds: `นัด ${cal.dc.join(', ')}` },
+    { icon: '🏆', name: 'ถ้วยประชาชน', rounds: `นัด ${cal.cup.join(', ')}` }
   ];
 
   return (
@@ -2360,7 +2714,7 @@ export const ScheduleCalendarView = React.memo<{
               />
               <div className="min-w-0">
                 <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate">
-                  ฤดูกาลที่ {state.season} · {TN[me.tier]}
+                  ฤดูกาลที่ {state.season} · {TN[me.tier]}{me.tier === 0 ? ` (${getT3ZoneLabel(me.zone)})` : ''}
                 </div>
                 <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
                   <span>แข่งแล้ว {playedCount}/{totalMd} นัด ({progressPct}%) ·</span>
@@ -2401,19 +2755,21 @@ export const ScheduleCalendarView = React.memo<{
                   onClick={onPlayNext}
                   className="btn btn-sm btn-gold px-3 mland:px-2"
                 >
-                  {state.md >= totalMd
-                    ? '🏁 สรุปจบฤดูกาล'
-                    : state.pa
-                      ? '🌏 แข่งถ้วยทวีป'
-                      : state.psc
-                        ? `${EXTRA_CUP_META.sc.icon} แข่ง${EXTRA_CUP_META.sc.short}`
-                        : state.plc
-                          ? `${EXTRA_CUP_META.lc.icon} แข่ง${EXTRA_CUP_META.lc.short}`
-                          : state.pdc
-                            ? `${EXTRA_CUP_META.dc.icon} แข่ง${EXTRA_CUP_META.dc.short}`
-                            : state.pc
-                              ? '🏆 แข่งถ้วยประชาชน'
-                              : `▶ แข่งนัดที่ ${state.md + 1}`}
+                  {state.ppo && state.po?.userPair
+                    ? '🔥 แข่งเพลย์ออฟ'
+                    : state.md >= totalMd
+                      ? '🏁 สรุปจบฤดูกาล'
+                      : state.pa
+                        ? '🌏 แข่งถ้วยทวีป'
+                        : state.psc
+                          ? `${EXTRA_CUP_META.sc.icon} แข่ง${EXTRA_CUP_META.sc.short}`
+                          : state.plc
+                            ? `${EXTRA_CUP_META.lc.icon} แข่ง${EXTRA_CUP_META.lc.short}`
+                            : state.pdc
+                              ? `${EXTRA_CUP_META.dc.icon} แข่ง${EXTRA_CUP_META.dc.short}`
+                              : state.pc
+                                ? '🏆 แข่งถ้วยประชาชน'
+                                : `▶ แข่งนัดที่ ${state.md + 1}`}
                 </button>
               )}
             </div>
@@ -2429,28 +2785,30 @@ export const ScheduleCalendarView = React.memo<{
 
           {/* Unboxed Milestone Key Line */}
           <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug tabular">
-            <span className="font-semibold text-[var(--g)]">ตลาด 1: นัด 1–6</span>
+            <span className="font-semibold text-[var(--g)]">ตลาด 1: นัด {cal.w1Start + 1}–{cal.w1End}</span>
             <span className="mx-1.5 opacity-45">·</span>
-            <span className="font-semibold text-[var(--g)]">ตลาด 2: นัด 15–20</span>
+            <span className="font-semibold text-[var(--g)]">ตลาด 2: นัด {cal.w2Start + 1}–{cal.w2End}</span>
             <span className="mx-1.5 opacity-45">·</span>
-            <span>ทวีป: 3, 10, 17, 24</span>
+            <span>ทวีป: {cal.ac.join(', ')}</span>
             <span className="mx-1.5 opacity-45">·</span>
-            <span>บอลถ้วย: 2, 4–6, 11–13, 18–20, 25–27</span>
+            <span>ถ้วย ปชช.: {cal.cup.join(', ')}</span>
           </div>
 
-          {/* Queued Midweek Cup Alert */}
+          {/* Queued Midweek Cup / Playoff Alert */}
           {hasMidweekCup && (
             <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/70 flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
               <span className="font-bold text-[#7a4f00] dark:text-[var(--lamp)] truncate">
-                {state.pa && state.ac
-                  ? `🌏 คิวแข่งกลางสัปดาห์: บอลถ้วยทวีป ${RN[state.ac.r] || `รอบ ${state.ac.r + 1}`}`
-                  : state.psc && state.sc
-                    ? `${EXTRA_CUP_META.sc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.sc.name} (ชิงชนะเลิศ)`
-                    : state.plc && state.lc
-                      ? `${EXTRA_CUP_META.lc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.lc.name} ${RN[state.lc.r] || `รอบ ${state.lc.r + 1}`}`
-                      : state.pdc && state.dc
-                        ? `${EXTRA_CUP_META.dc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.dc.name} ${RN[state.dc.r] || `รอบ ${state.dc.r + 1}`}`
-                        : `🏆 คิวแข่งกลางสัปดาห์: ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`}
+                {state.ppo && state.po?.userPair
+                  ? `🔥 คิวแข่งพิเศษ: ${state.po.userPair.label}`
+                  : state.pa && state.ac
+                    ? `🌏 คิวแข่งกลางสัปดาห์: บอลถ้วยทวีป ${RN[state.ac.r] || `รอบ ${state.ac.r + 1}`}`
+                    : state.psc && state.sc
+                      ? `${EXTRA_CUP_META.sc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.sc.name} (ชิงชนะเลิศ)`
+                      : state.plc && state.lc
+                        ? `${EXTRA_CUP_META.lc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.lc.name} ${RN[state.lc.r] || `รอบ ${state.lc.r + 1}`}`
+                        : state.pdc && state.dc
+                          ? `${EXTRA_CUP_META.dc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.dc.name} ${RN[state.dc.r] || `รอบ ${state.dc.r + 1}`}`
+                          : `🏆 คิวแข่งกลางสัปดาห์: ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`}
               </span>
               {onPlayNext && (
                 <button type="button" onClick={onPlayNext} className="btn btn-xs btn-gold shrink-0">
@@ -2643,21 +3001,25 @@ export const ScheduleCalendarView = React.memo<{
                       const ht = state.teams[cl.h];
                       const at = state.teams[cl.a];
                       const compLabel =
-                        cl.comp === 'asia'
-                          ? `🌏 ทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                          : cl.comp === 'sc'
-                            ? `${EXTRA_CUP_META.sc.icon} ซูเปอร์คัพ`
-                            : cl.comp === 'lc'
-                              ? `${EXTRA_CUP_META.lc.icon} ลีกคัพ · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                              : cl.comp === 'dc'
-                                ? `${EXTRA_CUP_META.dc.icon} ดิวิชั่น · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                                : `🏆 ปชช. · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`;
+                        cl.kind === 'po'
+                          ? cl.roundLabel || '🔥 เพลย์ออฟ'
+                          : cl.comp === 'asia'
+                            ? `🌏 ทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                            : cl.comp === 'sc'
+                              ? `${EXTRA_CUP_META.sc.icon} ซูเปอร์คัพ`
+                              : cl.comp === 'lc'
+                                ? `${EXTRA_CUP_META.lc.icon} ลีกคัพ · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                                : cl.comp === 'dc'
+                                  ? `${EXTRA_CUP_META.dc.icon} ดิวิชั่น · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                                  : `🏆 ปชช. · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`;
                       const cupTitle =
-                        cl.comp === 'asia'
-                          ? `บอลถ้วยทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                          : cl.comp === 'cup'
-                            ? `ถ้วยประชาชน · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                            : `${EXTRA_CUP_META[cl.comp].name} · ${cl.comp === 'sc' ? 'ชิงชนะเลิศ' : RN[cl.r] || `รอบ ${cl.r + 1}`}`;
+                        cl.kind === 'po'
+                          ? cl.roundLabel || 'รอบเพลย์ออฟ'
+                          : cl.comp === 'asia'
+                            ? `บอลถ้วยทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                            : cl.comp === 'cup'
+                              ? `ถ้วยประชาชน · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                              : `${EXTRA_CUP_META[cl.comp].name} · ${cl.comp === 'sc' ? 'ชิงชนะเลิศ' : RN[cl.r] || `รอบ ${cl.r + 1}`}`;
                       return (
                         <div key={idx} className="py-1.5 px-1 flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
                           <div className="min-w-0 flex-1 space-y-0.5">
@@ -2804,14 +3166,14 @@ export const ScheduleCalendarView = React.memo<{
             const isNext = mdIdx === state.md && !hasMidweekCup;
             const isPast = mdIdx < state.md;
             const isPreviewed = leftTab === 'round' && roundPreview === mdIdx;
-            const isWindowOpen = mdIdx < 6 || (mdIdx >= 14 && mdIdx < 20);
+            const isWindowOpen = (mdIdx >= cal.w1Start && mdIdx < cal.w1End) || (mdIdx >= cal.w2Start && mdIdx < cal.w2End);
             const rec = state.schedRes?.[mdIdx];
 
-            const cupIdx = [6, 13, 20, 27].indexOf(mdNum);
-            const lcIdx = [4, 11, 18, 25].indexOf(mdNum);
-            const dcIdx = [5, 12, 19, 26].indexOf(mdNum);
-            const isSuperCup = mdNum === 2;
-            const asiaIdx = [3, 10, 17, 24].indexOf(mdNum);
+            const cupIdx = cal.cup.indexOf(mdNum);
+            const lcIdx = cal.lc.indexOf(mdNum);
+            const dcIdx = cal.dc.indexOf(mdNum);
+            const isSuperCup = cal.sc.includes(mdNum);
+            const asiaIdx = cal.ac.indexOf(mdNum);
 
             const milestoneTag = isSuperCup
               ? { label: '🏅 ซูเปอร์คัพ', cls: 'text-amber-700 dark:text-[var(--lamp)]', title: EXTRA_CUP_META.sc.name }

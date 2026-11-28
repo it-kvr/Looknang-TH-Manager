@@ -87,7 +87,7 @@ export default defineConfig(({command}) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff,woff2}'],
           globIgnores: ['**/assets/aistudio/**'],
-          maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           cleanupOutdatedCaches: true,
           clientsClaim: true,
           navigateFallback,
@@ -149,6 +149,17 @@ export default defineConfig(({command}) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+      },
+    },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/xlsx')) {
+              return 'xlsx-vendor';
+            }
+          },
+        },
       },
     },
     server: {

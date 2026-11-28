@@ -1,13 +1,14 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, TransferLogEntry, TransferLogKind, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrainingIntensity, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, TransferLogEntry, TransferLogKind, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrainingIntensity, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem, DomesticPlayoffState } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
-import { RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, LEGACY_FOREIGN_CLUB_RENAMES, inferForeignTeamRegion, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
+import { RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, LEGACY_FOREIGN_CLUB_RENAMES, NG, SFX0, TIER_STANDALONE_CLUBS, inferForeignTeamRegion, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
+import { DOMESTIC_LEAGUE_SPECS, T3_ZONE_NAMES, WORLD_LEAGUE_SPECS, getSeasonCalendarMds, getT3ZoneLabel, getWorldLeagueSpec } from '../data/leagueStructures';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { getDefaultSponsorSeed, pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, getPlayerPersonalityId, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles, localizeForeignTeams } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
-import { applyActiveModToRuntimeData, applyModToTeamsArray, getActiveMod, getModRealismSettings } from './mods';
+import { applyActiveModToRuntimeData, applyModToTeamsArray, getActiveMod, getCupConfig, getModRealismSettings } from './mods';
 import {
   evolveSeasonPersonalities,
   formatPersonalityShiftFeed,
@@ -1296,7 +1297,9 @@ export const sortTable = (a: Team[]) =>
   [...a].sort((x, y) => y.pts - x.pts || y.gf - y.ga - (x.gf - x.ga) || y.gf - x.gf);
 
 export function roundRobin(ids: number[]): [number, number][][] {
+  if (ids.length < 2) return [];
   const arr = [...ids].sort(() => Math.random() - 0.5);
+  if (arr.length % 2 === 1) arr.push(-1);
   const n = arr.length;
   const o: [number, number][][] = [];
   for (let r = 0; r < n - 1; r++) {
@@ -1304,6 +1307,7 @@ export function roundRobin(ids: number[]): [number, number][][] {
     for (let i = 0; i < n / 2; i++) {
       const a = arr[i];
       const b = arr[n - 1 - i];
+      if (a === -1 || b === -1) continue;
       m.push(r % 2 ? [b, a] : [a, b]);
     }
     o.push(m);
@@ -1317,54 +1321,63 @@ export const doubleRoundRobin = (ids: number[]) => {
   return [...a, ...a.map((r) => r.map(([h, x]) => [x, h] as [number, number]))];
 };
 
+export const generateWorldLeagueFixtures = (ids: number[], roundsMultiplier: 1 | 2 | 3 = 2): [number, number][][] => {
+  if (ids.length < 2) return [];
+  if (roundsMultiplier === 1) return roundRobin(ids);
+  if (roundsMultiplier === 3) return [...doubleRoundRobin(ids), ...roundRobin(ids)];
+  return doubleRoundRobin(ids);
+};
+
 export function getTransferWindowInfo(s: Pick<GameState, 'md' | 'fx'>) {
   const total = s.fx?.length || 30;
   const md = s.md || 0;
+  const cal = getSeasonCalendarMds(total);
+  const w2StartDisplay = cal.w2Start + 1;
   if (md >= total) {
     return {
       open: false,
       phase: 'closed2' as const,
       label: '🔒 จบฤดูกาล (รอรอบตลาดใหม่)',
       shortLabel: '🔒 จบฤดูกาล',
-      subLabel: 'สรุปจบฤดูกาลเพื่อเข้าสู่ตลาดเปิดรอบต้นฤดูกาลหน้า (นัด 1–6)',
+      subLabel: `สรุปจบฤดูกาลเพื่อเข้าสู่ตลาดเปิดรอบต้นฤดูกาลหน้า (นัด 1–${cal.w1End})`,
       remaining: 0,
       rangeText: 'หลังจบฤดูกาล'
     };
   }
-  if (md < 6) {
-    const rem = 6 - md;
+  if (md < cal.w1End) {
+    const rem = cal.w1End - md;
     return {
       open: true,
       phase: 'open1' as const,
       label: '🟢 เปิดตลาดรอบแรก (ต้นฤดูกาล)',
       shortLabel: `🟢 ตลาดเปิด (${rem} นัด)`,
-      subLabel: `ช่วงนัดที่ 1–6 · เหลืออีก ${rem} นัดก่อนปิดตลาดรอบแรก`,
+      subLabel: `ช่วงนัดที่ 1–${cal.w1End} · เหลืออีก ${rem} นัดก่อนปิดตลาดรอบแรก`,
       remaining: rem,
-      rangeText: 'นัด 1–6'
+      rangeText: `นัด 1–${cal.w1End}`
     };
   }
-  if (md < 14) {
-    const wait = 14 - md;
+  if (md < cal.w2Start) {
+    const wait = cal.w2Start - md;
     return {
       open: false,
       phase: 'closed1' as const,
       label: '🔒 ตลาดซื้อขายปิดชั่วคราว',
-      shortLabel: `🔒 เปิดนัด 15 (อีก ${wait} นัด)`,
-      subLabel: `ตลาดเลกสองจะเปิดช่วงนัดที่ 15–20 (อีก ${wait} นัด)`,
+      shortLabel: `🔒 เปิดนัด ${w2StartDisplay} (อีก ${wait} นัด)`,
+      subLabel: `ตลาดเลกสองจะเปิดช่วงนัดที่ ${w2StartDisplay}–${cal.w2End} (อีก ${wait} นัด)`,
       remaining: wait,
-      rangeText: 'นัด 15–20'
+      rangeText: `นัด ${w2StartDisplay}–${cal.w2End}`
     };
   }
-  if (md < 20) {
-    const rem = 20 - md;
+  if (md < cal.w2End) {
+    const rem = cal.w2End - md;
     return {
       open: true,
       phase: 'open2' as const,
       label: '🟢 เปิดตลาดรอบสอง (เลกสอง)',
       shortLabel: `🟢 ตลาดเปิด (${rem} นัด)`,
-      subLabel: `ช่วงนัดที่ 15–20 · เหลืออีก ${rem} นัดก่อนปิดตลาดฤดูกาลนี้`,
+      subLabel: `ช่วงนัดที่ ${w2StartDisplay}–${cal.w2End} · เหลืออีก ${rem} นัดก่อนปิดตลาดฤดูกาลนี้`,
       remaining: rem,
-      rangeText: 'นัด 15–20'
+      rangeText: `นัด ${w2StartDisplay}–${cal.w2End}`
     };
   }
   const toEnd = Math.max(0, total - md);
@@ -3246,8 +3259,94 @@ export function teamStats(t: Team, s?: GameState | null) {
   return { ovSq, ovXi, at: Math.round(r.at), df: Math.round(r.df), gk: pos('GK'), d: pos('DF'), m: pos('MF'), f: pos('FW'), age };
 }
 
+export function ensureDomesticPyramidStructure(
+  s: GameState,
+  opts?: { topUpCounts?: boolean; rebalanceZones?: boolean }
+) {
+  const existingNames = new Set(s.teams.filter((t) => t.tier < 3).map((t) => t.name.trim()));
+  const genUniqueDomesticName = (tier: 0 | 1 | 2): string => {
+    const pool = NG[tier] || NG[0];
+    const monikers = TIER_STANDALONE_CLUBS[tier] || [];
+    const suffixes = (SFX0[tier] || ['เอฟซี']).filter(Boolean);
+    for (const m of monikers) {
+      if (!existingNames.has(m)) {
+        existingNames.add(m);
+        return m;
+      }
+    }
+    for (let attempt = 0; attempt < 120; attempt++) {
+      const cand = `${P(pool)} ${P(suffixes)}`.trim();
+      if (!existingNames.has(cand)) {
+        existingNames.add(cand);
+        return cand;
+      }
+    }
+    const fallback = `${P(pool)} ยูไนเต็ด ${s.teams.length}`;
+    existingNames.add(fallback);
+    return fallback;
+  };
+
+  if (opts?.topUpCounts) {
+    ([0, 1, 2] as const).forEach((tier) => {
+      const target = DOMESTIC_LEAGUE_SPECS[tier].teamCount;
+      while (s.teams.filter((t) => t.tier === tier).length < target) {
+        const name = genUniqueDomesticName(tier);
+        const zone =
+          tier === 0
+            ? s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 0).length <=
+              s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 1).length
+              ? 0
+              : 1
+            : undefined;
+        const tm = mkTeam(name, tier, s.teams.length, R(-6, 6), { keepName: true, zone });
+        s.teams.push(tm);
+      }
+    });
+  }
+
+  const t3Teams = s.teams.filter((t) => t.tier === 0);
+  if (t3Teams.length > 0) {
+    if (opts?.rebalanceZones) {
+      const half = Math.ceil(t3Teams.length / 2);
+      const z0: Team[] = [];
+      const z1: Team[] = [];
+      const unassigned: Team[] = [];
+      // Place user team first in its existing zone so player never drifts unnecessarily
+      const meT = s.teams[s.me];
+      const ordered = meT && meT.tier === 0 ? [meT, ...t3Teams.filter((t) => t.id !== meT.id)] : t3Teams;
+      ordered.forEach((t) => {
+        if (t.zone === 0 && z0.length < half) z0.push(t);
+        else if (t.zone === 1 && z1.length < t3Teams.length - half) z1.push(t);
+        else unassigned.push(t);
+      });
+      unassigned.forEach((t) => {
+        if (z0.length < half) z0.push(t);
+        else z1.push(t);
+      });
+      z0.forEach((t) => {
+        t.zone = 0;
+      });
+      z1.forEach((t) => {
+        t.zone = 1;
+      });
+    } else {
+      const half = Math.ceil(t3Teams.length / 2);
+      t3Teams.forEach((t, idx) => {
+        if (t.zone !== 0 && t.zone !== 1) {
+          t.zone = idx < half ? 0 : 1;
+        }
+      });
+    }
+  }
+  s.teams.forEach((t) => {
+    if (t.tier === 1 || t.tier === 2) {
+      delete t.zone;
+    }
+  });
+}
+
 export function setBoardObjective(s: GameState) {
-  [0, 1, 2].forEach((tier) => {
+  [1, 2].forEach((tier) => {
     const ts = s.teams
       .filter((x) => x.tier === tier)
       .map((x) => {
@@ -3262,9 +3361,25 @@ export function setBoardObjective(s: GameState) {
     });
   });
 
+  [0, 1].forEach((zone) => {
+    const ts = s.teams
+      .filter((x) => x.tier === 0 && (x.zone ?? 0) === zone)
+      .map((x) => {
+        const r = rate(x, s);
+        return { team: x, power: r.at + r.df };
+      })
+      .sort((a, b) => b.power - a.power);
+    const maxTarget = Math.max(1, ts.length - 1);
+    ts.forEach((entry, idx) => {
+      const rank = idx + 1;
+      entry.team.seasonObj = clamp(Math.ceil(rank * 0.8), 1, maxTarget);
+    });
+  });
+
   if (s.mode === 'm') {
     const me = s.teams[s.me];
-    const meTierCount = Math.max(2, s.teams.filter((x) => x.tier === me.tier).length);
+    const mePeers = s.teams.filter((x) => x.tier === me.tier && (me.tier !== 0 || (x.zone ?? 0) === (me.zone ?? 0)));
+    const meTierCount = Math.max(2, mePeers.length);
     s.obj = me?.seasonObj ?? clamp(Math.ceil(meTierCount * 0.5), 1, meTierCount - 1);
     s.bd = s.bd ?? 55;
   }
@@ -3278,7 +3393,7 @@ export function getTeamSeasonObjectiveInfo(
     return { targetRank: 1, powerRank: 1, totalTeams: 1 };
   }
   const tierRanked = s.teams
-    .filter((x) => x.tier === team.tier)
+    .filter((x) => x.tier === team.tier && (team.tier !== 0 || (x.zone ?? 0) === (team.zone ?? 0)))
     .map((x) => {
       const r = rate(x, s as GameState);
       return { id: x.id, power: r.at + r.df };
@@ -3297,20 +3412,57 @@ export function ensureAsia(s: GameState) {
   if (!Array.isArray(s.asia)) {
     s.asia = [];
   }
-  s.asia.forEach((id) => {
-    const tm = s.teams[id];
-    if (!tm?.name) return;
-    const renamed = LEGACY_FOREIGN_CLUB_RENAMES[tm.name.trim()];
-    if (renamed && renamed !== tm.name) {
-      tm.name = renamed;
+  const asiaSet = new Set(s.asia);
+  s.teams.forEach((tm) => {
+    if (!(tm.foreign === 1 || tm.tier >= 3)) return;
+    if (!asiaSet.has(tm.id)) {
+      asiaSet.add(tm.id);
+      s.asia!.push(tm.id);
+    }
+    if (tm.name) {
+      const renamed = LEGACY_FOREIGN_CLUB_RENAMES[tm.name.trim()];
+      if (renamed && renamed !== tm.name) {
+        tm.name = renamed;
+      }
+    }
+    if (!tm.leagueCode) {
+      const meta = getForeignTeamCountryMeta(tm.name);
+      if (meta?.code) tm.leagueCode = meta.code;
     }
   });
+
   const existingNames = new Set(
     s.asia.flatMap((id) => {
       const tm = s.teams[id];
       return tm ? [tm.name, tm.origName].filter((n): n is string => Boolean(n)) : [];
     })
   );
+
+  // Hydrate all 33 real-world leagues with 14-player lightweight squads
+  WORLD_LEAGUE_SPECS.forEach((spec) => {
+    spec.clubs.forEach((club) => {
+      if (existingNames.has(club.name)) return;
+      const diff = clamp(club.baseOvr - BASE[2] + R(-2, 2), -6, 20);
+      const t = mkTeam(club.name, 2, s.teams.length, diff, {
+        foreign: true,
+        nameRegion: spec.region,
+        natCode: spec.code,
+        kcOverride: club.kc,
+        allowImport: true,
+        keepName: true,
+        squadSize: 14,
+        leagueCode: spec.code
+      });
+      t.tier = 3;
+      t.foreign = 1;
+      t.leagueCode = spec.code;
+      s.teams.push(t);
+      s.asia!.push(t.id);
+      existingNames.add(club.name);
+    });
+  });
+
+  // Fallback for any legacy FOREIGN_CLUB_CATALOG entry
   FOREIGN_CLUB_CATALOG.forEach((entry) => {
     if (existingNames.has(entry.name)) return;
     const diff = clamp(entry.baseOvr - BASE[2] + R(-2, 2), -4, 18);
@@ -3320,19 +3472,36 @@ export function ensureAsia(s: GameState) {
       natCode: entry.code,
       kcOverride: entry.kc,
       allowImport: true,
-      keepName: true
+      keepName: true,
+      squadSize: 14,
+      leagueCode: entry.code
     });
     t.tier = 3;
     t.foreign = 1;
+    t.leagueCode = entry.code;
     s.teams.push(t);
     s.asia!.push(t.id);
     existingNames.add(entry.name);
   });
+
   localizeForeignTeams(s.teams);
   const activeMod = getActiveMod();
   if (activeMod) {
     applyModToTeamsArray(s.teams, activeMod, s);
   }
+}
+
+export function ensureWorldLeaguesFixtures(s: GameState) {
+  ensureAsia(s);
+  if (!s.fxWorld) s.fxWorld = {};
+  WORLD_LEAGUE_SPECS.forEach((spec) => {
+    const existing = s.fxWorld![spec.code];
+    if (existing && existing.length > 0) return;
+    const ids = s.teams.filter((t) => t.tier >= 3 && t.leagueCode === spec.code).map((t) => t.id);
+    if (ids.length >= 2) {
+      s.fxWorld![spec.code] = generateWorldLeagueFixtures(ids, spec.roundsMultiplier);
+    }
+  });
 }
 
 export function initAsia(s: GameState) {
@@ -3348,7 +3517,21 @@ export function initAsia(s: GameState) {
       .sort((a, b) => b[1] - a[1]);
     while (th.length < 3 && rs.length) th.push(rs.shift()![0]);
   }
-  const allForeign = (s.asia || []).filter((id) => s.teams[id]).sort(() => Math.random() - 0.5);
+
+  // Prioritize actual World League champions/runners-up from previous season before random pool
+  const champPriority: number[] = [];
+  if (s.worldChampions) {
+    Object.values(s.worldChampions).forEach((arr) => {
+      arr.forEach((id) => {
+        if (s.teams[id] && !champPriority.includes(id)) champPriority.push(id);
+      });
+    });
+  }
+  const restForeign = (s.asia || [])
+    .filter((id) => s.teams[id] && !champPriority.includes(id))
+    .sort(() => Math.random() - 0.5);
+  const allForeign = [...champPriority.sort(() => Math.random() - 0.5), ...restForeign];
+
   const isWorldEdition = (s.season ?? 1) % 2 === 0;
   const fo: number[] = [];
   const usedCountries = new Set<string>();
@@ -3357,14 +3540,19 @@ export function initAsia(s: GameState) {
   const pickByConfed = (confed: ForeignConfed, quota: number) => {
     const candidates = allForeign.filter((id) => {
       if (pickedSet.has(id)) return false;
-      const meta = getForeignTeamCountryMeta(s.teams[id]?.name);
+      const tm = s.teams[id];
+      const meta = getForeignTeamCountryMeta(tm?.name, tm?.leagueCode);
       return (meta?.confed || 'asia') === confed;
     });
     for (const id of candidates) {
       if (fo.length >= 13) break;
-      const countInThisBatch = fo.filter((x) => (getForeignTeamCountryMeta(s.teams[x]?.name)?.confed || 'asia') === confed).length;
+      const countInThisBatch = fo.filter((x) => {
+        const tx = s.teams[x];
+        return (getForeignTeamCountryMeta(tx?.name, tx?.leagueCode)?.confed || 'asia') === confed;
+      }).length;
       if (countInThisBatch >= quota) break;
-      const country = getForeignTeamCountryMeta(s.teams[id]?.name)?.country || s.teams[id]?.name || String(id);
+      const tm = s.teams[id];
+      const country = getForeignTeamCountryMeta(tm?.name, tm?.leagueCode)?.country || tm?.name || String(id);
       if (!usedCountries.has(country)) {
         usedCountries.add(country);
         pickedSet.add(id);
@@ -3374,7 +3562,7 @@ export function initAsia(s: GameState) {
   };
 
   if (isWorldEdition) {
-    // Even seasons: World Club Cup featuring clubs across Europe, Americas, Africa, and Asia
+    // Even seasons: World Club Cup featuring champions/top clubs across Europe, Americas, Africa, and Asia
     pickByConfed('europe', 5);
     pickByConfed('americas', 3);
     pickByConfed('africa', 2);
@@ -3387,7 +3575,8 @@ export function initAsia(s: GameState) {
   for (const id of allForeign) {
     if (fo.length >= 13) break;
     if (pickedSet.has(id)) continue;
-    const country = getForeignTeamCountryMeta(s.teams[id]?.name)?.country || s.teams[id]?.name || String(id);
+    const tm = s.teams[id];
+    const country = getForeignTeamCountryMeta(tm?.name, tm?.leagueCode)?.country || tm?.name || String(id);
     if (!usedCountries.has(country)) {
       usedCountries.add(country);
       pickedSet.add(id);
@@ -3506,14 +3695,24 @@ export function createNewGame(
   const teams: Team[] = [];
   let id = 0;
   const pv = mode === 'm' && opts.names && opts.t0;
-  (pv ? opts.names! : genClubNames()).forEach((arr, ti) => {
-    arr.forEach((n) => {
-      teams.push(pv && ti === 0 ? opts.t0![id] : mkTeam(n, ti, id, R(-7, 7), { keepName: true }));
+  const clubNames = pv ? opts.names! : genClubNames();
+  clubNames.forEach((arr, ti) => {
+    const zHalf = Math.ceil(arr.length / 2);
+    arr.forEach((n, idxInTier) => {
+      const zone = ti === 0 ? (idxInTier < zHalf ? 0 : 1) : undefined;
+      if (pv && ti === 0 && opts.t0![id]) {
+        const previewTm = opts.t0![id];
+        if (previewTm.zone == null) previewTm.zone = zone;
+        teams.push(previewTm);
+      } else {
+        teams.push(mkTeam(n, ti, id, R(-7, 7), { keepName: true, zone }));
+      }
       id++;
     });
   });
 
-  const meId = pv && opts.pick != null && opts.pick >= 0 && opts.pick < 16 ? opts.pick : R(0, 15);
+  const t0Count = clubNames[0]?.length || 24;
+  const meId = pv && opts.pick != null && opts.pick >= 0 && opts.pick < t0Count ? opts.pick : R(0, t0Count - 1);
   const myTeam = teams[meId];
   const rolledGrant = mode === 'm' && myTeam ? rollInitialBoardGrant(myTeam) : undefined;
   const initialGrant = rolledGrant
@@ -3804,9 +4003,28 @@ export function enforceSeasonForeignQuota(s: GameState): void {
 
 export function startSeason(s: GameState) {
   resolveEndOfSeasonLoans(s);
+  ensureDomesticPyramidStructure(s, { topUpCounts: true, rebalanceZones: true });
   enforceSeasonForeignQuota(s);
   s.teams.forEach((t) => {
     Object.assign(t, { pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, p: 0, fm: '' });
+    if (t.tier >= 3) {
+      t.sq.forEach((q) => {
+        q.fit = 100;
+        q.inj = 0;
+        q.sus = 0;
+        q.yc = 0;
+        q.rc = 0;
+        q.sg = 0;
+        q.sa = 0;
+        q.sp = 0;
+        q.cs = 0;
+        q.srs = 0;
+        q.sra = 0;
+        q.motm = 0;
+        q.tyc = 0;
+      });
+      return;
+    }
     t.sq.forEach((q) => {
       q.fit = 100;
       q.inj = 0;
@@ -3823,7 +4041,7 @@ export function startSeason(s: GameState) {
       q.tyc = 0;
       q.cupStats = {};
     });
-    // Randomize shirt numbers across all teams each season (preserving Season 1 Career start number)
+    // Randomize shirt numbers across all domestic teams each season (preserving Season 1 Career start number)
     assignTeamShirtNumbers(t, {
       randomize: true,
       careerP: t.id === s.me ? s.p : null,
@@ -3861,7 +4079,8 @@ export function startSeason(s: GameState) {
     s.p.s0 = { gl: s.p.gl, as: s.p.as, ap: s.p.ap };
   }
 
-  const mt = s.teams[s.me].tier;
+  const meTeam = s.teams[s.me];
+  const mt = meTeam.tier;
   s.lg = mt;
   if (s.mode === 'm') {
     const ms = ensureMegastoreState(s);
@@ -3878,13 +4097,31 @@ export function startSeason(s: GameState) {
       ms.featuredPlayer = null;
     }
   }
-  s.fx = doubleRoundRobin(s.teams.filter((t) => t.tier === mt).map((t) => t.id));
+
+  const z0Ids = s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 0).map((t) => t.id);
+  const z1Ids = s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 1).map((t) => t.id);
+  s.fxZones = {
+    0: doubleRoundRobin(z0Ids),
+    1: doubleRoundRobin(z1Ids)
+  };
+  const myZone = mt === 0 ? (meTeam.zone ?? 0) : 0;
+  s.fx =
+    mt === 0
+      ? s.fxZones[myZone] || []
+      : doubleRoundRobin(s.teams.filter((t) => t.tier === mt).map((t) => t.id));
   s.fxo = {};
-  [0, 1, 2]
+  [1, 2]
     .filter((i) => i !== mt)
     .forEach((i) => {
       s.fxo![i] = doubleRoundRobin(s.teams.filter((t) => t.tier === i).map((t) => t.id));
     });
+
+  // Reset World League fixtures for the new season
+  s.fxWorld = {};
+  ensureWorldLeaguesFixtures(s);
+
+  s.po = undefined;
+  s.ppo = false;
   s.md = 0;
   s.pc = false;
   s.plc = false;
@@ -4208,9 +4445,16 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
   const curMd = s.md ?? 0;
   if (curMd < 1) return;
 
-  const myTier = s.teams[s.me]?.tier ?? 0;
+  const myTeam = s.teams[s.me];
+  const myTier = myTeam?.tier ?? 0;
+  const myZone = myTeam?.zone ?? 0;
   const findNextOppPow = (tm: Team): number | null => {
-    const fxList = tm.tier === myTier ? s.fx : s.fxo?.[tm.tier];
+    const fxList =
+      tm.tier === 0
+        ? (myTier === 0 && (tm.zone ?? 0) === myZone ? s.fx : s.fxZones?.[tm.zone ?? 0])
+        : tm.tier === myTier
+          ? s.fx
+          : s.fxo?.[tm.tier];
     const roundPairs = fxList?.[curMd];
     const pair = roundPairs?.find(([h, a]) => h === tm.id || a === tm.id);
     if (!pair) return null;
@@ -4221,6 +4465,7 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
   };
 
   s.teams.forEach((t) => {
+    if (t.tier >= 3) return;
     if (s.mode === 'm' && t.id === s.me) return;
     if (t.tacticTrialMd != null && curMd - t.tacticTrialMd < 2) return;
 
@@ -5394,23 +5639,25 @@ export function simulateCpuAsiaRound(s: GameState) {
     c.done = true;
     const w = nx[0];
     const winTeam = s.teams[w];
+    const asiaCfg = getCupConfig('asia', { name: 'ชิงแชมป์สโมสรทวีป', short: 'ถ้วยทวีป', icon: '🌏', prize: ASIA_CUP_PRIZE });
+    const asiaTrophy = asiaCfg.name === 'ชิงแชมป์สโมสรทวีป' ? 'แชมป์สโมสรทวีป' : `แชมป์${asiaCfg.name}`;
     if (winTeam) {
       winTeam.trophies = winTeam.trophies || [];
       if (!winTeam.trophies.some((t) => t.season === s.season && t.type === 'asia')) {
-        winTeam.trophies.push({ season: s.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
+        winTeam.trophies.push({ season: s.season, title: asiaTrophy, type: 'asia' });
       }
     }
     if (c.p.includes(s.me)) {
-      s.hist.push(`🌏 ซีซั่น ${s.season}: บอลถ้วยในทวีป ${w === s.me ? 'แชมป์!' : `ตกรอบ (${s.teams[w].name} แชมป์)`}`);
+      s.hist.push(`${asiaCfg.icon} ซีซั่น ${s.season}: ${asiaCfg.name} ${w === s.me ? 'แชมป์!' : `ตกรอบ (${s.teams[w].name} แชมป์)`}`);
     }
     if (w === s.me) {
       s.trophies = s.trophies || [];
       if (!s.trophies.some((t) => t.season === s.season && t.type === 'asia')) {
-        s.trophies.push({ season: s.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
+        s.trophies.push({ season: s.season, title: asiaTrophy, type: 'asia' });
       }
       if (s.mode === 'm') {
-        s.money += ASIA_CUP_PRIZE;
-        logFin(s, 'รางวัลแชมป์ทวีป', ASIA_CUP_PRIZE);
+        s.money += asiaCfg.prize;
+        logFin(s, `รางวัล${asiaTrophy}`, asiaCfg.prize);
         s.mgrRep = (s.mgrRep || 50) + 120;
       }
     }
@@ -5440,20 +5687,22 @@ export function simulateCpuCupRound(s: GameState) {
     c.done = true;
     const w = nx[0];
     const winTeam = s.teams[w];
+    const faCfg = getCupConfig('fa', { name: 'ถ้วยประชาชน', short: 'ถ้วยประชาชน', icon: '🏆', prize: FA_CUP_PRIZE });
+    const faTrophy = faCfg.name === 'ถ้วยประชาชน' ? 'แชมป์ถ้วยประชาชน' : `แชมป์${faCfg.name}`;
     if (winTeam) {
       winTeam.trophies = winTeam.trophies || [];
       if (!winTeam.trophies.some((t) => t.season === s.season && t.type === 'cup')) {
-        winTeam.trophies.push({ season: s.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
+        winTeam.trophies.push({ season: s.season, title: faTrophy, type: 'cup' });
       }
     }
     if (w === s.me) {
       s.trophies = s.trophies || [];
       if (!s.trophies.some((t) => t.season === s.season && t.type === 'cup')) {
-        s.trophies.push({ season: s.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
+        s.trophies.push({ season: s.season, title: faTrophy, type: 'cup' });
       }
       if (s.mode === 'm') {
-        s.money += FA_CUP_PRIZE;
-        logFin(s, 'รางวัลแชมป์ถ้วยประชาชน', FA_CUP_PRIZE);
+        s.money += faCfg.prize;
+        logFin(s, `รางวัล${faTrophy}`, faCfg.prize);
         s.mgrRep = (s.mgrRep || 50) + 75;
       }
     }
@@ -5558,7 +5807,22 @@ export function ensureSeasonExtraCups(s: GameState) {
 export function simulateCpuExtraCupRound(s: GameState, comp: 'lc' | 'sc' | 'dc') {
   const c = s[comp];
   if (!c || c.done) return;
-  const meta = EXTRA_CUP_META[comp];
+  const baseMeta = EXTRA_CUP_META[comp];
+  const modCupKey = comp === 'lc' ? 'leagueCup' : comp === 'sc' ? 'superCup' : 'divCup';
+  const cupCfg = getCupConfig(modCupKey, {
+    name: baseMeta.name,
+    short: baseMeta.short,
+    icon: baseMeta.icon,
+    prize: baseMeta.prize
+  });
+  const meta = {
+    ...baseMeta,
+    name: cupCfg.name,
+    short: cupCfg.short,
+    icon: cupCfg.icon,
+    prize: cupCfg.prize,
+    trophyTitle: cupCfg.name === baseMeta.name ? baseMeta.trophyTitle : `แชมป์${cupCfg.name}`
+  };
   const roundLabel = comp === 'sc' ? 'ชิงชนะเลิศ' : RN[c.r] || `รอบ ${c.r + 1}`;
   const nx: number[] = [];
   for (let i = 0; i < c.ids.length; i += 2) {
@@ -7269,6 +7533,14 @@ export function afterMatchDay(
   let restedCount = 0;
 
   s.teams.forEach((t) => {
+    if (t.tier >= 3) {
+      t.sq.forEach((q) => {
+        q.fit = 100;
+        q.inj = 0;
+        q.sus = 0;
+      });
+      return;
+    }
     const pl = xi(t);
     const mine = t.id === s.me;
     const isAiManaged = !mine || !mg;
@@ -7521,8 +7793,9 @@ export function afterMatchDay(
   // Ensure AI clubs also hold budgets/board confidence if loading an older save
   ensureAiClubsInitialized(s, false);
 
-  // Active in-season training & mission progression for AI bot clubs using symmetric progression rules
+  // Active in-season training & mission progression for domestic AI bot clubs using symmetric progression rules
   s.teams.forEach((t) => {
+    if (t.tier >= 3) return;
     if (mg && t.id === s.me) return;
     const aiXiList = xi(t);
     const aiXi = new Set(aiXiList.map((z) => z.n));
@@ -7647,6 +7920,7 @@ export function afterMatchDay(
   );
   const personalityShifts: PersonalityShiftEvent[] = [];
   s.teams.forEach((t) => {
+    if (t.tier >= 3) return;
     const teamCtx = liveInjMeta?.wellbeingByTeam?.[t.id];
     const lastResChar = (t.fm || '').slice(-1);
     const inferredRes = lastResChar === 'W' || lastResChar === 'D' || lastResChar === 'L' ? lastResChar : undefined;
@@ -7789,41 +8063,43 @@ export function afterMatchDay(
       }
     }
 
+    const cal = getSeasonCalendarMds(s.fx?.length || 30);
     const tw = getTransferWindowInfo(s);
-    if (s.md === 6) {
+    if (s.md === cal.w1End) {
       syncOffersField(s, []);
-      pushFeed(s, 'ตลาดซื้อขาย', '🔒 ตลาดซื้อขายรอบแรกปิดแล้ว (จะเปิดรอบสองอีกครั้งนัดที่ 15–20)', '');
-    } else if (s.md === 14) {
+      pushFeed(s, 'ตลาดซื้อขาย', `🔒 ตลาดซื้อขายรอบแรกปิดแล้ว (จะเปิดรอบสองอีกครั้งนัดที่ ${cal.w2Start + 1}–${cal.w2End})`, '');
+    } else if (s.md === cal.w2Start) {
       mkMarket(s);
-      pushFeed(s, 'ตลาดซื้อขาย', '🟢 ตลาดซื้อขายเลกสอง (นัดที่ 15–20) เปิดทำการแล้ว!', 'ok');
+      pushFeed(s, 'ตลาดซื้อขาย', `🟢 ตลาดซื้อขายเลกสอง (นัดที่ ${cal.w2Start + 1}–${cal.w2End}) เปิดทำการแล้ว!`, 'ok');
       generateIncomingWindowOffers(s, { maxNew: 2, includeBuy: true, includeLoan: true, notify: true });
-    } else if (s.md === 20) {
+    } else if (s.md === cal.w2End) {
       syncOffersField(s, []);
       pushFeed(s, 'ตลาดซื้อขาย', '🔒 ตลาดซื้อขายเลกสองปิดแล้ว จนถึงต้นฤดูกาลหน้า', '');
     }
 
-    if (tw.open && s.md !== 14) {
+    if (tw.open && s.md !== cal.w2Start) {
       generateIncomingWindowOffers(s, { maxNew: 2, includeBuy: true, includeLoan: true, notify: true });
     }
   } else {
     s.derby = 0;
   }
 
+  const cal = getSeasonCalendarMds(s.fx?.length || 30);
   const aiTw = getTransferWindowInfo(s);
   if (aiTw.open) {
-    const deadlineBoost = s.md === 5 || s.md === 14 || s.md === 19 ? 3 : 2;
+    const deadlineBoost = s.md === cal.w1End - 1 || s.md === cal.w2Start || s.md === cal.w2End - 1 ? 3 : 2;
     simulateAiLeagueTransfers(s, deadlineBoost);
   }
 
   // Ensure older saves have extra cups initialized
   ensureSeasonExtraCups(s);
 
-  // Trigger cups on non-overlapping matchdays
+  // Trigger cups on dynamic non-overlapping matchdays scaled to season length
   const n = s.md + 1;
 
-  // Thailand Champions Cup (Super Cup): early season MD 2
+  // Thailand Champions Cup (Super Cup)
   const sc = s.sc;
-  if (sc && !sc.done && n === 2) {
+  if (sc && !sc.done && n === cal.sc[0]) {
     if (sc.alive && sc.ids.includes(s.me)) {
       s.psc = true;
       s.news = '🏅 ถึงคิวชิงไทยแลนด์ แชมเปี้ยนส์ คัพ!';
@@ -7832,9 +8108,9 @@ export function afterMatchDay(
     }
   }
 
-  // Asian Club Cup: MD 3, 10, 17, 24
+  // Asian / Continental Club Cup
   const c = s.ac;
-  if (c && !c.done && c.r < 4 && n === 7 * c.r + 3) {
+  if (c && !c.done && c.r < 4 && n === cal.ac[c.r]) {
     if (c.alive && c.ids.includes(s.me)) {
       s.pa = true;
       s.news = `🌏 ถึงคิวแข่งบอลถ้วยในทวีป ${RN[c.r]}`;
@@ -7843,9 +8119,9 @@ export function afterMatchDay(
     }
   }
 
-  // Thai League Cup: MD 4, 11, 18, 25
+  // Thai League Cup
   const lc = s.lc;
-  if (lc && !lc.done && lc.r < 4 && n === 7 * lc.r + 4) {
+  if (lc && !lc.done && lc.r < 4 && n === cal.lc[lc.r]) {
     if (lc.alive && lc.ids.includes(s.me)) {
       s.plc = true;
       s.news = `🥇 ถึงคิวแข่งไทยลีก คัพ ${RN[lc.r]}`;
@@ -7854,9 +8130,9 @@ export function afterMatchDay(
     }
   }
 
-  // Division & Regional Shield Cup: MD 5, 12, 19, 26
+  // Division & Regional Shield Cup
   const dc = s.dc;
-  if (dc && !dc.done && dc.r < 4 && n === 7 * dc.r + 5) {
+  if (dc && !dc.done && dc.r < 4 && n === cal.dc[dc.r]) {
     if (dc.alive && dc.ids.includes(s.me)) {
       s.pdc = true;
       s.news = `🛡️ ถึงคิวแข่งถ้วยดิวิชั่น & ภูมิภาค ${RN[dc.r]}`;
@@ -7865,9 +8141,9 @@ export function afterMatchDay(
     }
   }
 
-  // Thai FA Cup: MD 6, 13, 20, 27
+  // Thai FA Cup
   const cup = s.cup;
-  if (cup && !cup.done && cup.r < 4 && n === 7 * cup.r + 6) {
+  if (cup && !cup.done && cup.r < 4 && n === cal.cup[cup.r]) {
     if (cup.alive && cup.ids.includes(s.me)) {
       s.pc = true;
       s.news = `🏆 ถึงคิวแข่งถ้วยประชาชน ${RN[cup.r]}`;
@@ -8632,23 +8908,24 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
 }
 
 export function getLeaguePrizeMoney(tier: number, rank: number, totalTeams = 16): number {
-  const r = Math.max(1, Math.min(totalTeams, Math.round(rank || 1)));
+  const maxTeams = Math.max(1, totalTeams);
+  const r = Math.max(1, Math.min(maxTeams, Math.round(rank || 1)));
   if (tier >= 2) {
-    // ลีกในประเทศ 1 (ลีกสูงสุด): แชมป์ 1m -> อันดับ 16 = 160k
+    // ไทยลีก 1 (16 ทีม): แชมป์ 1M -> อันดับ 16 = 160K
     const top = [1000, 750, 600, 500, 420, 360];
     if (r <= top.length) return top[r - 1];
     return Math.max(160, 360 - (r - 6) * 20);
   }
   if (tier === 1) {
-    // ลีกในประเทศ 2: แชมป์ 550k -> อันดับ 16 = 90k
+    // ไทยลีก 2 (18 ทีม): แชมป์ 550K -> อันดับ 18 = 80K
     const top = [550, 420, 340, 280, 240, 210];
     if (r <= top.length) return top[r - 1];
-    return Math.max(90, Math.round((210 - (r - 6) * 12) / 5) * 5);
+    return Math.max(80, Math.round((210 - (r - 6) * 11) / 5) * 5);
   }
-  // ลีกจังหวัด: แชมป์ 300k -> อันดับ 16 = 45k
+  // ไทยลีก 3 (โซนละ 12 ทีม): แชมป์โซน 300K -> อันดับ 12 = 55K
   const top = [300, 230, 185, 150, 125, 105];
   if (r <= top.length) return top[r - 1];
-  return Math.max(45, Math.round((105 - (r - 6) * 6) / 5) * 5);
+  return Math.max(55, Math.round((105 - (r - 6) * 8) / 5) * 5);
 }
 
 export interface NationalTeamCandidateRow {
@@ -8914,64 +9191,638 @@ export function evaluateNationalTeamCallup(
   };
 }
 
+function samplePoissonGoals(lambda: number): number {
+  const l = Math.exp(-clamp(lambda, 0.2, 4.2));
+  let k = 0;
+  let p = 1;
+  do {
+    k++;
+    p *= Math.random();
+  } while (p > l && k < 10);
+  return Math.max(0, k - 1);
+}
+
+function quickTeamStrength(t: Team): number {
+  const sq = t.sq;
+  if (!sq || !sq.length) return 70;
+  let sum = 0;
+  const n = Math.min(11, sq.length);
+  for (let i = 0; i < n; i++) sum += sq[i].ov || 70;
+  return sum / n;
+}
+
+export function simWorldLeagueMatch(h: Team, a: Team) {
+  if (!h || !a) return;
+  const sH = quickTeamStrength(h) + 2.0; // home advantage
+  const sA = quickTeamStrength(a);
+  const diff = clamp(sH - sA, -16, 16);
+  const gh = samplePoissonGoals(clamp(1.38 + diff * 0.055 + (Math.random() - 0.5) * 0.22, 0.25, 3.8));
+  const ga = samplePoissonGoals(clamp(1.18 - diff * 0.048 + (Math.random() - 0.5) * 0.22, 0.22, 3.5));
+
+  h.p++;
+  a.p++;
+  h.gf += gh;
+  h.ga += ga;
+  a.gf += ga;
+  a.ga += gh;
+  if (gh > ga) {
+    h.w++;
+    a.l++;
+    h.pts += 3;
+    h.fm = (h.fm + 'W').slice(-5);
+    a.fm = (a.fm + 'L').slice(-5);
+  } else if (ga > gh) {
+    a.w++;
+    h.l++;
+    a.pts += 3;
+    h.fm = (h.fm + 'L').slice(-5);
+    a.fm = (a.fm + 'W').slice(-5);
+  } else {
+    h.d++;
+    a.d++;
+    h.pts++;
+    a.pts++;
+    h.fm = (h.fm + 'D').slice(-5);
+    a.fm = (a.fm + 'D').slice(-5);
+  }
+
+  // Fast stat attribution across first 11 players for realistic leaderboards
+  const creditSide = (tm: Team, goalsFor: number, goalsAgainst: number) => {
+    const sq = tm.sq;
+    if (!sq?.length) return;
+    const n = Math.min(11, sq.length);
+    for (let i = 0; i < n; i++) {
+      const q = sq[i];
+      q.sp = (q.sp || 0) + 1;
+      if (goalsAgainst === 0 && (q.pos === 'GK' || q.pos === 'DF')) {
+        q.cs = (q.cs || 0) + 1;
+      }
+    }
+    if (goalsFor > 0 && n > 1) {
+      for (let g = 0; g < goalsFor; g++) {
+        // Favor attackers & midfielders (indices towards the end of 14-player GK/DF/MF/FW squad)
+        const scorerIdx = Math.min(n - 1, Math.max(1, Math.floor(Math.random() * 7) + Math.max(1, n - 7)));
+        const scorer = sq[scorerIdx] || sq[n - 1];
+        scorer.sg = (scorer.sg || 0) + 1;
+        if (Math.random() < 0.72) {
+          const astIdx = Math.min(n - 1, Math.max(1, Math.floor(Math.random() * 8) + Math.max(1, n - 8)));
+          if (astIdx !== scorerIdx && sq[astIdx]) {
+            sq[astIdx].sa = (sq[astIdx].sa || 0) + 1;
+          }
+        }
+      }
+    }
+  };
+  creditSide(h, gh, ga);
+  creditSide(a, ga, gh);
+}
+
+export function advanceOtherLeaguesOnMatchday(s: GameState, prevMd: number, nextMd: number) {
+  const totalMd = Math.max(1, s.fx?.length || 30);
+  const clampedPrev = Math.max(0, prevMd);
+  const clampedNext = Math.max(clampedPrev, nextMd);
+  const meTeam = s.teams[s.me];
+  const mt = meTeam?.tier ?? 0;
+  const myZone = mt === 0 ? (meTeam.zone ?? 0) : -1;
+
+  const runProportional = (rounds: [number, number][][] | undefined, isWorld: boolean) => {
+    if (!rounds?.length) return;
+    const rLen = rounds.length;
+    const fromIdx = Math.floor((clampedPrev * rLen) / totalMd);
+    const toIdx = Math.min(rLen, Math.floor((clampedNext * rLen) / totalMd));
+    for (let idx = fromIdx; idx < toIdx; idx++) {
+      const rd = rounds[idx];
+      if (!rd) continue;
+      for (let m = 0; m < rd.length; m++) {
+        const [hId, aId] = rd[m];
+        const H = s.teams[hId];
+        const A = s.teams[aId];
+        if (!H || !A) continue;
+        if (isWorld) {
+          simWorldLeagueMatch(H, A);
+        } else {
+          const r = simMatch(H, A, s);
+          applyMatchResult(H, r.gh, A, r.ga);
+          tallyMatchPlayers(H, A, r);
+          applyPositionAdaptation(s, H, A, r);
+        }
+      }
+    }
+  };
+
+  if (s.fxZones) {
+    ([0, 1] as const).forEach((z) => {
+      if (mt === 0 && z === myZone) return;
+      runProportional(s.fxZones![z], false);
+    });
+  }
+  if (s.fxo) {
+    Object.entries(s.fxo).forEach(([k, rounds]) => {
+      const tIdx = Number(k);
+      if (tIdx === mt || tIdx === 0) return;
+      runProportional(rounds, false);
+    });
+  }
+  if (s.fxWorld) {
+    Object.values(s.fxWorld).forEach((rounds) => runProportional(rounds, true));
+  }
+}
+
+function finalizeRemainingFixtures(s: GameState) {
+  const meTeam = s.teams[s.me];
+  const mt = meTeam?.tier ?? 0;
+  const myZone = mt === 0 ? (meTeam.zone ?? 0) : -1;
+  const totalMd = Math.max(1, s.fx?.length || 30);
+  const doneMd = Math.min(totalMd, s.md ?? totalMd);
+
+  const flushRemaining = (rounds: [number, number][][] | undefined, isWorld: boolean) => {
+    if (!rounds?.length) return;
+    const rLen = rounds.length;
+    const alreadyDone = Math.floor((doneMd * rLen) / totalMd);
+    for (let idx = alreadyDone; idx < rLen; idx++) {
+      const rd = rounds[idx];
+      if (!rd) continue;
+      for (let m = 0; m < rd.length; m++) {
+        const [hId, aId] = rd[m];
+        const H = s.teams[hId];
+        const A = s.teams[aId];
+        if (!H || !A) continue;
+        if (isWorld) {
+          simWorldLeagueMatch(H, A);
+        } else {
+          const r = simMatch(H, A, s);
+          applyMatchResult(H, r.gh, A, r.ga);
+          tallyMatchPlayers(H, A, r);
+          applyPositionAdaptation(s, H, A, r);
+        }
+      }
+    }
+  };
+
+  if (s.fxZones) {
+    ([0, 1] as const).forEach((z) => {
+      if (mt === 0 && z === myZone) return;
+      flushRemaining(s.fxZones![z], false);
+    });
+  }
+  if (s.fxo) {
+    Object.entries(s.fxo).forEach(([k, rounds]) => {
+      const tIdx = Number(k);
+      if (tIdx === mt || tIdx === 0) return;
+      flushRemaining(rounds, false);
+    });
+  }
+  if (s.fxWorld) {
+    Object.values(s.fxWorld).forEach((rounds) => flushRemaining(rounds, true));
+  }
+}
+
+function syncUserPlayoffPrompt(s: GameState) {
+  const po = s.po;
+  if (!po || po.done) {
+    s.ppo = false;
+    if (po) po.userPair = undefined;
+    return;
+  }
+
+  const runTieSim = (hId: number, aId: number, label: string, log: string[]): number => {
+    const H = s.teams[hId];
+    const A = s.teams[aId];
+    if (!H || !A) return H ? hId : aId;
+    const r = simMatch(H, A, s);
+    tallyCupMatchPlayers('cup', H, A, r);
+    const w = pickWinner(H, A, r, s);
+    const penNote = r.gh === r.ga ? ` (${w.name} ชนะจุดโทษ)` : '';
+    log.push(`${label}: ${H.name} ${r.gh}-${r.ga} ${A.name}${penNote}`);
+    return w.id;
+  };
+
+  // Loop in case Round 0 has no user tie and auto-advances straight into Round 1 (or finishes completely)
+  for (let guard = 0; guard < 3; guard++) {
+    if (po.done) {
+      s.ppo = false;
+      po.userPair = undefined;
+      return;
+    }
+
+    if (po.round === 0) {
+      // Check if user plays in T2 SF
+      for (let i = 0; i < po.t2.pairs.length; i++) {
+        const pair = po.t2.pairs[i];
+        if (pair && (pair[0] === s.me || pair[1] === s.me)) {
+          po.userPair = {
+            comp: 't2',
+            slot: i,
+            homeId: pair[0],
+            awayId: pair[1],
+            label: 'เพลย์ออฟเลื่อนชั้น ไทยลีก 2 (รอบรองชนะเลิศ)'
+          };
+          s.ppo = true;
+          return;
+        }
+      }
+      // Check if user plays in T3 Champions League SF
+      for (let i = 0; i < po.t3.promoPairs.length; i++) {
+        const pair = po.t3.promoPairs[i];
+        if (pair && (pair[0] === s.me || pair[1] === s.me)) {
+          po.userPair = {
+            comp: 't3_promo',
+            slot: i,
+            homeId: pair[0],
+            awayId: pair[1],
+            label: 'เพลย์ออฟ ไทยลีก 3 แชมเปียนส์ลีก (รอบรองชนะเลิศ)'
+          };
+          s.ppo = true;
+          return;
+        }
+      }
+
+      // User is not in Round 0 -> resolve all Round 0 semifinals by AI and move to Round 1 Finals
+      if (po.t2.r === 0) {
+        if (po.t2.pairs.length >= 2) {
+          const w1 = runTieSim(po.t2.pairs[0][0], po.t2.pairs[0][1], 'T2 เพลย์ออฟ รอบรอง 1', po.t2.log);
+          const w2 = runTieSim(po.t2.pairs[1][0], po.t2.pairs[1][1], 'T2 เพลย์ออฟ รอบรอง 2', po.t2.log);
+          po.t2.pairs = [[w1, w2]];
+        }
+        po.t2.r = 1;
+      }
+      if (po.t3.r === 0) {
+        if (po.t3.promoPairs.length >= 2) {
+          const w1 = runTieSim(po.t3.promoPairs[0][0], po.t3.promoPairs[0][1], 'T3 ชปล. เพลย์ออฟ รอบรอง 1', po.t3.log);
+          const w2 = runTieSim(po.t3.promoPairs[1][0], po.t3.promoPairs[1][1], 'T3 ชปล. เพลย์ออฟ รอบรอง 2', po.t3.log);
+          po.t3.promoPairs = [[w1, w2]];
+        }
+        po.t3.r = 1;
+      }
+      po.round = 1;
+      continue;
+    }
+
+    // Round 1: Finals!
+    if (po.t2.winnerId == null && po.t2.pairs.length === 1) {
+      const fPair = po.t2.pairs[0];
+      if (fPair[0] === s.me || fPair[1] === s.me) {
+        po.userPair = {
+          comp: 't2',
+          slot: 0,
+          homeId: fPair[0],
+          awayId: fPair[1],
+          label: 'เพลย์ออฟเลื่อนชั้น ไทยลีก 2 (รอบชิงตั๋ว T1)'
+        };
+        s.ppo = true;
+        return;
+      }
+    }
+    if (po.t3.promoWinnerId == null && po.t3.promoPairs.length === 1) {
+      const fPair = po.t3.promoPairs[0];
+      if (fPair[0] === s.me || fPair[1] === s.me) {
+        po.userPair = {
+          comp: 't3_promo',
+          slot: 0,
+          homeId: fPair[0],
+          awayId: fPair[1],
+          label: 'เพลย์ออฟ ไทยลีก 3 (รอบชิงตั๋วขึ้น T2 ใบที่ 3)'
+        };
+        s.ppo = true;
+        return;
+      }
+    }
+    if (po.t3.champWinnerId == null && po.t3.champPair) {
+      const cPair = po.t3.champPair;
+      if (cPair[0] === s.me || cPair[1] === s.me) {
+        po.userPair = {
+          comp: 't3_champ',
+          slot: 0,
+          homeId: cPair[0],
+          awayId: cPair[1],
+          label: 'รอบชิงแชมป์ระดับประเทศ ไทยลีก 3'
+        };
+        s.ppo = true;
+        return;
+      }
+    }
+
+    // Resolve remaining AI Finals and finish playoff stage
+    if (po.t2.winnerId == null && po.t2.pairs.length === 1) {
+      po.t2.winnerId = runTieSim(po.t2.pairs[0][0], po.t2.pairs[0][1], 'T2 เพลย์ออฟ รอบชิง', po.t2.log);
+      po.t2.r = 2;
+    }
+    if (po.t3.promoWinnerId == null && po.t3.promoPairs.length === 1) {
+      po.t3.promoWinnerId = runTieSim(po.t3.promoPairs[0][0], po.t3.promoPairs[0][1], 'T3 ชปล. เพลย์ออฟ รอบชิง', po.t3.log);
+      po.t3.r = 2;
+    }
+    if (po.t3.champWinnerId == null && po.t3.champPair) {
+      po.t3.champWinnerId = runTieSim(po.t3.champPair[0], po.t3.champPair[1], 'ชิงแชมป์ประเทศ ไทยลีก 3', po.t3.log);
+    }
+    po.done = true;
+    po.userPair = undefined;
+    s.ppo = false;
+    return;
+  }
+}
+
+export function initDomesticPlayoffs(s: GameState) {
+  if (s.po) return;
+  finalizeRemainingFixtures(s);
+
+  const tb1 = sortTable(s.teams.filter((t) => t.tier === 1));
+  const tb0Z0 = sortTable(s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 0));
+  const tb0Z1 = sortTable(s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 1));
+
+  const t2Pairs: [number, number][] =
+    tb1.length >= 6
+      ? [
+          [tb1[2].id, tb1[5].id],
+          [tb1[3].id, tb1[4].id]
+        ]
+      : [];
+  const t3PromoPairs: [number, number][] =
+    tb0Z0.length >= 3 && tb0Z1.length >= 3
+      ? [
+          [tb0Z0[1].id, tb0Z1[2].id],
+          [tb0Z1[1].id, tb0Z0[2].id]
+        ]
+      : [];
+  const t3ChampPair: [number, number] | undefined =
+    tb0Z0.length >= 1 && tb0Z1.length >= 1 ? [tb0Z0[0].id, tb0Z1[0].id] : undefined;
+
+  const po: DomesticPlayoffState = {
+    round: 0,
+    done: false,
+    t2: { r: 0, pairs: t2Pairs, log: [] },
+    t3: { r: 0, promoPairs: t3PromoPairs, champPair: t3ChampPair, log: [] }
+  };
+  s.po = po;
+  syncUserPlayoffPrompt(s);
+  if (s.ppo && s.po.userPair) {
+    s.news = `🔥 ${s.po.userPair.label}!`;
+    pushFeed(s, 'รอบเพลย์ออฟ', `🔥 สโมสรเข้าสู่ ${s.po.userPair.label}`, 'ok');
+  }
+}
+
+export function resolveUserPlayoffMatch(
+  s: GameState,
+  payload: { homeId: number; awayId: number; r: MatchResult; pen?: boolean }
+) {
+  const po = s.po;
+  if (!po || !po.userPair) {
+    s.ppo = false;
+    return;
+  }
+  const H = s.teams[payload.homeId];
+  const A = s.teams[payload.awayId];
+  const mrWithPen = payload.pen != null && payload.r.pen == null ? { ...payload.r, pen: payload.pen } : payload.r;
+  const w = pickWinner(H, A, mrWithPen, s);
+  const penNote = payload.r.gh === payload.r.ga ? ` (${w.name} ชนะจุดโทษ)` : '';
+  const scoreLine = `${H.name} ${payload.r.gh}-${payload.r.ga} ${A.name}${penNote}`;
+  const up = po.userPair;
+
+  const runTieSim = (hId: number, aId: number, label: string, log: string[]): number => {
+    const tH = s.teams[hId];
+    const tA = s.teams[aId];
+    if (!tH || !tA) return tH ? hId : aId;
+    const mr = simMatch(tH, tA, s);
+    tallyCupMatchPlayers('cup', tH, tA, mr);
+    const mw = pickWinner(tH, tA, mr, s);
+    const mPen = mr.gh === mr.ga ? ` (${mw.name} ชนะจุดโทษ)` : '';
+    log.push(`${label}: ${tH.name} ${mr.gh}-${mr.ga} ${tA.name}${mPen}`);
+    return mw.id;
+  };
+
+  if (po.round === 0) {
+    if (up.comp === 't2' && po.t2.pairs.length >= 2) {
+      const otherSlot = up.slot === 0 ? 1 : 0;
+      const oPair = po.t2.pairs[otherSlot];
+      const otherWinner = runTieSim(oPair[0], oPair[1], `T2 เพลย์ออฟ รอบรอง ${otherSlot + 1}`, po.t2.log);
+      po.t2.log.push(`T2 เพลย์ออฟ รอบรอง ${up.slot + 1}: ${scoreLine}`);
+      po.t2.pairs = [up.slot === 0 ? [w.id, otherWinner] : [otherWinner, w.id]];
+      po.t2.r = 1;
+    } else if (po.t2.r === 0 && po.t2.pairs.length >= 2) {
+      const w1 = runTieSim(po.t2.pairs[0][0], po.t2.pairs[0][1], 'T2 เพลย์ออฟ รอบรอง 1', po.t2.log);
+      const w2 = runTieSim(po.t2.pairs[1][0], po.t2.pairs[1][1], 'T2 เพลย์ออฟ รอบรอง 2', po.t2.log);
+      po.t2.pairs = [[w1, w2]];
+      po.t2.r = 1;
+    }
+
+    if (up.comp === 't3_promo' && po.t3.promoPairs.length >= 2) {
+      const otherSlot = up.slot === 0 ? 1 : 0;
+      const oPair = po.t3.promoPairs[otherSlot];
+      const otherWinner = runTieSim(oPair[0], oPair[1], `T3 ชปล. เพลย์ออฟ รอบรอง ${otherSlot + 1}`, po.t3.log);
+      po.t3.log.push(`T3 ชปล. เพลย์ออฟ รอบรอง ${up.slot + 1}: ${scoreLine}`);
+      po.t3.promoPairs = [up.slot === 0 ? [w.id, otherWinner] : [otherWinner, w.id]];
+      po.t3.r = 1;
+    } else if (po.t3.r === 0 && po.t3.promoPairs.length >= 2) {
+      const w1 = runTieSim(po.t3.promoPairs[0][0], po.t3.promoPairs[0][1], 'T3 ชปล. เพลย์ออฟ รอบรอง 1', po.t3.log);
+      const w2 = runTieSim(po.t3.promoPairs[1][0], po.t3.promoPairs[1][1], 'T3 ชปล. เพลย์ออฟ รอบรอง 2', po.t3.log);
+      po.t3.promoPairs = [[w1, w2]];
+      po.t3.r = 1;
+    }
+
+    po.round = 1;
+    po.userPair = undefined;
+    s.ppo = false;
+    syncUserPlayoffPrompt(s);
+    if (s.ppo && s.po?.userPair) {
+      pushFeed(s, 'รอบเพลย์ออฟ', `🔥 ผ่านเข้ารอบชิง! ${s.po.userPair.label}`, 'ok');
+    } else {
+      pushFeed(s, 'รอบเพลย์ออฟ', `สรุปผลเพลย์ออฟ: ${scoreLine}`, w.id === s.me ? 'ok' : 'urg');
+    }
+    return;
+  }
+
+  // Round 1 resolution
+  if (up.comp === 't2') {
+    po.t2.winnerId = w.id;
+    po.t2.r = 2;
+    po.t2.log.push(`T2 เพลย์ออฟ รอบชิง: ${scoreLine}`);
+  } else if (up.comp === 't3_promo') {
+    po.t3.promoWinnerId = w.id;
+    po.t3.r = 2;
+    po.t3.log.push(`T3 ชปล. เพลย์ออฟ รอบชิง: ${scoreLine}`);
+  } else if (up.comp === 't3_champ') {
+    po.t3.champWinnerId = w.id;
+    po.t3.log.push(`ชิงแชมป์ประเทศ ไทยลีก 3: ${scoreLine}`);
+  }
+
+  // Resolve any remaining Round 1 AI finals cleanly
+  if (po.t2.winnerId == null && po.t2.pairs.length === 1) {
+    po.t2.winnerId = runTieSim(po.t2.pairs[0][0], po.t2.pairs[0][1], 'T2 เพลย์ออฟ รอบชิง', po.t2.log);
+    po.t2.r = 2;
+  }
+  if (po.t3.promoWinnerId == null && po.t3.promoPairs.length === 1) {
+    po.t3.promoWinnerId = runTieSim(po.t3.promoPairs[0][0], po.t3.promoPairs[0][1], 'T3 ชปล. เพลย์ออฟ รอบชิง', po.t3.log);
+    po.t3.r = 2;
+  }
+  if (po.t3.champWinnerId == null && po.t3.champPair) {
+    po.t3.champWinnerId = runTieSim(po.t3.champPair[0], po.t3.champPair[1], 'ชิงแชมป์ประเทศ ไทยลีก 3', po.t3.log);
+  }
+
+  po.done = true;
+  po.userPair = undefined;
+  s.ppo = false;
+
+  if (w.id === s.me) {
+    pushFeed(
+      s,
+      'รอบเพลย์ออฟ',
+      up.comp === 't3_champ'
+        ? `🏆 สุดยอด! ชนะ ${scoreLine} คว้าแชมป์ประเทศไทย ไทยลีก 3!`
+        : `🎉 เฮลั่น! ชนะ ${scoreLine} คว้าตั๋วเลื่อนชั้นสำเร็จ!`,
+      'ok'
+    );
+  } else {
+    pushFeed(s, 'รอบเพลย์ออฟ', `ผลนัดชิง: ${scoreLine}`, 'urg');
+  }
+}
+
 export function finishSeasonComputation(s: GameState) {
-  const mt = s.teams[s.me].tier;
-  const lp = s.teams.filter((t) => t.tier === mt).flatMap((t) => t.sq.map((q) => ({ q, t })));
+  const meTeam = s.teams[s.me];
+  const mt = meTeam.tier;
+  const myZone = mt === 0 ? (meTeam.zone ?? 0) : undefined;
+  const lp = s.teams.filter((t) => t.tier === mt && (mt !== 0 || (t.zone ?? 0) === myZone)).flatMap((t) => t.sq.map((q) => ({ q, t })));
   const top = (k: 'sg' | 'sa') => lp.slice().sort((a, b) => (b.q[k] || 0) - (a.q[k] || 0))[0];
   const bs = top('sg');
   const ba = top('sa');
 
-  [0, 1, 2]
-    .filter((i) => i !== mt)
-    .forEach((i) => {
-      const rounds = s.fxo?.[i] ? s.fxo[i].slice(s.md) : roundRobin(s.teams.filter((t) => t.tier === i).map((t) => t.id));
-      rounds.forEach((rd) =>
-        rd.forEach(([h, a]) => {
-          const r = simMatch(s.teams[h], s.teams[a], s);
-          applyMatchResult(s.teams[h], r.gh, s.teams[a], r.ga);
-          tallyMatchPlayers(s.teams[h], s.teams[a], r);
-          applyPositionAdaptation(s, s.teams[h], s.teams[a], r);
-        })
-      );
-    });
+  // Ensure all regular-season rounds & domestic playoffs are finalized
+  finalizeRemainingFixtures(s);
+  if (!s.po) {
+    initDomesticPlayoffs(s);
+  }
+  if (s.po && !s.po.done) {
+    s.ppo = false;
+    s.po.userPair = undefined;
+    const dummySync = (hId: number, aId: number, label: string, log: string[]) => {
+      const H = s.teams[hId];
+      const A = s.teams[aId];
+      if (!H || !A) return H ? hId : aId;
+      const r = simMatch(H, A, s);
+      tallyCupMatchPlayers('cup', H, A, r);
+      const w = pickWinner(H, A, r, s);
+      log.push(`${label}: ${H.name} ${r.gh}-${r.ga} ${A.name}`);
+      return w.id;
+    };
+    const po = s.po;
+    if (po.round === 0) {
+      if (po.t2.r === 0 && po.t2.pairs.length >= 2) {
+        const w1 = dummySync(po.t2.pairs[0][0], po.t2.pairs[0][1], 'T2 เพลย์ออฟ รอบรอง 1', po.t2.log);
+        const w2 = dummySync(po.t2.pairs[1][0], po.t2.pairs[1][1], 'T2 เพลย์ออฟ รอบรอง 2', po.t2.log);
+        po.t2.pairs = [[w1, w2]];
+        po.t2.r = 1;
+      }
+      if (po.t3.r === 0 && po.t3.promoPairs.length >= 2) {
+        const w1 = dummySync(po.t3.promoPairs[0][0], po.t3.promoPairs[0][1], 'T3 ชปล. เพลย์ออฟ รอบรอง 1', po.t3.log);
+        const w2 = dummySync(po.t3.promoPairs[1][0], po.t3.promoPairs[1][1], 'T3 ชปล. เพลย์ออฟ รอบรอง 2', po.t3.log);
+        po.t3.promoPairs = [[w1, w2]];
+        po.t3.r = 1;
+      }
+      po.round = 1;
+    }
+    if (po.t2.winnerId == null && po.t2.pairs.length === 1) {
+      po.t2.winnerId = dummySync(po.t2.pairs[0][0], po.t2.pairs[0][1], 'T2 เพลย์ออฟ รอบชิง', po.t2.log);
+      po.t2.r = 2;
+    }
+    if (po.t3.promoWinnerId == null && po.t3.promoPairs.length === 1) {
+      po.t3.promoWinnerId = dummySync(po.t3.promoPairs[0][0], po.t3.promoPairs[0][1], 'T3 ชปล. เพลย์ออฟ รอบชิง', po.t3.log);
+      po.t3.r = 2;
+    }
+    if (po.t3.champWinnerId == null && po.t3.champPair) {
+      po.t3.champWinnerId = dummySync(po.t3.champPair[0], po.t3.champPair[1], 'ชิงแชมป์ประเทศ ไทยลีก 3', po.t3.log);
+    }
+    po.done = true;
+  }
 
-  const tb = [0, 1, 2].map((i) => sortTable(s.teams.filter((t) => t.tier === i)));
+  // Record champions/runners-up for every World League to seed next season's Continental/World Cup
+  const worldChamps: Record<string, number[]> = {};
+  WORLD_LEAGUE_SPECS.forEach((spec) => {
+    const lTeams = sortTable(s.teams.filter((t) => t.tier >= 3 && t.leagueCode === spec.code));
+    if (lTeams.length > 0) {
+      worldChamps[spec.code] = lTeams.slice(0, 2).map((t) => t.id);
+    }
+  });
+  if (Object.keys(worldChamps).length > 0) {
+    s.worldChampions = worldChamps;
+  }
+
+  const tb2 = sortTable(s.teams.filter((t) => t.tier === 2));
+  const tb1 = sortTable(s.teams.filter((t) => t.tier === 1));
+  const tb0Z0 = sortTable(s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 0));
+  const tb0Z1 = sortTable(s.teams.filter((t) => t.tier === 0 && (t.zone ?? 0) === 1));
+  const tb0All = sortTable(s.teams.filter((t) => t.tier === 0));
+  const tb = [tb0All, tb1, tb2];
+
   const preTierByTeam = new Map<number, number>();
   const rankByTeam = new Map<number, { rank: number; total: number }>();
-  tb.forEach((tierList, tierIdx) => {
+  [tb1, tb2].forEach((tierList, idx) => {
+    const tierIdx = idx + 1;
     tierList.forEach((tm, rIdx) => {
       preTierByTeam.set(tm.id, tierIdx);
       rankByTeam.set(tm.id, { rank: rIdx + 1, total: tierList.length });
     });
   });
-
-  const meTeam = s.teams[s.me];
-  const pos = tb[mt].indexOf(meTeam) + 1;
-  const ch = tb[mt][0].id === s.me;
-  const up: Team[] = [];
-  const dn: Team[] = [];
-  [0, 1].forEach((i) => {
-    up.push(...tb[i].slice(0, 3));
-    dn.push(...tb[i + 1].slice(-3));
+  [tb0Z0, tb0Z1].forEach((zoneList) => {
+    zoneList.forEach((tm, rIdx) => {
+      preTierByTeam.set(tm.id, 0);
+      rankByTeam.set(tm.id, { rank: rIdx + 1, total: zoneList.length });
+    });
   });
+
+  const userTable = mt === 0 ? ((meTeam.zone ?? 0) === 1 ? tb0Z1 : tb0Z0) : tb[mt];
+  const pos = Math.max(1, userTable.indexOf(meTeam) + 1);
+  const isT3NatChamp = mt === 0 && s.po?.t3?.champWinnerId === s.me;
+  const ch = (userTable[0]?.id === s.me && mt > 0) || isT3NatChamp || (mt === 0 && userTable[0]?.id === s.me);
+
+  // Real-world promotions & relegations across Thai League 1 / 2 / 3
+  const upSet = new Set<Team>();
+  const dnSet = new Set<Team>();
+
+  // T1 (16 teams) -> bottom 3 relegate to T2
+  tb2.slice(-3).forEach((t) => dnSet.add(t));
+
+  // T2 (18 teams) -> #1, #2 auto-promote + Playoff winner promotes to T1; bottom 3 relegate to T3
+  tb1.slice(0, 2).forEach((t) => upSet.add(t));
+  const t2PoWinner = s.po?.t2?.winnerId != null ? s.teams[s.po.t2.winnerId] : undefined;
+  if (t2PoWinner && t2PoWinner.tier === 1 && !upSet.has(t2PoWinner)) {
+    upSet.add(t2PoWinner);
+  }
+  tb1.slice(-3).forEach((t) => dnSet.add(t));
+
+  // T3 (2 zones x 12 teams) -> Zone #1s + Champions League Playoff winner promote to T2
+  if (tb0Z0[0]) upSet.add(tb0Z0[0]);
+  if (tb0Z1[0]) upSet.add(tb0Z1[0]);
+  const t3PoWinner = s.po?.t3?.promoWinnerId != null ? s.teams[s.po.t3.promoWinnerId] : undefined;
+  if (t3PoWinner && t3PoWinner.tier === 0 && !upSet.has(t3PoWinner)) {
+    upSet.add(t3PoWinner);
+  }
 
   if (s.aqs !== s.season) {
     s.aqs = s.season;
-    s.aq = tb[2].slice(0, 3).map((t) => t.id);
+    s.aq = tb2.slice(0, 3).map((t) => t.id);
   }
 
-  up.forEach((t) => t.tier++);
-  dn.forEach((t) => t.tier--);
+  upSet.forEach((t) => t.tier++);
+  dnSet.forEach((t) => t.tier--);
+  ensureDomesticPyramidStructure(s, { topUpCounts: true, rebalanceZones: true });
   const nt = s.teams[s.me].tier;
   s.lg = nt;
 
   s.trophies = s.trophies || [];
   s.records = s.records || {};
-  if (ch && !s.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
+  if (mt === 0 && isT3NatChamp) {
+    if (!s.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
+      s.trophies.push({ season: s.season, title: `แชมป์ประเทศไทย ${TN[0]}`, tier: 0, type: 'league' });
+      s.mgrRep = (s.mgrRep || 50) + 50;
+    }
+  } else if (mt === 0 && userTable[0]?.id === s.me) {
+    if (!s.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
+      s.trophies.push({ season: s.season, title: `แชมป์ ${TN[0]} (${getT3ZoneLabel(meTeam.zone)})`, tier: 0, type: 'league' });
+      s.mgrRep = (s.mgrRep || 50) + 40;
+    }
+  } else if (ch && !s.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
     s.trophies.push({ season: s.season, title: `แชมป์ ${TN[mt]}`, tier: mt, type: 'league' });
     s.mgrRep = (s.mgrRep || 50) + (mt === 2 ? 100 : mt === 1 ? 60 : 40);
   } else if (nt > mt) {
-    s.mgrRep = (s.mgrRep || 50) + 30;
+    s.mgrRep = (s.mgrRep || 50) + 35;
   }
 
   const meTopScorer = meTeam.sq.slice().sort((a, b) => (b.sg || 0) - (a.sg || 0))[0];
@@ -8998,7 +9849,7 @@ export function finishSeasonComputation(s: GameState) {
     (q) => calcSeasonAvgRating(q, q.sp || 0, q.sg || 0, q.sa || 0, q.cs || 0)
   );
 
-  const leaguePrize = s.mode === 'm' ? getLeaguePrizeMoney(mt, pos, tb[mt].length) : 0;
+  const leaguePrize = s.mode === 'm' ? getLeaguePrizeMoney(mt, pos, userTable.length) : 0;
   if (s.mode === 'm') {
     if (leaguePrize > 0) {
       s.money += leaguePrize;
@@ -9083,7 +9934,7 @@ export function finishSeasonComputation(s: GameState) {
           ? 'ถึงรอบสุดท้าย'
           : 'ตกรอบถ้วยดิวิชั่น'
       : undefined;
-  s.hist.push(`ซีซั่น ${s.season}: ${TN[mt]} อันดับ ${pos} · ${cupStatus}${leagueCupStatus ? ` · ${leagueCupStatus}` : ''}${asiaStatus ? ` · ${asiaStatus}` : ''}`);
+  s.hist.push(`ซีซั่น ${s.season}: ${TN[mt]}${mt === 0 ? ` (${getT3ZoneLabel(myZone)})` : ''} อันดับ ${pos} · ${cupStatus}${leagueCupStatus ? ` · ${leagueCupStatus}` : ''}${asiaStatus ? ` · ${asiaStatus}` : ''}`);
 
   // Archive Team & Player Season Histories across all clubs in the pyramid
   const cupWinnerId = s.cup.done ? s.cup.ids[0] : -1;
@@ -9091,13 +9942,15 @@ export function finishSeasonComputation(s: GameState) {
   const lcWinnerId = s.lc?.done ? s.lc.ids[0] : -1;
   const scWinnerId = s.sc?.done ? s.sc.ids[0] : -1;
   const dcWinnerId = s.dc?.done ? s.dc.ids[0] : -1;
-  s.prevLeagueChampId = tb[2]?.[0]?.id ?? s.prevLeagueChampId;
+  const t3NatWinnerId = s.po?.t3?.champWinnerId ?? -1;
+  s.prevLeagueChampId = tb2?.[0]?.id ?? s.prevLeagueChampId;
   if (cupWinnerId >= 0) s.prevCupChampId = cupWinnerId;
 
   s.teams.forEach((tm) => {
+    if (tm.tier >= 3) return;
     const preTier = preTierByTeam.get(tm.id);
     const rk = rankByTeam.get(tm.id);
-    const isChamp = rk ? rk.rank === 1 : false;
+    const isChamp = rk ? (preTier === 0 ? tm.id === t3NatWinnerId || rk.rank === 1 : rk.rank === 1) : false;
     const isCupChamp = tm.id === cupWinnerId;
     const isAsiaChamp = tm.id === asiaWinnerId;
     const isLcChamp = tm.id === lcWinnerId;
@@ -9106,8 +9959,10 @@ export function finishSeasonComputation(s: GameState) {
 
     if (preTier != null && rk) {
       tm.trophies = tm.trophies || [];
-      if (isChamp && !tm.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
-        tm.trophies.push({ season: s.season, title: `แชมป์ ${TN[preTier]}`, tier: preTier, type: 'league' });
+      if (preTier === 0 && tm.id === t3NatWinnerId && !tm.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
+        tm.trophies.push({ season: s.season, title: `แชมป์ประเทศไทย ${TN[0]}`, tier: 0, type: 'league' });
+      } else if (rk.rank === 1 && !tm.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
+        tm.trophies.push({ season: s.season, title: preTier === 0 ? `แชมป์ ${TN[0]} (${getT3ZoneLabel(tm.zone)})` : `แชมป์ ${TN[preTier]}`, tier: preTier, type: 'league' });
       }
       // Season-end fanbase growth/churn for every club based on trophies, promotion, and relegation
       let fanEndMul = 0.015;
@@ -9162,7 +10017,9 @@ export function finishSeasonComputation(s: GameState) {
             : isDcChamp
               ? 'แชมป์ถ้วยดิวิชั่น'
               : isChamp && preTier != null
-                ? `แชมป์ ${TN[preTier]}`
+                ? preTier === 0 && tm.id === t3NatWinnerId
+                  ? `แชมป์ประเทศไทย ${TN[0]}`
+                  : `แชมป์ ${TN[preTier]}`
                 : preTier != null && tm.tier > preTier
                   ? 'เลื่อนชั้น'
                   : undefined;
@@ -9250,7 +10107,7 @@ export function finishSeasonComputation(s: GameState) {
     }
   }
 
-  const stText = nt > mt ? 'เลื่อนชั้น! 🎉' : nt < mt ? 'ตกชั้น' : ch ? 'แชมป์ลีก!' : 'อยู่ชั้นเดิม';
+  const stText = nt > mt ? 'เลื่อนชั้น! 🎉' : nt < mt ? 'ตกชั้น' : isT3NatChamp ? 'แชมป์ประเทศ T3! 🏆' : ch ? 'แชมป์ลีก!' : 'อยู่ชั้นเดิม';
   const leagueBestScorer = bs && bs.q.sg ? `${bs.q.n} (${bs.t.name}) ${bs.q.sg} ประตู` : '';
   const leagueBestAssist = ba && ba.q.sa ? `${ba.q.n} (${ba.t.name}) ${ba.q.sa} ครั้ง` : '';
 
@@ -9320,7 +10177,7 @@ export function finishSeasonComputation(s: GameState) {
     tier: mt,
     nextTier: nt,
     rank: pos,
-    totalTeams: tb[mt].length,
+    totalTeams: userTable.length,
     played: meTeam.p,
     won: meTeam.w,
     drawn: meTeam.d,
@@ -9374,7 +10231,7 @@ export function finishSeasonComputation(s: GameState) {
     mt,
     nt,
     pos,
-    totalTeams: tb[mt].length,
+    totalTeams: userTable.length,
     ch,
     cupStatus,
     asiaStatus,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Check, ChevronRight, FolderInput, Minus, Package, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ChevronRight, Fingerprint, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
@@ -8,7 +8,8 @@ import { KIT_PATTERNS } from '../data/crestAndKitData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, getTeamClubIdentity, SPW, APPEARANCE_ORIGIN_PRESETS, getPresetGroupProfile, rndVis, type AppearancePresetGroup, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort, getClubLevelAndGrantMeta } from '../engine/simulation';
-import { applyModToTeamsArray, getActiveMod } from '../engine/mods';
+import { T3_ZONE_NAMES, getT3ZoneLabel } from '../data/leagueStructures';
+import { applyModToTeamsArray, getActiveMod, getGameBrandDisplay } from '../engine/mods';
 import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
 import { ModManagerModal } from '../modals/ModManagerModal';
@@ -241,6 +242,7 @@ export const MainMenu = React.memo<{
   const [previewClubs, setPreviewClubs] = useState<{ names: string[][]; t0: Team[] } | null>(null);
   const [selectedClubIdx, setSelectedClubIdx] = useState<number>(0);
   const [clubFilter, setClubFilter] = useState<'all' | 'top' | 'mid' | 'underdog'>('all');
+  const [t3ZoneFilter, setT3ZoneFilter] = useState<'all' | 0 | 1>('all');
   const [diff, setDiff] = useState<number>(1);
   const [confirmDelSlot, setConfirmDelSlot] = useState<{ mode: GameMode; k: number; d: GameState } | null>(null);
   const [confirmSaveSlot, setConfirmSaveSlot] = useState<{ mode: GameMode; k: number; d: GameState } | null>(null);
@@ -262,6 +264,7 @@ export const MainMenu = React.memo<{
   );
   const [showImport, setShowImport] = useState(false);
   const [showModModal, setShowModModal] = useState(false);
+  const [modAuthorized, setModAuthorized] = useState(false);
   const activeModInfo = useMemo(() => {
     void refresh;
     return getActiveMod();
@@ -414,7 +417,7 @@ export const MainMenu = React.memo<{
     SFX.tap();
     clearNamePool();
     const names = genClubNames();
-    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true }));
+    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true, zone: i < 12 ? 0 : 1 }));
     const activeMod = getActiveMod();
     if (activeMod) {
       applyModToTeamsArray(t0, activeMod);
@@ -424,6 +427,7 @@ export const MainMenu = React.memo<{
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
     setClubFilter('all');
+    setT3ZoneFilter('all');
     goStep('ms');
   };
 
@@ -431,7 +435,7 @@ export const MainMenu = React.memo<{
     SFX.tap();
     clearNamePool();
     const names = genClubNames();
-    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true }));
+    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true, zone: i < 12 ? 0 : 1 }));
     const activeMod = getActiveMod();
     if (activeMod) {
       applyModToTeamsArray(t0, activeMod);
@@ -440,6 +444,7 @@ export const MainMenu = React.memo<{
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
     setClubFilter('all');
+    setT3ZoneFilter('all');
   };
 
   const applyFaceTraits = (f: ReturnType<typeof rollFaceTraitsFor>) => {
@@ -772,7 +777,11 @@ export const MainMenu = React.memo<{
       };
     });
 
-    const filteredClubs = clubMetaList.filter((item) => clubFilter === 'all' || item.tierBucket === clubFilter);
+    const filteredClubs = clubMetaList.filter(
+      (item) =>
+        (clubFilter === 'all' || item.tierBucket === clubFilter) &&
+        (t3ZoneFilter === 'all' || (item.team.zone ?? 0) === t3ZoneFilter)
+    );
     const activeIdx = previewClubs.t0[selectedClubIdx] ? selectedClubIdx : 0;
     const selectedTeam = previewClubs.t0[activeIdx];
     const selectedMeta = clubMetaList[activeIdx] || clubMetaList[0];
@@ -804,19 +813,21 @@ export const MainMenu = React.memo<{
 
     const clubCount = filteredClubs.length;
     const gridLayoutCls =
-      clubCount > 12
-        ? 'grid-cols-4 grid-rows-4'
-        : clubCount > 8
-          ? 'grid-cols-4 grid-rows-3'
-          : clubCount > 6
-            ? 'grid-cols-4 grid-rows-2'
-            : clubCount > 4
-              ? 'grid-cols-3 grid-rows-2'
-              : clubCount > 2
-                ? 'grid-cols-2 grid-rows-2'
-                : clubCount === 2
-                  ? 'grid-cols-2 grid-rows-1'
-                  : 'grid-cols-1 grid-rows-1';
+      clubCount > 16
+        ? 'grid-cols-4 sm:grid-cols-6 grid-rows-6 sm:grid-rows-4'
+        : clubCount > 12
+          ? 'grid-cols-4 grid-rows-4'
+          : clubCount > 8
+            ? 'grid-cols-4 grid-rows-3'
+            : clubCount > 6
+              ? 'grid-cols-4 grid-rows-2'
+              : clubCount > 4
+                ? 'grid-cols-3 grid-rows-2'
+                : clubCount > 2
+                  ? 'grid-cols-2 grid-rows-2'
+                  : clubCount === 2
+                    ? 'grid-cols-2 grid-rows-1'
+                    : 'grid-cols-1 grid-rows-1';
 
     return (
       <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] safe-all p-1 sm:p-2 lg:p-3 mland:p-1">
@@ -838,7 +849,7 @@ export const MainMenu = React.memo<{
                     เลือกสโมสรเริ่มต้น
                   </h2>
                   <span className="hidden sm:inline mland:inline text-[11px] sm:text-xs mland:text-[9px] font-medium text-[var(--mut)] tabular shrink-0">
-                    ลีกจังหวัด · ช่อง #{targetSlot}
+                    ไทยลีก 3 (24 ทีม · 2 โซน) · ช่อง #{targetSlot}
                   </span>
                 </div>
               </div>
@@ -876,32 +887,63 @@ export const MainMenu = React.memo<{
           <div className="flex-1 min-h-0 w-full mx-auto px-1.5 sm:px-3 lg:px-4 mland:px-1.5 py-1.5 sm:py-2.5 lg:py-3 mland:py-1 overflow-hidden flex flex-col sm:grid mland:grid sm:grid-cols-[1.52fr_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.42fr_1fr] mland:grid-rows-[minmax(0,1fr)] gap-1.5 sm:gap-2.5 lg:gap-3.5 mland:gap-1.5">
             {/* Left Column: Filter Bar + Full-Size Club Grid */}
             <section className="flex-1 min-h-0 mland:h-full flex flex-col gap-1.5 sm:gap-2 mland:gap-1 overflow-hidden">
-              <div className="shrink-0 flex items-center justify-between gap-2 min-w-0">
-                <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
-                  {(
-                    [
-                      ['all', `ทั้งหมด (${clubMetaList.length})`],
-                      ['top', 'เต็งลีก'],
-                      ['mid', 'กลางตาราง'],
-                      ['underdog', 'ท้าทาย']
-                    ] as const
-                  ).map(([fk, fl]) => (
-                    <button
-                      key={fk}
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        setClubFilter(fk);
-                        const firstMatch = clubMetaList.find((c) => fk === 'all' || c.tierBucket === fk);
-                        if (firstMatch && fk !== 'all' && selectedMeta.tierBucket !== fk) {
-                          setSelectedClubIdx(firstMatch.idx);
-                        }
-                      }}
-                      className={`seg-btn sm:!px-3 sm:!py-1 sm:!text-xs ${clubFilter === fk ? 'seg-btn-active' : ''}`}
-                    >
-                      {fl}
-                    </button>
-                  ))}
+              <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5 min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                  <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
+                    {(
+                      [
+                        ['all', `ทั้งหมด (${clubMetaList.length})`],
+                        [0, `${T3_ZONE_NAMES[0].replace('โซน', '')} (${clubMetaList.filter((c) => (c.team.zone ?? 0) === 0).length})`],
+                        [1, `${T3_ZONE_NAMES[1].replace('โซน', '')} (${clubMetaList.filter((c) => (c.team.zone ?? 0) === 1).length})`]
+                      ] as const
+                    ).map(([zk, zl]) => (
+                      <button
+                        key={String(zk)}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setT3ZoneFilter(zk);
+                          const firstMatch = clubMetaList.find(
+                            (c) => (zk === 'all' || (c.team.zone ?? 0) === zk) && (clubFilter === 'all' || c.tierBucket === clubFilter)
+                          );
+                          if (firstMatch && zk !== 'all' && (selectedTeam.zone ?? 0) !== zk) {
+                            setSelectedClubIdx(firstMatch.idx);
+                          }
+                        }}
+                        className={`seg-btn sm:!px-2.5 sm:!py-1 sm:!text-xs ${t3ZoneFilter === zk ? 'seg-btn-active' : ''}`}
+                      >
+                        {zl}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
+                    {(
+                      [
+                        ['all', 'ทุกระดับ'],
+                        ['top', 'เต็งลีก'],
+                        ['mid', 'กลางตาราง'],
+                        ['underdog', 'ท้าทาย']
+                      ] as const
+                    ).map(([fk, fl]) => (
+                      <button
+                        key={fk}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setClubFilter(fk);
+                          const firstMatch = clubMetaList.find(
+                            (c) => (fk === 'all' || c.tierBucket === fk) && (t3ZoneFilter === 'all' || (c.team.zone ?? 0) === t3ZoneFilter)
+                          );
+                          if (firstMatch && fk !== 'all' && selectedMeta.tierBucket !== fk) {
+                            setSelectedClubIdx(firstMatch.idx);
+                          }
+                        }}
+                        className={`seg-btn sm:!px-2.5 sm:!py-1 sm:!text-xs ${clubFilter === fk ? 'seg-btn-active' : ''}`}
+                      >
+                        {fl}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <span className="hidden sm:inline-block mland:inline-block text-[11px] sm:text-xs mland:text-[9px] font-semibold text-[var(--mut)] tabular shrink-0 whitespace-nowrap">
                   {filteredClubs.length} สโมสร
@@ -1062,6 +1104,10 @@ export const MainMenu = React.memo<{
                       {selectedTeam.name}
                     </h3>
                     <div className="flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs mland:text-[8.5px] text-[var(--mut)] truncate tabular">
+                      <span className="font-semibold text-[var(--ink)]/80 shrink-0">
+                        {getT3ZoneLabel(selectedTeam.zone)}
+                      </span>
+                      <span aria-hidden="true">·</span>
                       <span
                         className={`font-semibold shrink-0 ${
                           selectedMeta.tierBucket === 'top'
@@ -2505,53 +2551,70 @@ export const MainMenu = React.memo<{
       {/* Framed Main Hub Stage with Comfortable Vertical & Horizontal Breathing Room */}
       <div className="relative z-10 w-full max-w-6xl h-full max-h-[82%] sm:max-h-[min(78%,600px)] mland:max-h-[84%] mx-auto my-auto rounded-3xl mland:rounded-2xl border border-white/14 bg-[#07130d]/82 shadow-[0_24px_64px_rgba(0,0,0,0.68)] px-3.5 sm:px-5 mland:px-3.5 py-3 sm:py-4 mland:py-2 flex flex-col gap-3 mland:gap-1.5 overflow-hidden">
         {/* Top Stadium Masthead */}
-        <header className="shrink-0 flex items-center justify-between gap-3 mland:gap-2">
-          <div className="flex items-center gap-3 mland:gap-2 min-w-0">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 mland:w-8 mland:h-8 rounded-xl bg-white/12 border border-white/15 flex items-center justify-center shrink-0 shadow-lg">
-              <svg viewBox="0 0 40 40" className="w-7 h-7 sm:w-8 sm:h-8 mland:w-6 mland:h-6" aria-hidden="true">
-                <defs>
-                  <linearGradient id="pitch_crest" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stopColor="#123a26" />
-                    <stop offset="1" stopColor="#22794b" />
-                  </linearGradient>
-                  <radialGradient id="flood_crest" cx="0.5" cy="0.15" r="0.65">
-                    <stop offset="0" stopColor="#fde68a" stopOpacity="0.7" />
-                    <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
-                  </radialGradient>
-                </defs>
-                <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#pitch_crest)" />
-                <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#flood_crest)" />
-                <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.88">
-                  <path d="M5 24h30" />
-                  <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
-                </g>
-                <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
-              </svg>
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl mland:text-lg font-extrabold font-display tracking-wide leading-none text-white">
-                ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
-              </h1>
-              <p className="text-[11px] sm:text-xs mland:text-[9.5px] font-medium text-emerald-100/75 truncate mt-0.5">
-                เกมจำลองคุมสโมสร &amp; นักเตะอาชีพไทย
-              </p>
-            </div>
-          </div>
+        {(() => {
+          const brand = getGameBrandDisplay(activeModInfo);
+          return (
+            <header className="shrink-0 flex items-center justify-between gap-3 mland:gap-2">
+              <div className="flex items-center gap-3 mland:gap-2 min-w-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 mland:w-8 mland:h-8 rounded-xl bg-white/12 border border-white/15 flex items-center justify-center shrink-0 shadow-lg overflow-hidden">
+                  {brand.logoUrl ? (
+                    <img
+                      src={brand.logoUrl}
+                      alt={brand.title}
+                      className="w-8 h-8 sm:w-9 sm:h-9 mland:w-6 mland:h-6 object-contain rounded-lg"
+                    />
+                  ) : (
+                    <svg viewBox="0 0 40 40" className="w-7 h-7 sm:w-8 sm:h-8 mland:w-6 mland:h-6" aria-hidden="true">
+                      <defs>
+                        <linearGradient id="pitch_crest" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0" stopColor="#123a26" />
+                          <stop offset="1" stopColor="#22794b" />
+                        </linearGradient>
+                        <radialGradient id="flood_crest" cx="0.5" cy="0.15" r="0.65">
+                          <stop offset="0" stopColor="#fde68a" stopOpacity="0.7" />
+                          <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
+                        </radialGradient>
+                      </defs>
+                      <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#pitch_crest)" />
+                      <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#flood_crest)" />
+                      <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.88">
+                        <path d="M5 24h30" />
+                        <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
+                      </g>
+                      <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
+                    </svg>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl mland:text-lg font-extrabold font-display tracking-wide leading-none text-white truncate">
+                    {brand.isCustomTitle ? (
+                      brand.title
+                    ) : (
+                      <>
+                        ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
+                      </>
+                    )}
+                  </h1>
+                  <p className="text-[11px] sm:text-xs mland:text-[9.5px] font-medium text-emerald-100/75 truncate mt-0.5">
+                    {brand.subtitle}
+                  </p>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => { SFX.tap(); setShowModModal(true); }}
-              title={activeModInfo ? `Mod ที่เปิดอยู่: ${activeModInfo.name}` : 'จัดการ Mod ลีกและสโมสร (.json)'}
-              className={`h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg border text-[11px] sm:text-xs mland:text-[10px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.28)] transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-                activeModInfo
-                  ? 'border-amber-300/60 bg-amber-500/25 hover:bg-amber-500/35 text-amber-100'
-                  : 'border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-white'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[#fad05a] shrink-0" />
-              <span className="max-w-[110px] truncate">{activeModInfo ? `Mod: ${activeModInfo.name}` : 'Mod'}</span>
-            </button>
+              <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setShowModModal(true); }}
+                  aria-label="สแกนลายนิ้วมือ"
+                  title="สแกนลายนิ้วมือ"
+                  className={`w-8 h-8 sm:w-9 sm:h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg inline-flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                    modAuthorized
+                      ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-400/35'
+                      : 'text-white/35 hover:text-white/85 hover:bg-white/10'
+                  }`}
+                >
+                  <Fingerprint className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                </button>
             <button
               type="button"
               onClick={() => { SFX.tap(); openImportModal(); }}
@@ -2560,9 +2623,11 @@ export const MainMenu = React.memo<{
               <FolderInput className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-emerald-200 shrink-0" />
               <span>โหลดเซฟที่บันทึกไว้</span>
             </button>
-            <PWAInstallButton variant="compact" tone="stadium" onToast={onToast} />
-          </div>
-        </header>
+              <PWAInstallButton variant="compact" tone="stadium" onToast={onToast} />
+            </div>
+          </header>
+          );
+        })()}
 
         {/* Main 2 Columns: Col 1 = In-Game Collector Athlete Card | Col 2 = 2-Column Save & Mode Hub */}
         <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[240px_1fr] md:grid-cols-[252px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[214px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-3 sm:gap-4 mland:gap-3 overflow-y-auto sm:overflow-hidden mland:overflow-hidden items-stretch">
@@ -2819,6 +2884,9 @@ export const MainMenu = React.memo<{
 
       {showModModal && (
         <ModManagerModal
+          authorized={modAuthorized}
+          onAuthorize={() => setModAuthorized(true)}
+          onLock={() => setModAuthorized(false)}
           onClose={() => {
             setShowModModal(false);
             setRefresh((x) => x + 1);

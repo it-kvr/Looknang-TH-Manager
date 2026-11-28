@@ -352,6 +352,8 @@ export const packSaveTeam = (t: Team): unknown[] => {
     });
   }
   if (t.trophies && t.trophies.length) tex.tr = t.trophies;
+  if (t.zone !== undefined) tex.zn = t.zone;
+  if (t.leagueCode) tex.lc = t.leagueCode;
   if (t.fans != null) tex.fn = t.fans;
   if (t.seasonObj != null) tex.so = t.seasonObj;
   const arr: unknown[] = [
@@ -427,6 +429,8 @@ export const unpackSaveTeam = (raw: unknown): Team => {
     });
   }
   if (Array.isArray(tex.tr)) tm.trophies = tex.tr as TrophyRecord[];
+  if (tex.zn !== undefined) tm.zone = Number(tex.zn);
+  if (tex.lc !== undefined) tm.leagueCode = String(tex.lc);
   if (tex.fn !== undefined) tm.fans = Number(tex.fn);
   if (tex.so !== undefined) tm.seasonObj = Number(tex.so);
   return tm;
@@ -436,8 +440,15 @@ export const packFixturesCompact = (rounds: [number, number][][]): unknown => {
   const canCompact = rounds.every((rd) =>
     rd.every(([h, a]) => h >= 0 && h < 64 && a >= 0 && a < 64)
   );
-  if (!canCompact) return rounds;
-  return 'F:' + rounds.map((rd) => rd.map(([h, a]) => SAVE_B64U[h] + SAVE_B64U[a]).join('')).join('|');
+  if (canCompact) {
+    return 'F:' + rounds.map((rd) => rd.map(([h, a]) => SAVE_B64U[h] + SAVE_B64U[a]).join('')).join('|');
+  }
+  return (
+    'W:' +
+    rounds
+      .map((rd) => rd.map(([h, a]) => `${h.toString(36)},${a.toString(36)}`).join(';'))
+      .join('|')
+  );
 };
 
 export const unpackFixturesCompact = (raw: unknown): [number, number][][] => {
@@ -454,6 +465,22 @@ export const unpackFixturesCompact = (raw: unknown): [number, number][][] => {
       return pairs;
     });
   }
+  if (typeof raw === 'string' && raw.startsWith('W:')) {
+    const body = raw.slice(2);
+    if (!body) return [];
+    return body.split('|').map((seg) => {
+      if (!seg) return [];
+      return seg
+        .split(';')
+        .map((pair) => {
+          const [hs, as] = pair.split(',');
+          const h = parseInt(hs, 36);
+          const a = parseInt(as, 36);
+          return Number.isFinite(h) && Number.isFinite(a) ? ([h, a] as [number, number]) : null;
+        })
+        .filter((x): x is [number, number] => Boolean(x));
+    });
+  }
   return Array.isArray(raw) ? (raw as [number, number][][]) : [];
 };
 
@@ -465,6 +492,12 @@ export const packSaveState = (s: GameState): Record<string, unknown> => {
   out.fx = packFixturesCompact(s.fx || []);
   if (s.fxo) {
     out.fxo = Object.fromEntries(Object.entries(s.fxo).map(([k, v]) => [k, packFixturesCompact(v)]));
+  }
+  if (s.fxZones) {
+    out.fxZones = Object.fromEntries(Object.entries(s.fxZones).map(([k, v]) => [k, packFixturesCompact(v)]));
+  }
+  if (s.fxWorld) {
+    out.fxWorld = Object.fromEntries(Object.entries(s.fxWorld).map(([k, v]) => [k, packFixturesCompact(v)]));
   }
   if (Array.isArray(s.shortlist) && s.shortlist.length) {
     out.shortlist = s.shortlist.map((entry) => ({
@@ -506,6 +539,16 @@ export const unpackSaveState = (raw: Record<string, unknown>): GameState => {
   if (raw.fxo && typeof raw.fxo === 'object') {
     copy.fxo = Object.fromEntries(
       Object.entries(raw.fxo as Record<string, unknown>).map(([k, v]) => [k, unpackFixturesCompact(v)])
+    );
+  }
+  if (raw.fxZones && typeof raw.fxZones === 'object') {
+    copy.fxZones = Object.fromEntries(
+      Object.entries(raw.fxZones as Record<string, unknown>).map(([k, v]) => [Number(k), unpackFixturesCompact(v)])
+    );
+  }
+  if (raw.fxWorld && typeof raw.fxWorld === 'object') {
+    copy.fxWorld = Object.fromEntries(
+      Object.entries(raw.fxWorld as Record<string, unknown>).map(([k, v]) => [k, unpackFixturesCompact(v)])
     );
   }
   if (Array.isArray(raw.shortlist)) {
