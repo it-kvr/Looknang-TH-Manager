@@ -634,15 +634,15 @@ export const PWAInstallButton: React.FC<{
           <button
             type="button"
             onClick={handleInstallClick}
-            className="w-full flex items-center justify-between gap-3 p-2.5 mland:p-2 rounded-xl bg-[var(--surface)] hover:bg-[var(--g-soft)]/50 border border-[var(--line)] hover:border-[var(--g)]/50 text-left cursor-pointer transition-all"
+            className="w-full flex items-center justify-between gap-3 p-2.5 mland:p-2 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)] border border-[var(--line)]/80 hover:border-[var(--g)]/50 text-left cursor-pointer transition-all"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <img src={iconUrl} alt="ลูกหนังไทย" className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl shrink-0" />
+              <img src={iconUrl} alt="ลูกหนังไทย" className="w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-lg shrink-0" />
               <div className="min-w-0">
-                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] truncate">
+                <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] truncate">
                   ติดตั้งแอปลงเครื่อง
                 </div>
-                <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
                   เล่นเต็มจอ ไม่มีแถบเบราว์เซอร์ และเล่นออฟไลน์ได้
                 </div>
               </div>
@@ -655,9 +655,9 @@ export const PWAInstallButton: React.FC<{
         )}
 
         {needRefresh ? (
-          <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 text-xs flex items-center justify-between gap-2">
+          <div className="p-2.5 mland:p-2 rounded-xl mland:rounded-lg bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 text-xs flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="font-bold text-[#7a4f00] dark:text-[var(--lamp)] mland:text-[10.5px] flex items-center gap-1.5">
+              <div className="font-bold text-[#7a4f00] dark:text-[var(--lamp)] mland:text-[10px] flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง</span>
               </div>
@@ -676,11 +676,11 @@ export const PWAInstallButton: React.FC<{
             </button>
           </div>
         ) : isInstalled ? (
-          <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 text-xs flex items-center gap-2">
+          <div className="p-2.5 mland:p-2 rounded-xl mland:rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/35 text-xs flex items-center gap-2.5">
             <CheckCircle2 className="w-4 h-4 text-[var(--g)] shrink-0" />
             <div className="min-w-0">
-              <div className="font-bold text-[var(--g)] mland:text-[10.5px] truncate">ติดตั้งแอปลงเครื่องแล้ว</div>
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">ตัวเกมเป็นเวอร์ชันล่าสุด</div>
+              <div className="font-bold text-[var(--g)] mland:text-[10px] truncate">ติดตั้งแอปลงเครื่องแล้ว</div>
+              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ตัวเกมเป็นเวอร์ชันล่าสุด</div>
             </div>
           </div>
         ) : null}
