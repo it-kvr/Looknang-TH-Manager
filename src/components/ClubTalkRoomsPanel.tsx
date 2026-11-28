@@ -36,7 +36,7 @@ import {
 } from '../engine/wellbeing';
 import { DeltaValue, EffectText } from './DeltaText';
 import { NavFocusBadge } from './NavFocusBanner';
-import { PlayerFace } from './SvgVisuals';
+import { ClubCrest, PlayerFace } from './SvgVisuals';
 import { PositionBadge } from './PositionBadge';
 import { CaptainBadge } from './CaptainBadge';
 import { getStaminaMeta } from './StaminaBar';
@@ -867,40 +867,80 @@ export const ClubTalkRoomsPanel: React.FC<{
           })()}
         </div>
       ) : (
-        /* ==================== ROOM 2: TEAM MEETING ROOM + TEAM OFFICE VIEW ==================== */
+        /* ==================== ROOM 2: TEAM MEETING ROOM (OWN CLUB ONLY) ==================== */
         <div
           data-focus-id="team-talk"
           className={`flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden ${
             isFocused('team-talk') ? 'task-focus-spotlight' : ''
           }`}
         >
-          {/* Compact Group Team Meeting Strip */}
-          <div className="shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5 mland:space-y-1">
+          {/* All-Hands Club Meeting Header & Agenda Selector */}
+          <div className="shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 space-y-2 mland:space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <h3 className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] text-[var(--ink)] flex items-center gap-1.5 truncate">
-                  <span>🏛️ ประชุมรวมทั้งสโมสร</span>
-                  {isFocused('team-talk') && <NavFocusBadge />}
-                </h3>
-                <span className="hidden sm:inline text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                  · ขวัญ {state.mor ?? 55}% · ใจเฉลี่ย {avgMental}/100
-                  {lowMentalPlayers.length > 0 ? ` · ใจต่ำ ${lowMentalPlayers.length} คน` : ''}
-                </span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="shrink-0 w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-center [&>svg]:w-6 [&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
+                  <ClubCrest
+                    name={me.name}
+                    size={24}
+                    team={me}
+                    club={state.club}
+                    isMyClub={state.mode === 'm'}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-extrabold text-xs sm:text-sm mland:text-[10.5px] text-[var(--ink)] flex items-center gap-1.5 truncate">
+                    <span className="truncate">🏛️ ประชุมรวมทั้งสโมสร · {me.name}</span>
+                    {isFocused('team-talk') && <NavFocusBadge />}
+                  </h3>
+                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular flex flex-wrap items-center gap-x-1.5">
+                    <span>
+                      ขวัญทีม <b className="text-[var(--ink)]">{state.mor ?? 55}%</b>
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      ใจเฉลี่ย <b className={getWellbeingTierMeta(avgMental, 'mental', false).txtCls}>{avgMental}/100</b>
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      กายเฉลี่ย <b className={getWellbeingTierMeta(avgPhys, 'phys', false).txtCls}>{avgPhys}/100</b>
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      เข้าใจแผน <b className="text-[var(--ink)]">{me.tacFam ?? 65}%</b>
+                    </span>
+                    {lowMentalPlayers.length > 0 && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-bold text-amber-700 dark:text-[var(--lamp)]">
+                          ใจต่ำ {lowMentalPlayers.length} คน
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
+
               <span
                 className={`text-[10.5px] mland:text-[8.5px] font-bold tabular shrink-0 ${
-                  teamTalkUsed ? 'text-[var(--mut)]' : 'text-[var(--g)]'
+                  teamTalkUsed ? 'text-[var(--g)]' : 'text-[var(--g)]'
                 }`}
               >
                 {teamTalkUsed
-                  ? `✓ ${plan.lastTeamTalkNote || usedOpt?.label || 'ประชุมรอบนี้ไปแล้ว'}`
-                  : '● พร้อมประชุมรวม 1/1 (ไม่หักโควตาออฟฟิศ)'}
+                  ? `✓ ${plan.lastTeamTalkNote || usedOpt?.label || 'ประชุมรอบนี้แล้ว'}`
+                  : 'พร้อมประชุมรวม 1/1 · ไม่หักโควตาออฟฟิศ'}
               </span>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 mland:gap-1">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mland:gap-1">
               {TEAM_TALK_OPTIONS.map((opt) => {
                 const isLast = teamTalkUsed && plan.lastTeamTalkId === opt.id;
+                const isRecommended =
+                  !teamTalkUsed &&
+                  ((opt.id === 'calm' && (lowMentalPlayers.length >= 2 || avgMental < 66)) ||
+                    (opt.id === 'tactics' && (me.tacFam ?? 65) < 76) ||
+                    (opt.id === 'inspire' && (state.mor ?? 55) < 62) ||
+                    (opt.id === 'praise' && avgPhys < 74));
+
                 return (
                   <button
                     key={opt.id}
@@ -908,30 +948,47 @@ export const ClubTalkRoomsPanel: React.FC<{
                     disabled={teamTalkUsed}
                     onClick={() => handleTeamTalk(opt.id)}
                     title={opt.whenToUse}
-                    className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border text-left transition-all cursor-pointer disabled:cursor-default ${
+                    className={`px-3 py-2 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border text-left transition-all cursor-pointer disabled:cursor-default space-y-0.5 ${
                       isLast
                         ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]/35'
                         : teamTalkUsed
                           ? 'bg-[var(--surface-2)]/40 border-[var(--line)] opacity-55'
-                          : 'bg-[var(--surface-2)]/65 border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/35'
+                          : isRecommended
+                            ? 'bg-[var(--g-soft)]/25 border-[var(--g)]/55 hover:border-[var(--g)] hover:bg-[var(--g-soft)]/45'
+                            : 'bg-[var(--surface-2)]/65 border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/35'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1 text-[11px] mland:text-[9px] font-extrabold text-[var(--ink)]">
+                    <div className="flex items-center justify-between gap-1.5 text-[11.5px] mland:text-[9px] font-extrabold text-[var(--ink)]">
                       <span className="truncate">
                         {opt.icon} {opt.label}
                       </span>
-                      {isLast && <span className="text-[var(--g)] shrink-0">✓</span>}
+                      {isLast ? (
+                        <span className="text-[10px] mland:text-[8px] font-bold text-[var(--g)] shrink-0">✓ แล้ว</span>
+                      ) : isRecommended ? (
+                        <span className="text-[9.5px] mland:text-[7.5px] font-bold text-[var(--g)] shrink-0">แนะนำ</span>
+                      ) : null}
                     </div>
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] truncate tabular">
+                    <div className="text-[10px] mland:text-[7.5px] text-[var(--mut)] truncate tabular">
                       <EffectText text={opt.effectHint} />
                     </div>
                   </button>
                 );
               })}
             </div>
+
+            {teamTalkUsed && usedOpt && (
+              <div className="hidden sm:flex items-center justify-between gap-3 pt-1.5 border-t border-[var(--line)]/70 text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
+                <span className="truncate">
+                  🗣️ <b className="text-[var(--ink)]">สารจากห้องประชุม:</b> {usedOpt.coachSpeech}
+                </span>
+                <span className="shrink-0 text-[var(--g)] font-bold tabular">
+                  รอแข่งนัดถัดไปเพื่อประชุมรอบใหม่
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Categorized Meeting Rooms & Individual Coach/Player Talk Workspace */}
+          {/* Own Club Meeting Hall: Coach Briefing & Squad Individual Care */}
           <TeamOfficeView
             state={state}
             onUpdateState={onUpdateState}
