@@ -418,7 +418,11 @@ export const SeasonEndModal: React.FC<{
                 <WdlRecordBadges w={arc?.won ?? me.w} d={arc?.drawn ?? me.d} l={arc?.lost ?? me.l} size="xs" />
               </div>
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
-                ยิง {arc?.gf ?? me.gf} เสีย {arc?.ga ?? me.ga} ({gd >= 0 ? `+${gd}` : gd})
+                ยิง {arc?.gf ?? me.gf} เสีย {arc?.ga ?? me.ga} (
+                <span className={gd > 0 ? 'text-[var(--g)] font-bold' : gd < 0 ? 'text-[var(--red)] font-bold' : ''}>
+                  {gd >= 0 ? `+${gd}` : gd}
+                </span>
+                )
               </div>
             </div>
 
@@ -451,7 +455,7 @@ export const SeasonEndModal: React.FC<{
                   <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${state.sack === 1 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`} />
                   <span>บอร์ด {state.bd ?? 50}%</span>
                   {summary.leaguePrize > 0 && (
-                    <span className="ml-auto text-[#9a6700] dark:text-[var(--lamp)] text-xs mland:text-[10px]">
+                    <span className="ml-auto text-[var(--g)] font-extrabold text-xs mland:text-[10px]">
                       +{fmtMoney(summary.leaguePrize)}
                     </span>
                   )}

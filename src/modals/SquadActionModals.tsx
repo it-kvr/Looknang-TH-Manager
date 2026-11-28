@@ -148,8 +148,21 @@ export const SquadRenewModal: React.FC<{
                 <b className="tabular">{ch}%</b>
               </div>
               <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
-                ค่าเหนื่อยใหม่: <b className="text-[var(--ink)]">{fmtMoneyNum(newWg)}/นัด</b>
-                {bonus ? ` · โบนัสเซ็น ${fmtMoneyNum(bonus)}` : ''}
+                ค่าเหนื่อยใหม่:{' '}
+                <b className={wageDelta > 0.05 ? 'text-[var(--red)]' : wageDelta < -0.05 ? 'text-[var(--g)]' : 'text-[var(--ink)]'}>
+                  {fmtMoneyNum(newWg)}/นัด
+                </b>
+                {Math.abs(wageDelta) >= 0.05 && (
+                  <span className={`ml-1 font-bold ${wageDelta > 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                    ({wageDelta > 0 ? `-${fmtMoneyNum(wageDelta)} ลดงบ` : `+${fmtMoneyNum(Math.abs(wageDelta))} ประหยัด`})
+                  </span>
+                )}
+                {bonus ? (
+                  <>
+                    {' · โบนัสเซ็น '}
+                    <b className="text-[var(--red)]">-{fmtMoneyNum(bonus)}</b>
+                  </>
+                ) : ''}
               </div>
             </div>
             {renewOverCap && (
@@ -635,7 +648,7 @@ export const SquadReleaseModal: React.FC<{
     onClose();
     onToast(
       `ปล่อยตัวนักเตะ ${relOut.length || check.eligiblePlayers.length} ราย${
-        costOut > 0 ? ` (ค่าชดเชย ${fmtMoney(costOut)})` : ''
+        costOut > 0 ? ` (ค่าชดเชย -${fmtMoney(costOut)})` : ''
       }`
     );
   };

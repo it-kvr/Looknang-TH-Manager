@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSea
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp, capMoney } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
 import { ensureTeamWellbeing, getActiveFavBoost, getWellbeingOvrAdjustment, initPlayerWellbeing } from './wellbeing';
 
 export const NMU = new Set<string>();
@@ -18,27 +18,148 @@ export function genPlayerName(): string {
   return n;
 }
 
+const THAI_FIRST_SET = new Set<string>([
+  ...FN,
+  ...A1.flatMap((a) => A2.map((b) => a + b))
+]);
+const THAI_LAST_SET = new Set<string>([
+  ...SN,
+  ...S1.flatMap((a) => S2.map((b) => a + b))
+]);
+
+export function isLikelyGeneratedThaiName(name?: string | null): boolean {
+  if (!name) return false;
+  const parts = name.trim().split(/\s+/);
+  if (parts.length !== 2) return false;
+  return THAI_FIRST_SET.has(parts[0]) && THAI_LAST_SET.has(parts[1]);
+}
+
+export function genForeignPlayerName(
+  region: ForeignNameRegion = 'intl',
+  opts?: { allowImport?: boolean; excludeNames?: Set<string> }
+): string {
+  const useImport = Boolean(opts?.allowImport && region !== 'intl' && Math.random() < 0.15);
+  const pickedRegion: ForeignNameRegion = useImport ? 'intl' : region;
+  const pool = FOREIGN_NAME_POOLS[pickedRegion] || FOREIGN_NAME_POOLS.intl;
+  const familyFirst = pickedRegion === 'kr' || pickedRegion === 'cn' || pickedRegion === 'vn';
+  let n = '';
+  for (let i = 0; i < 60; i++) {
+    const first = P(pool.first);
+    const last = P(pool.last);
+    n = familyFirst ? `${last} ${first}` : `${first} ${last}`;
+    if (!NMU.has(n) && !opts?.excludeNames?.has(n)) break;
+  }
+  NMU.add(n);
+  return n;
+}
+
+export function localizeForeignTeams(teams?: Team[] | null): boolean {
+  if (!Array.isArray(teams)) return false;
+  let changed = false;
+  const existingNames = new Set<string>();
+  teams.forEach((tm) => tm.sq?.forEach((q) => existingNames.add(q.n)));
+
+  teams.forEach((tm) => {
+    if (!(tm.foreign === 1 || tm.tier >= 3) || !Array.isArray(tm.sq)) return;
+    const region = inferForeignTeamRegion(tm.name) || 'intl';
+    const renameMap = new Map<string, string>();
+
+    tm.sq.forEach((q) => {
+      if (q.me || q.signedSeason || q.loan) return;
+      if (!isLikelyGeneratedThaiName(q.n)) return;
+      const oldName = q.n;
+      const newName = genForeignPlayerName(region, {
+        allowImport: true,
+        excludeNames: existingNames
+      });
+      existingNames.add(newName);
+      renameMap.set(oldName, newName);
+      q.n = newName;
+      changed = true;
+    });
+
+    if (renameMap.size > 0) {
+      if (Array.isArray(tm.lu)) {
+        tm.lu = tm.lu.map((name) => renameMap.get(name) || name);
+      }
+      if (tm.cap && renameMap.has(tm.cap)) {
+        tm.cap = renameMap.get(tm.cap);
+      }
+      if (tm.setPieces) {
+        if (tm.setPieces.corner && renameMap.has(tm.setPieces.corner)) {
+          tm.setPieces.corner = renameMap.get(tm.setPieces.corner);
+        }
+        if (tm.setPieces.freekick && renameMap.has(tm.setPieces.freekick)) {
+          tm.setPieces.freekick = renameMap.get(tm.setPieces.freekick);
+        }
+        if (tm.setPieces.penalty && renameMap.has(tm.setPieces.penalty)) {
+          tm.setPieces.penalty = renameMap.get(tm.setPieces.penalty);
+        }
+      }
+    }
+  });
+
+  return changed;
+}
+
 export function clearNamePool() {
   NMU.clear();
 }
 
 export function genClubNames(): string[][] {
   const u = new Set<string>();
-  const tg = [
-    ['เอฟซี', 'เอสซี', 'สปอร์ตคลับ', 'ยูธ', 'ซิตี้', ''],
-    ['เอฟซี', 'ยูไนเต็ด', 'ซิตี้', 'แอธเลติก', 'เรนเจอร์ส', 'ทาวน์', ''],
-    ['', 'ยูไนเต็ด', 'ซิตี้', 'เอฟซี', 'สตาร์', 'โรเวอร์ส', '']
+  const shuffle = <T,>(arr: T[]): T[] => {
+    const copy = arr.slice();
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = R(0, i);
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+  const suffixDecks: string[][] = [
+    // Tier 0: 5 standalone Thai monikers + 11 varied provincial suffixed names (capped per suffix)
+    ['', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ซิตี้', 'ซิตี้', 'เอสซี', 'เอสซี', 'ยูไนเต็ด', 'ทาวน์', 'ยูธ', 'คลับ'],
+    // Tier 1: 6 standalone regional monikers + 10 varied regional suffixed names
+    ['', '', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ยูไนเต็ด', 'ยูไนเต็ด', 'ซิตี้', 'ซิตี้', 'เอสซี', 'แอธเลติก', 'คลับ'],
+    // Tier 2: 7 standalone powerhouse monikers + 9 sleek top-flight club names
+    ['', '', '', '', '', '', '', 'เอฟซี', 'เอฟซี', 'เอฟซี', 'ยูไนเต็ด', 'ยูไนเต็ด', 'ซิตี้', 'ซิตี้', 'เอสซี', 'คลับ']
   ];
   return [0, 1, 2].map((t) => {
-    const pool = NG[t].slice().sort(() => Math.random() - 0.5);
+    const basePool = shuffle(NG[t]);
+    const monikerPool = shuffle(TIER_STANDALONE_CLUBS[t] || []);
+    const slots = shuffle(suffixDecks[t]);
     const out: string[] = [];
-    for (const base of pool) {
+    let baseIdx = 0;
+    let monikerIdx = 0;
+
+    for (const sx of slots) {
       if (out.length >= 16) break;
-      const sx = P(tg[t]);
-      const n = base + (sx ? ' ' + sx : '');
-      if (!u.has(n)) {
-        u.add(n);
-        out.push(n);
+      if (!sx && monikerIdx < monikerPool.length) {
+        const cand = monikerPool[monikerIdx++];
+        if (!u.has(cand)) {
+          u.add(cand);
+          out.push(cand);
+          continue;
+        }
+      }
+      while (baseIdx < basePool.length) {
+        const base = basePool[baseIdx++];
+        const useSx = sx || P(SFX0[t].filter(Boolean));
+        const cand = `${base} ${useSx}`.trim();
+        if (!u.has(cand)) {
+          u.add(cand);
+          out.push(cand);
+          break;
+        }
+      }
+    }
+
+    while (out.length < 16 && baseIdx < basePool.length) {
+      const base = basePool[baseIdx++];
+      const cand = `${base} ${P(SFX0[t].filter(Boolean))}`.trim();
+      if (!u.has(cand)) {
+        u.add(cand);
+        out.push(cand);
       }
     }
     return out;
@@ -198,6 +319,7 @@ export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
       }
       if (mePl?.no) d.p.no = mePl.no;
     }
+    localizeForeignTeams(d.teams);
     ensureAiTeamPhilosophies(d, false);
     d.teams.forEach((tm) => ensureTeamWellbeing(tm, d));
     d.money = capMoney(d.money);
@@ -896,7 +1018,13 @@ export function getPlayerBio(
   return { heightCm, weightKg, foot, footLabel, footShort, physiqueLabel };
 }
 
-export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: SubRole): Player {
+export function mkPlayer(
+  pos: Position,
+  baseOv: number,
+  yo?: boolean,
+  forceRo?: SubRole,
+  nameOpts?: { foreignRegion?: ForeignNameRegion; allowImport?: boolean; excludeNames?: Set<string> }
+): Player {
   const age = yo ? R(16, 18) : R(17, 34);
   const ov = yo ? clamp(baseOv + R(-6, 4), 20, 82) : clamp(baseOv + R(-9, 9), 25, 92);
   const talent = yo
@@ -905,8 +1033,14 @@ export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: 
   const potBoost = talent >= 80 ? R(4, 10) : 0;
   const ro = forceRo || SPW(pos);
   const bio = rollPlayerBio(pos, ro);
+  const playerName = nameOpts?.foreignRegion
+    ? genForeignPlayerName(nameOpts.foreignRegion, {
+        allowImport: nameOpts.allowImport,
+        excludeNames: nameOpts.excludeNames
+      })
+    : genPlayerName();
   const pl: Player = {
-    n: genPlayerName(),
+    n: playerName,
     pos,
     ro,
     sp: 0,
@@ -1089,10 +1223,16 @@ export function autoAssignTeamRoles(
   };
 }
 
-export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)): Team {
+export function mkTeam(
+  name: string,
+  tier: number,
+  id: number,
+  diff = R(-7, 7),
+  opts?: { foreign?: boolean; nameRegion?: ForeignNameRegion; allowImport?: boolean; keepName?: boolean }
+): Team {
   const kp = KIT_P[(id + tier * 5) % KIT_P.length];
   const hasSpace = name.includes(' ');
-  const sx = hasSpace ? '' : P(SFX0[tier] || ['']);
+  const sx = opts?.keepName || hasSpace ? '' : P(SFX0[tier] || ['']);
   const ph = pickClubPhilosophy(id, tier, diff, true);
   const fsdSlots = FSD[ph.form] || FSD['4-4-2'];
   const slotRolesByPos: Record<Position, SubRole[]> = { GK: [], DF: [], MF: [], FW: [] };
@@ -1112,6 +1252,9 @@ export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)):
     slotRolesByPos[pos].push(naturalRo);
   });
 
+  const foreignRegion = opts?.nameRegion || (opts?.foreign ? inferForeignTeamRegion(name) || 'intl' : undefined);
+  const allowImport = opts?.allowImport ?? Boolean(opts?.foreign);
+
   const baseOv = BASE[tier] + diff;
   const sq: Player[] = (
     [
@@ -1124,7 +1267,13 @@ export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)):
     const preferredRoles = slotRolesByPos[p];
     return Array.from({ length: c }, (_, idx) => {
       const forceRo = idx < preferredRoles.length ? preferredRoles[idx] : undefined;
-      return mkPlayer(p, baseOv + R(-4, 4), false, forceRo);
+      return mkPlayer(
+        p,
+        baseOv + R(-4, 4),
+        false,
+        forceRo,
+        foreignRegion ? { foreignRegion, allowImport } : undefined
+      );
     });
   });
 

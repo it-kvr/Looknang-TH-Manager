@@ -6,17 +6,17 @@ import {
   enterLandscapeFullscreen,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
-import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
+import type { GameMode, MainTab, NavIntent, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
 import { P, clamp, capMoney, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, saveSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
-import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
+import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK, localizeForeignTeams } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { resolveStateSponsorBrand } from './data/sponsorBrands';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
-import { getActiveFavBoost, updateTeamWellbeingAfterMatchday, type MatchdayWellbeingCtx } from './engine/wellbeing';
+import { getActiveFavBoost, getTeamFavoritePlayers, updateTeamWellbeingAfterMatchday, type MatchdayWellbeingCtx } from './engine/wellbeing';
 import { AppEntrySplash, AppToast, AppTopHud, AppNavDock, type NextMatchDescriptor } from './components/AppShellSections';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -94,7 +94,7 @@ export default function App() {
     return getSettings();
   });
   const [navResetSeq, setNavResetSeq] = useState(0);
-  const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
+  const [navIntent, setNavIntent] = useState<NavIntent | null>(null);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -168,9 +168,9 @@ export default function App() {
     });
   }, []);
 
-  const navigateToTab = useCallback((tab: MainTab, sub?: string) => {
+  const navigateToTab = useCallback((tab: MainTab, sub?: string, focus?: string, hint?: string) => {
     const resolvedTab: MainTab = tab === 'f' && sub === 'infra' ? 'u' : tab;
-    setNavIntent({ tab: resolvedTab, sub, ts: Date.now() });
+    setNavIntent({ tab: resolvedTab, sub, focus, hint, ts: Date.now() });
     setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
     navigateShallow((d) => {
@@ -295,6 +295,7 @@ export default function App() {
     flushPendingSave();
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
     const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier, money: capMoney(loaded.money) };
+    localizeForeignTeams(normalized.teams);
     ensureSeasonExtraCups(normalized);
     setPreMatch(null);
     setActiveMatch(null);
@@ -468,21 +469,55 @@ export default function App() {
     });
 
     const syncCupParticipantWellbeing = (participants: { team: Team; ctx: MatchdayWellbeingCtx }[]) => {
-      const prevFavBoost = me.favPlayer
-        ? getActiveFavBoost(me.sq.find((q) => q.n === me.favPlayer) || me.sq[0], me, d.p)
-        : 0;
+      const prevFavBoostMap = new Map(
+        getTeamFavoritePlayers(me).map((fp) => [fp.n, getActiveFavBoost(fp, me, fp.me ? d.p : null)])
+      );
       participants.forEach(({ team, ctx }) => {
         updateTeamWellbeingAfterMatchday(team, d, ctx);
       });
-      if (me.favPlayer) {
-        const favPl = me.sq.find((q) => q.n === me.favPlayer);
-        if (favPl) {
+      const curFavs = getTeamFavoritePlayers(me);
+      if (curFavs.length > 0) {
+        const boostedNow: { name: string; boost: number }[] = [];
+        const droppedNow: string[] = [];
+        curFavs.forEach((favPl) => {
           const nextBoost = getActiveFavBoost(favPl, me, favPl.me ? d.p : null);
           if (nextBoost > 0) {
-            pushFeed(d, 'ลูกรักโค้ช', `💖 ${favPl.n} สุขภาพใจ/กายดีเยี่ยม! รับพลังเสริมชั่วคราว +${nextBoost} OVR นัดถัดไป`, 'ok');
-          } else if (prevFavBoost > 0) {
-            pushFeed(d, 'ลูกรักโค้ช', `⚠️ ${favPl.n} สุขภาพจิตใจหรือร่างกายยังไม่ถึงเกณฑ์ โบนัสลูกรักชั่วคราวหมดลงแล้ว`, 'urg');
+            boostedNow.push({ name: favPl.n, boost: nextBoost });
+          } else if ((prevFavBoostMap.get(favPl.n) || 0) > 0) {
+            droppedNow.push(favPl.n);
           }
+        });
+        if (boostedNow.length === 1) {
+          pushFeed(
+            d,
+            'ลูกรักโค้ช',
+            `💖 ${boostedNow[0].name} สุขภาพใจ/กายดีเยี่ยม! รับพลังเสริมชั่วคราว +${boostedNow[0].boost} OVR นัดถัดไป`,
+            'ok'
+          );
+        } else if (boostedNow.length > 1) {
+          const summary = boostedNow.map((x) => `${x.name.split(' ')[0]} +${x.boost}`).join(', ');
+          pushFeed(
+            d,
+            'ลูกรักโค้ช',
+            `💖 ลูกรัก ${boostedNow.length} คนพร้อมปลุกพลัง! (${summary} OVR นัดถัดไป)`,
+            'ok'
+          );
+        }
+        if (droppedNow.length === 1) {
+          pushFeed(
+            d,
+            'ลูกรักโค้ช',
+            `⚠️ ${droppedNow[0]} สุขภาพจิตใจหรือร่างกายยังไม่ถึงเกณฑ์ โบนัสลูกรักชั่วคราวหมดลงแล้ว`,
+            'urg'
+          );
+        } else if (droppedNow.length > 1) {
+          const dropNames = droppedNow.map((n) => n.split(' ')[0]).join(', ');
+          pushFeed(
+            d,
+            'ลูกรักโค้ช',
+            `⚠️ ลูกรัก ${droppedNow.length} คน (${dropNames}) สุขภาพยังไม่ถึงเกณฑ์ โบนัสชั่วคราวหมดลงแล้ว`,
+            'urg'
+          );
         }
       }
     };
@@ -1454,6 +1489,7 @@ export default function App() {
         nextIsHome={nextIsHome}
         autoSkipMatch={effectiveAutoSkip}
         onNavigateToTab={navigateToTab}
+        onUpdateState={updateState}
         onTriggerNextStep={handleTriggerNextStep}
         onOpenNtModal={handleOpenNtModal}
         onOpenSettings={handleOpenSettings}
@@ -1490,6 +1526,7 @@ export default function App() {
               onInspectPlayer={handleInspectPlayer}
               onNavigate={navigateToTab}
               onToast={showToast}
+              navIntent={navIntent}
             />
           )}
           {curTab === 'r' && state.mode === 'm' && (
@@ -1499,6 +1536,7 @@ export default function App() {
               onUpdateState={updateState}
               onInspectPlayer={handleInspectPlayer}
               onToast={showToast}
+              navIntent={navIntent}
             />
           )}
           {curTab === 'k' && state.mode === 'm' && (
@@ -1532,6 +1570,7 @@ export default function App() {
               onUpdateState={updateState}
               onToast={showToast}
               onOpenSeasonStats={handleOpenSeasonStats}
+              navIntent={navIntent}
             />
           )}
           {curTab === 'k' && state.mode === 'p' && (

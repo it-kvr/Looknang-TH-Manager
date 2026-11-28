@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { MainTab, Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
+import type { MainTab, NavIntent, Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
+import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
@@ -26,7 +27,9 @@ import {
   getPlayerMentalScore,
   getPlayerPhysScore,
   getTeamCareQuotaInfo,
-  getWellbeingTierMeta
+  getTeamFavoritePlayers,
+  getWellbeingTierMeta,
+  isTeamFavoritePlayer
 } from '../engine/wellbeing';
 
 type SquadSortKey = 'pos' | 'ov' | 'age' | 'fit' | 'form' | 'val' | 'goals';
@@ -38,7 +41,9 @@ export const SquadTacticsView = React.memo<{
   onInspectPlayer: (player: Player, team: Team) => void;
   onNavigate?: (tab: MainTab, sub?: string) => void;
   onToast: (msg: string) => void;
-}>(({ state, onUpdateState, onShallowPatch, onInspectPlayer, onNavigate, onToast }) => {
+  navIntent?: NavIntent | null;
+}>(({ state, onUpdateState, onShallowPatch, onInspectPlayer, onNavigate, onToast, navIntent }) => {
+  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'q');
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = (state.sub ?? 0) > 3 ? 0 : (state.sub ?? 0);
@@ -181,6 +186,53 @@ export const SquadTacticsView = React.memo<{
       onToast(`🛌 พักตัวล้า ${swappedPairs.length} ตำแหน่ง (${swappedPairs.slice(0, 2).join(', ')}${swappedPairs.length > 2 ? '…' : ''})`);
     } else {
       onToast('ยังไม่มีตัวสำรองที่ฟิตพอสลับในตำแหน่งที่ล้า');
+    }
+  };
+
+  const unreadyStarters = useMemo(
+    () => starters.filter((q) => q.inj > 0 || (q.sus || 0) > 0),
+    [starters]
+  );
+
+  const swapUnreadyStarters = () => {
+    if (!isMgr || unreadyStarters.length === 0) return;
+    const swappedPairs: string[] = [];
+    SFX.tap();
+    onUpdateState((draft) => {
+      const t = draft.teams[draft.me];
+      const curXi = xi(t);
+      const nextLu = curXi.map((q) => q.n);
+      const usedNames = new Set(nextLu);
+      const readyPool = t.sq
+        .filter((q) => !usedNames.has(q.n) && q.inj === 0 && (q.sus || 0) === 0)
+        .sort((a, b) => (b.fit ?? 100) * 0.45 + b.ov - ((a.fit ?? 100) * 0.45 + a.ov));
+
+      curXi.forEach((starter, idx) => {
+        if (starter.inj === 0 && (starter.sus || 0) === 0) return;
+        const starterSlotSp = slots[idx]?.sp || starter.ro;
+        const subIdx = readyPool.findIndex((b) =>
+          starter.pos === 'GK'
+            ? b.pos === 'GK' || playerPen(b, 'GK') === 0
+            : b.pos === starter.pos || playerPen(b, starterSlotSp) === 0
+        );
+        const fallbackIdx =
+          subIdx >= 0
+            ? subIdx
+            : readyPool.findIndex((b) => (starter.pos === 'GK' ? true : b.pos !== 'GK'));
+        const pickIdx = fallbackIdx >= 0 ? fallbackIdx : readyPool.length > 0 ? 0 : -1;
+        if (pickIdx >= 0) {
+          const replacement = readyPool.splice(pickIdx, 1)[0];
+          nextLu[idx] = replacement.n;
+          swappedPairs.push(`${starter.n.split(' ')[0]}→${replacement.n.split(' ')[0]}`);
+        }
+      });
+      t.lu = nextLu;
+    });
+    if (swappedPairs.length > 0) {
+      clearFocus();
+      onToast(`⚡ สลับตัวพร้อมลง ${swappedPairs.length} ตำแหน่ง (${swappedPairs.slice(0, 2).join(', ')})`);
+    } else {
+      onToast('ยังไม่มีตัวสำรองที่พร้อมลงสนาม');
     }
   };
 
@@ -893,6 +945,8 @@ export const SquadTacticsView = React.memo<{
             : ''
         : '';
 
+    const isUnreadyHighlight = Boolean(slotSp && unavailable && isFocused('xi-unready'));
+
     return (
       <div
         key={q.n}
@@ -900,6 +954,7 @@ export const SquadTacticsView = React.memo<{
         tabIndex={0}
         data-drop-player={q.n}
         data-drop-slot={slotSp || ''}
+        data-focus-id={isUnreadyHighlight ? 'xi-unready-row' : undefined}
         onPointerDown={(e) => handlePlayerPointerDown(e, q, slotSp)}
         onContextMenu={(e) => e.preventDefault()}
         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
@@ -915,11 +970,13 @@ export const SquadTacticsView = React.memo<{
             ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
             : isSource
               ? 'opacity-45 bg-[var(--surface-2)]'
-              : unavailable
-                ? 'bg-rose-500/[0.06] hover:bg-rose-500/[0.1]'
-                : isMe
-                  ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
-                  : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
+              : isUnreadyHighlight
+                ? 'bg-rose-500/15 ring-1 ring-inset ring-amber-400'
+                : unavailable
+                  ? 'bg-rose-500/[0.06] hover:bg-rose-500/[0.1]'
+                  : isMe
+                    ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                    : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
         } ${unavailable ? 'opacity-82' : ''} ${dragUi ? 'cursor-grabbing' : 'cursor-pointer'}`}
       >
         <div
@@ -1192,6 +1249,14 @@ export const SquadTacticsView = React.memo<{
                   {subTabBar}
                 </div>
 
+                {activeHint && (
+                  <NavFocusBanner
+                    hint={activeHint}
+                    onJumpToTarget={scrollToFocused}
+                    onDismiss={clearFocus}
+                  />
+                )}
+
                 {/* Squad Panel */}
                 <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
                   <SquadListHeaderBar
@@ -1207,6 +1272,29 @@ export const SquadTacticsView = React.memo<{
                       onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
                     }}
                   />
+
+                  {isMgr && unreadyStarters.length > 0 && (
+                    <div
+                      data-focus-id="xi-unready"
+                      className={`shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 border-b border-rose-500/40 bg-rose-500/10 flex items-center justify-between gap-2 ${
+                        isFocused('xi-unready') ? 'task-focus-spotlight' : ''
+                      }`}
+                    >
+                      <div className="min-w-0 flex items-center gap-1.5 text-[10.5px] mland:text-[9px]">
+                        {isFocused('xi-unready') && <NavFocusBadge label="แก้ตรงนี้" />}
+                        <span className="font-bold text-rose-700 dark:text-rose-300 truncate">
+                          ⚠️ ตัวจริงเจ็บ/แบน {unreadyStarters.length} คน: {unreadyStarters.map((q) => q.n.split(' ')[0]).join(', ')}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={swapUnreadyStarters}
+                        className="btn btn-xs bg-rose-600 hover:bg-rose-700 text-white border border-rose-500/40 shrink-0 whitespace-nowrap"
+                      >
+                        ⚡ สลับตัวพร้อมลง
+                      </button>
+                    </div>
+                  )}
 
                   {/* Player Rows (Scrollable Starters + Bench) */}
                   <div className="flex-1 min-h-0 overflow-y-auto">
@@ -2033,43 +2121,59 @@ export const SquadTacticsView = React.memo<{
 
                 <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
                 {(() => {
-                  const favPl = me.favPlayer ? me.sq.find((q) => q.n === me.favPlayer) : null;
-                  const favCp = favPl?.me ? state.p : null;
-                  const favM = favPl ? getPlayerMentalScore(favPl, favCp) : 0;
-                  const favP = favPl ? getPlayerPhysScore(favPl, favCp) : 0;
-                  const favB = favPl ? getActiveFavBoost(favPl, me, favCp) : 0;
+                  const favList = getTeamFavoritePlayers(me);
+                  const anyBoosted = favList.some((fp) => getActiveFavBoost(fp, me, fp.me ? state.p : null) > 0);
                   const quota = getTeamCareQuotaInfo(state, me);
                   return (
                     <div
                       className={`px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl border flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10px] ${
-                        favPl && favB > 0
+                        anyBoosted
                           ? 'bg-gradient-to-r from-rose-500/12 via-amber-500/10 to-emerald-500/10 border-rose-500/45'
-                          : favPl
+                          : favList.length > 0
                             ? 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/50'
                             : 'bg-[var(--surface-2)]/70 border-[var(--line)]'
                       }`}
                     >
-                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                        <span className="font-extrabold text-[var(--ink)]">💖 ลูกรักประจำทีม (เลือกอัตโนมัติ):</span>
-                        {favPl ? (
-                          <>
-                            <span className="font-bold text-[var(--ink)]">{favPl.n}</span>
-                            <span className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
-                              (🧠 ใจ {favM} · 💪 กาย {favP})
-                            </span>
-                            {favB > 0 ? (
-                              <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[10px] mland:text-[8.5px] font-black tabular">
-                                +{favB} OVR ชั่วคราวทำงาน!
-                              </span>
-                            ) : (
-                              <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold">
-                                รอใจ ≥72 &amp; กาย ≥72 เพื่อรับ +5..+10
-                              </span>
-                            )}
-                          </>
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
+                        <span className="font-extrabold text-[var(--ink)] shrink-0">
+                          💖 ลูกรักประจำทีม ({favList.length}/5):
+                        </span>
+                        {favList.length > 0 ? (
+                          favList.map((fp) => {
+                            const fCp = fp.me ? state.p : null;
+                            const fm = getPlayerMentalScore(fp, fCp);
+                            const fph = getPlayerPhysScore(fp, fCp);
+                            const fb = getActiveFavBoost(fp, me, fCp);
+                            return (
+                              <button
+                                key={fp.n}
+                                type="button"
+                                onClick={() => {
+                                  SFX.tap();
+                                  onInspectPlayer(fp, me);
+                                }}
+                                title={`🧠 ใจ ${fm} · 💪 กาย ${fph} (${fb > 0 ? `ปลุกพลัง +${fb} OVR` : 'รอใจ/กาย ≥72'})`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] mland:text-[9px] font-bold cursor-pointer transition-colors ${
+                                  fb > 0
+                                    ? 'bg-rose-600/15 border-rose-500/55 text-rose-700 dark:text-rose-200 hover:bg-rose-600/25'
+                                    : 'bg-[var(--surface)]/80 border-[var(--line)] text-[var(--ink)] hover:border-amber-500/60'
+                                }`}
+                              >
+                                <span className="truncate max-w-[110px]">{fp.n.split(' ')[0]}</span>
+                                <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">
+                                  {fm}/{fph}
+                                </span>
+                                {fb > 0 && (
+                                  <span className="px-1 rounded bg-rose-600 text-white text-[9.5px] mland:text-[8px] font-black tabular">
+                                    +{fb}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })
                         ) : (
                           <span className="text-[var(--mut)]">
-                            ระบบจะคัดเลือกนักเตะฟอร์มเด่นให้อัตโนมัติ (ใจ/กาย ≥72 รับ +5..+10 OVR ชั่วคราว)
+                            ยังไม่มีรายชื่อ (ใจ/กาย ≥72 รับ +5..+10 OVR ชั่วคราว)
                           </span>
                         )}
                         {isMgr && (
@@ -2078,18 +2182,6 @@ export const SquadTacticsView = React.memo<{
                           </span>
                         )}
                       </div>
-                      {favPl && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onInspectPlayer(favPl, me);
-                          }}
-                          className="btn btn-xs btn-secondary shrink-0"
-                        >
-                          ดู/ดูแลลูกรัก →
-                        </button>
-                      )}
                     </div>
                   );
                 })()}
@@ -2209,7 +2301,7 @@ export const SquadTacticsView = React.memo<{
                       const bio = getPlayerBio(q);
                       const footMeta = getFootColorMeta(bio.foot);
                       const unavailable = q.inj > 0 || (q.sus || 0) > 0;
-                      const isFav = me.favPlayer === q.n;
+                      const isFav = isTeamFavoritePlayer(me, q.n);
                       const favCp = isMe ? state.p : null;
                       const favBoost = getActiveFavBoost(q, me, favCp);
                       const mScore = getPlayerMentalScore(q, favCp);

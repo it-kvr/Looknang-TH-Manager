@@ -10,7 +10,9 @@ import { ClubCrest, PlayerFace } from './SvgVisuals';
 import { StaminaBar } from './StaminaBar';
 import { TransferMarketIcon } from './TransferMarketIcon';
 import { OvrBadge } from './OvrBadge';
-import { AnimatedMoney, MoneyDeltaPill, type MoneyDeltaState } from './AnimatedMoney';
+import { AnimatedMoney, MoneyDeltaPill, NumericDeltaPill, useNumericDelta, type MoneyDeltaState } from './AnimatedMoney';
+import { EffectText } from './DeltaText';
+import { TeamReadinessBadge } from './TeamReadinessBadge';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 
 export type NextMatchDescriptor = {
@@ -97,13 +99,13 @@ export const AppToast = React.memo<{
   if (variant === 'menu') {
     return (
       <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
-        {message}
+        <EffectText text={message} variant="inverted" />
       </div>
     );
   }
   return (
     <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
-      {message}
+      <EffectText text={message} variant="inverted" />
     </div>
   );
 });
@@ -119,7 +121,8 @@ export const AppTopHud = React.memo<{
   nextOppTeam: Team | null;
   nextIsHome: boolean;
   autoSkipMatch: boolean;
-  onNavigateToTab: (tab: MainTab, sub?: string) => void;
+  onNavigateToTab: (tab: MainTab, sub?: string, focus?: string, hint?: string) => void;
+  onUpdateState?: (updater: (draft: GameState) => void) => void;
   onTriggerNextStep: () => void;
   onOpenNtModal: () => void;
   onOpenSettings: () => void;
@@ -136,6 +139,7 @@ export const AppTopHud = React.memo<{
   nextIsHome,
   autoSkipMatch,
   onNavigateToTab,
+  onUpdateState,
   onTriggerNextStep,
   onOpenNtModal,
   onOpenSettings,
@@ -155,6 +159,11 @@ export const AppTopHud = React.memo<{
         ? 'text-[#b47b00] dark:text-[var(--lamp)]'
         : 'text-[var(--red)]';
   const myStaminaVal = Math.round(state.p?.en ?? 100);
+  const myRepVal = state.p?.rep ?? 0;
+  const boardDelta = useNumericDelta(state.mode === 'm' ? boardVal : 0, `${saveEpoch}-${state.mode}`, 0.5);
+  const fansDelta = useNumericDelta(state.mode === 'm' ? myFansCount : 0, `${saveEpoch}-${state.mode}`, 1);
+  const staminaDelta = useNumericDelta(state.mode === 'p' ? myStaminaVal : 0, `${saveEpoch}-${state.mode}`, 0.5);
+  const repDelta = useNumericDelta(state.mode === 'p' ? myRepVal : 0, `${saveEpoch}-${state.mode}`, 0.5);
   const nextNt = state.mode === 'm' && state.natTeam?.active
     ? state.natTeam.fixtures.find((f) => !f.played) ?? null
     : null;
@@ -163,7 +172,7 @@ export const AppTopHud = React.memo<{
     <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-t-2 border-t-[var(--g)] border-b border-[var(--line)] shadow-[0_1px_6px_rgba(12,31,21,0.05)] dark:shadow-[0_1px_8px_rgba(0,0,0,0.28)]">
       <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 sm:py-2 mland:py-1 flex items-center justify-between gap-2 sm:gap-4 mland:gap-2">
         {/* Zone 1: Club / Player Identity */}
-        <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1 lg:flex-none lg:max-w-[34%]">
+        <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1 lg:flex-none lg:max-w-[29%]">
           <button
             type="button"
             onClick={() => {
@@ -326,13 +335,40 @@ export const AppTopHud = React.memo<{
               </>
             )}
           </div>
-          {state.mode === 'm' && (
-            <MoneyDeltaPill
-              delta={hudMoneyDelta}
-              placement="below"
-              className="!left-[52px] mland:!left-[43px] !-translate-x-1/2"
-            />
-          )}
+          <div className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 flex items-center justify-center gap-1.5 whitespace-nowrap">
+            {state.mode === 'm' ? (
+              <>
+                <MoneyDeltaPill delta={hudMoneyDelta} placement="static" />
+                <NumericDeltaPill
+                  delta={boardDelta}
+                  labelPrefix="บอร์ด"
+                  format={(n) => `${n > 0 ? `+${Math.round(n)}` : Math.round(n)}%`}
+                  placement="static"
+                />
+                <NumericDeltaPill
+                  delta={fansDelta}
+                  labelPrefix="แฟน"
+                  format={(n) => `${n > 0 ? `+${fmtFansShort(Math.round(n))}` : `-${fmtFansShort(Math.abs(Math.round(n)))}`}`}
+                  placement="static"
+                />
+              </>
+            ) : (
+              <>
+                <NumericDeltaPill
+                  delta={staminaDelta}
+                  labelPrefix="ฟิต"
+                  format={(n) => `${n > 0 ? `+${Math.round(n)}` : Math.round(n)}%`}
+                  placement="static"
+                />
+                <NumericDeltaPill
+                  delta={repDelta}
+                  labelPrefix="★"
+                  format={(n) => `${n > 0 ? `+${Math.round(n)}` : Math.round(n)}`}
+                  placement="static"
+                />
+              </>
+            )}
+          </div>
         </div>
 
         {/* Zone 3: Matchday CTA & Settings */}
@@ -352,16 +388,27 @@ export const AppTopHud = React.memo<{
               <span className="hidden md:inline">ทีมชาติ</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={onTriggerNextStep}
-            title={
-              nextMatchInfo && nextOppTeam
-                ? `นัดถัดไป: พบ ${nextOppTeam.name} (${nextIsHome ? 'เหย้า' : 'เยือน'})`
-                : 'สรุปผลฤดูกาล'
-            }
-            className="btn btn-gold h-10 mland:h-8 px-3.5 sm:px-4.5 mland:px-3 text-xs sm:text-sm mland:text-[10.5px]"
-          >
+          <div className="inline-flex items-stretch shrink-0">
+            {nextMatchInfo && (
+              <TeamReadinessBadge
+                state={state}
+                onNavigateToTab={onNavigateToTab}
+                onUpdateState={onUpdateState}
+                onToast={onToast}
+              />
+            )}
+            <button
+              type="button"
+              onClick={onTriggerNextStep}
+              title={
+                nextMatchInfo && nextOppTeam
+                  ? `นัดถัดไป: พบ ${nextOppTeam.name} (${nextIsHome ? 'เหย้า' : 'เยือน'})`
+                  : 'สรุปผลฤดูกาล'
+              }
+              className={`btn btn-gold h-10 mland:h-8 px-3 sm:px-4 mland:px-2.5 text-xs sm:text-sm mland:text-[10.5px] ${
+                nextMatchInfo ? '!rounded-l-none' : ''
+              }`}
+            >
             {nextMatchInfo
               ? autoSkipMatch
                 ? nextMatchInfo.kind === 'asia'
@@ -387,7 +434,8 @@ export const AppTopHud = React.memo<{
                           ? '🏆 แข่งถ้วยปชช.'
                           : `▶ แข่งนัดที่ ${state.md + 1}`
               : '🏁 สรุปจบฤดูกาล'}
-          </button>
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => {

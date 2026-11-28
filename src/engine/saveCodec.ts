@@ -321,6 +321,9 @@ export const packSaveTeam = (t: Team): unknown[] => {
   if (t.philosophy) tex.ph = t.philosophy;
   if (t.tacticTrialMd !== undefined) tex.ttm = t.tacticTrialMd;
   if (t.tacticTrialLabel) tex.ttl = t.tacticTrialLabel;
+  if (t.favPlayer) tex.fp = t.favPlayer;
+  if (Array.isArray(t.favPlayers) && t.favPlayers.length) tex.fps = t.favPlayers;
+  if (t.favChangedTurn != null) tex.fct = t.favChangedTurn;
   if (t.history && t.history.length) {
     tex.hi = t.history.map((h) => {
       const flags = (h.champion ? 1 : 0) | (h.cupChampion ? 2 : 0) | (h.asiaChampion ? 4 : 0);
@@ -390,6 +393,9 @@ export const unpackSaveTeam = (raw: unknown): Team => {
   if (tex.ph !== undefined) tm.philosophy = String(tex.ph);
   if (tex.ttm !== undefined) tm.tacticTrialMd = Number(tex.ttm);
   if (tex.ttl !== undefined) tm.tacticTrialLabel = String(tex.ttl);
+  if (tex.fp !== undefined) tm.favPlayer = String(tex.fp);
+  if (Array.isArray(tex.fps)) tm.favPlayers = tex.fps.map((x) => String(x)).filter(Boolean);
+  if (tex.fct !== undefined) tm.favChangedTurn = Number(tex.fct);
   if (Array.isArray(tex.hi)) {
     tm.history = (tex.hi as unknown[]).map((item): TeamSeasonHistoryRecord => {
       if (!Array.isArray(item)) return item as TeamSeasonHistoryRecord;

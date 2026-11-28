@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { GameState, Player, TalkTopicId, Team } from '../types/game';
 import { SFX } from '../utils/audioTheme';
+import { DeltaValue, EffectText } from './DeltaText';
 import {
   CAREER_TALK_TOPICS,
   GOOD_MENTAL_THRESHOLD,
@@ -12,9 +13,11 @@ import {
   getPlayerMentalScore,
   getPlayerPhysScore,
   getTeamCareQuotaInfo,
+  getTeamFavoritePlayers,
   getWellbeingTierMeta,
   isPlayerMentalGood,
-  isPlayerPhysGood
+  isPlayerPhysGood,
+  isTeamFavoritePlayer
 } from '../engine/wellbeing';
 
 interface LocalReplySnapshot {
@@ -63,7 +66,8 @@ export const PlayerWellbeingCard: React.FC<{
   const mMeta = getWellbeingTierMeta(mental, 'mental', false);
   const pMeta = getWellbeingTierMeta(phys, 'phys', injured);
 
-  const isFav = Boolean(team && team.favPlayer === player.n);
+  const favPlayersList = getTeamFavoritePlayers(team);
+  const isFav = isTeamFavoritePlayer(team, player.n);
   const favBoost = getActiveFavBoost(player, team, careerP);
   const mFactors = (isMePlayer && careerP?.mentalFactors?.length ? careerP.mentalFactors : player.mentalFactors) || [];
   const pFactors = (isMePlayer && careerP?.physFactors?.length ? careerP.physFactors : player.physFactors) || [];
@@ -198,7 +202,9 @@ export const PlayerWellbeingCard: React.FC<{
           ) : (
             <span className="text-[var(--mut)] truncate flex items-center gap-1.5">
               <span className="font-semibold text-[var(--ink)]/85 truncate">
-                {team?.favPlayer ? `ปัจจุบัน: ${team.favPlayer}` : 'เลือกอัตโนมัติตามฟอร์ม'}
+                {favPlayersList.length > 0
+                  ? `ลูกรักปัจจุบัน: ${favPlayersList.map((fp) => fp.n.split(' ')[0]).join(', ')}`
+                  : 'ยังไม่มีลูกรักในรอบนี้'}
               </span>
               <span className="hidden sm:inline opacity-40">·</span>
               <span className="hidden sm:inline tabular">ใจ/กาย ≥{GOOD_MENTAL_THRESHOLD} รับ +5~10 OVR</span>
@@ -206,8 +212,8 @@ export const PlayerWellbeingCard: React.FC<{
           )}
         </div>
 
-        <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap">
-          เลือกอัตโนมัติ
+        <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap tabular">
+          {favPlayersList.length}/5 คน
         </span>
       </div>
 
@@ -330,7 +336,7 @@ export const PlayerWellbeingCard: React.FC<{
           </div>
 
           <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] px-0.5">
-            {activeTopicMeta.effectHint} · {activeTopicMeta.desc}
+            <EffectText text={`${activeTopicMeta.effectHint} · ${activeTopicMeta.desc}`} />
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -416,12 +422,18 @@ export const PlayerWellbeingCard: React.FC<{
             <div className="p-2 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-1 text-[10.5px] mland:text-[8.5px]">
               <div className="flex items-center justify-between gap-2 font-bold">
                 <span className="text-[var(--g)]">🗣️ บทสนทนาล่าสุด · {visibleReply.topicLabel}</span>
-                <span className="tabular text-[var(--ink)]">
-                  {visibleReply.deltaMental !== 0
-                    ? `ใจ ${visibleReply.deltaMental > 0 ? `+${visibleReply.deltaMental}` : visibleReply.deltaMental}`
-                    : ''}
-                  {visibleReply.deltaMental !== 0 && visibleReply.deltaPhys > 0 ? ' · ' : ''}
-                  {visibleReply.deltaPhys > 0 ? `กาย +${visibleReply.deltaPhys}` : ''}
+                <span className="tabular font-bold">
+                  {visibleReply.deltaMental !== 0 && (
+                    <span>
+                      ใจ <DeltaValue value={visibleReply.deltaMental} />
+                    </span>
+                  )}
+                  {visibleReply.deltaMental !== 0 && visibleReply.deltaPhys !== 0 ? ' · ' : ''}
+                  {visibleReply.deltaPhys !== 0 && (
+                    <span>
+                      กาย <DeltaValue value={visibleReply.deltaPhys} />
+                    </span>
+                  )}
                 </span>
               </div>
               <div className="text-[var(--mut)]">{visibleReply.coachLine}</div>

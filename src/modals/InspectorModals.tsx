@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Scissors, Star } from 'lucide-react';
 import type { Position, Player, Team, GameState } from '../types/game';
 import { fmtMoney } from '../utils/math';
-import { TN, SPN, AR_T } from '../data/thaiFootballData';
+import { TN, SPN, AR_T, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
@@ -28,7 +28,7 @@ import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { WdlFormStrip, WdlRecordBadges } from '../components/WdlBadge';
-import { getActiveFavBoost } from '../engine/wellbeing';
+import { getActiveFavBoost, getTeamFavoritePlayers, isTeamFavoritePlayer } from '../engine/wellbeing';
 import { PlayerWellbeingCard } from '../components/PlayerWellbeingCard';
 
 export const PlayerInspectorModal: React.FC<{
@@ -57,7 +57,7 @@ export const PlayerInspectorModal: React.FC<{
   const canEditShirtNo = !isRetired && Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
-  const isFav = !isRetired && !!liveTeam && liveTeam.favPlayer === livePlayer.n;
+  const isFav = !isRetired && isTeamFavoritePlayer(liveTeam, livePlayer.n);
   const favBoost = !isRetired ? getActiveFavBoost(livePlayer, liveTeam, isMePlayer ? state.p : null) : 0;
   const staminaMeta = getStaminaMeta(livePlayer.fit);
   const fitVal = staminaMeta.f;
@@ -475,8 +475,10 @@ export const TeamInspectorModal: React.FC<{
   const totalVal = team.sq.reduce((s, q) => s + vlu(q), 0);
   const formChars = (team.fm || '').slice(-5).split('');
   const gd = team.gf - team.ga;
-  const favPl = team.favPlayer ? team.sq.find((q) => q.n === team.favPlayer) || null : null;
-  const favBoostNow = favPl ? getActiveFavBoost(favPl, team, favPl.me ? state.p : null) : 0;
+  const favPlayersList = getTeamFavoritePlayers(team);
+  const favBoostedTop = favPlayersList
+    .map((fp) => ({ pl: fp, boost: getActiveFavBoost(fp, team, fp.me ? state.p : null) }))
+    .sort((a, b) => b.boost - a.boost)[0] || null;
   const displayBudget = isClubMeManager ? state.money : team.budget;
   const displayBoard = isClubMeManager ? state.bd : team.bd;
   const displayTacFam = Math.round(team.tacFam ?? 65);
@@ -508,7 +510,14 @@ export const TeamInspectorModal: React.FC<{
                 {isMeTeam && <MyTeamBadge size="md" />}
               </div>
               <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap">
-                <span>{TN[team.tier] || 'สโมสรทวีป'}</span>
+                <span>
+                  {team.tier >= 3
+                    ? (() => {
+                        const meta = getForeignTeamCountryMeta(team.name);
+                        return meta ? `${meta.flag} สโมสร${meta.country}` : 'สโมสรทวีป';
+                      })()
+                    : TN[team.tier] || 'สโมสรทวีป'}
+                </span>
                 {rank ? <span>· อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
                 <span>·</span>
                 <WdlRecordBadges w={team.w} d={team.d} l={team.l} size="2xs" />
@@ -761,14 +770,15 @@ export const TeamInspectorModal: React.FC<{
                       )}
                       เข้าใจแผน <b className="text-[var(--ink)]">{displayTacFam}%</b>
                     </div>
-                    {favPl && (
-                      <div className="shrink-0 text-[var(--mut)]">
-                        💖{' '}
-                        <b className="text-[var(--ink)]">{favPl.n.split(' ')[0]}</b>
-                        {favBoostNow > 0 ? (
-                          <span className="ml-0.5 font-extrabold text-[var(--g)]">+{favBoostNow}</span>
-                        ) : (
-                          <span className="ml-0.5 text-[10px] mland:text-[8px]">(รอพร้อม)</span>
+                    {favPlayersList.length > 0 && (
+                      <div className="shrink-0 text-[var(--mut)] truncate max-w-[46%]">
+                        💖 ลูกรัก {favPlayersList.length}:{' '}
+                        <b className="text-[var(--ink)]">
+                          {favPlayersList.map((fp) => fp.n.split(' ')[0]).slice(0, 3).join(', ')}
+                          {favPlayersList.length > 3 ? ` +${favPlayersList.length - 3}` : ''}
+                        </b>
+                        {favBoostedTop && favBoostedTop.boost > 0 && (
+                          <span className="ml-0.5 font-extrabold text-[var(--g)]">+{favBoostedTop.boost}</span>
                         )}
                       </div>
                     )}
@@ -906,7 +916,7 @@ export const TeamInspectorModal: React.FC<{
                               {q.n}
                             </span>
                             {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
-                            {team.favPlayer === q.n && (() => {
+                            {isTeamFavoritePlayer(team, q.n) && (() => {
                               const rBoost = getActiveFavBoost(q, team, isMe ? state.p : null);
                               return (
                                 <span

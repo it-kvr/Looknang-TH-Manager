@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, ChevronRight, FolderInput, Minus, Pin, Plus, 
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
-import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
+import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, TIER_STANDALONE_CLUBS, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, SPW, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort, getClubLevelAndGrantMeta } from '../engine/simulation';
@@ -47,14 +47,14 @@ interface StarPosterCard {
 }
 
 const STAR_CLUB_PRESETS: Array<{ name: string; kit: [string, string]; pos: Position; sp: SubRole; no: number; archId: string }> = [
-  { name: `${NG[2][0]} ${SFX0[2][0]}`, kit: KIT_P[0], pos: 'FW', sp: 'ST', no: 9, archId: 'poacher' },
-  { name: `${NG[2][1]} ${SFX0[2][5]}`, kit: KIT_P[1], pos: 'MF', sp: 'CAM', no: 10, archId: 'maestro' },
-  { name: `${NG[2][2]} ${SFX0[2][6]}`, kit: KIT_P[2], pos: 'FW', sp: 'LW', no: 7, archId: 'winger' },
-  { name: `${NG[2][7]} ${SFX0[2][8]}`, kit: KIT_P[3], pos: 'MF', sp: 'CM', no: 8, archId: 'b2b' },
-  { name: `${NG[2][9]} ${SFX0[2][9]}`, kit: KIT_P[4], pos: 'DF', sp: 'CB', no: 4, archId: 'destroyer' },
-  { name: `${NG[2][12]} ${SFX0[2][1]}`, kit: KIT_P[5], pos: 'GK', sp: 'GK', no: 1, archId: 'sweeper_gk' },
-  { name: `${NG[2][20]} ${SFX0[2][3]}`, kit: KIT_P[7], pos: 'FW', sp: 'RW', no: 11, archId: 'cannon' },
-  { name: `${NG[2][14]} ${SFX0[2][7]}`, kit: KIT_P[13], pos: 'DF', sp: 'RB', no: 2, archId: 'fullback' }
+  { name: TIER_STANDALONE_CLUBS[2][0], kit: KIT_P[0], pos: 'FW', sp: 'ST', no: 9, archId: 'poacher' },
+  { name: `${NG[2][0]} ${SFX0[2][1]}`, kit: KIT_P[1], pos: 'MF', sp: 'CAM', no: 10, archId: 'maestro' },
+  { name: TIER_STANDALONE_CLUBS[2][1], kit: KIT_P[2], pos: 'FW', sp: 'LW', no: 7, archId: 'winger' },
+  { name: `${NG[2][1]} ${SFX0[2][2]}`, kit: KIT_P[3], pos: 'MF', sp: 'CM', no: 8, archId: 'b2b' },
+  { name: TIER_STANDALONE_CLUBS[2][2], kit: KIT_P[4], pos: 'DF', sp: 'CB', no: 4, archId: 'destroyer' },
+  { name: `${NG[2][2]} ${SFX0[2][0]}`, kit: KIT_P[5], pos: 'GK', sp: 'GK', no: 1, archId: 'sweeper_gk' },
+  { name: TIER_STANDALONE_CLUBS[2][3], kit: KIT_P[7], pos: 'FW', sp: 'RW', no: 11, archId: 'cannon' },
+  { name: `${NG[2][3]} ${SFX0[2][3]}`, kit: KIT_P[13], pos: 'DF', sp: 'RB', no: 2, archId: 'fullback' }
 ];
 
 function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameState | null)[] }): StarPosterCard[] {
@@ -395,7 +395,7 @@ export const MainMenu = React.memo<{
     SFX.tap();
     clearNamePool();
     const names = genClubNames();
-    const t0 = names[0].map((n, i) => mkTeam(n, 0, i));
+    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true }));
     setTargetSlot(slot);
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
@@ -407,7 +407,7 @@ export const MainMenu = React.memo<{
     SFX.tap();
     clearNamePool();
     const names = genClubNames();
-    const t0 = names[0].map((n, i) => mkTeam(n, 0, i));
+    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true }));
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
     setClubFilter('all');

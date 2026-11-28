@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ActiveDilemma } from '../types/game';
 import { SFX } from '../utils/audioTheme';
+import { EffectText } from '../components/DeltaText';
 
 export const DilemmaModal: React.FC<{
   dilemma: ActiveDilemma;
@@ -26,7 +27,9 @@ export const DilemmaModal: React.FC<{
               className="w-full p-3 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-left transition-colors cursor-pointer"
             >
               <div className="font-bold text-xs mland:text-[10.5px]">{opt.label}</div>
-              <div className="text-[11px] mland:text-[9.5px] text-[var(--g)] mt-0.5">{opt.hint}</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] mt-0.5 font-semibold">
+                <EffectText text={opt.hint} />
+              </div>
             </button>
           ))}
         </div>

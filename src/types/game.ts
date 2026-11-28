@@ -10,6 +10,13 @@ export type Mentality = 'X' | 'A' | 'B' | 'D' | 'Z';
 export type GameMode = 'm' | 'p';
 export type MatchKind = 'league' | 'cup' | 'ac' | 'lc' | 'sc' | 'dc' | 'nt';
 export type MainTab = 't' | 's' | 'q' | 'r' | 'k' | 'f' | 'u' | 'c' | 'p';
+export interface NavIntent {
+  tab: MainTab;
+  sub?: string;
+  focus?: string;
+  hint?: string;
+  ts: number;
+}
 export type TrainingFocus = 'FW' | 'MF' | 'DF' | 'F';
 export type TrainingProgramId = 'balanced' | 'attack' | 'defense' | 'tactics' | 'setpiece' | 'fitness' | 'recovery';
 export type TrainingIntensity = 'light' | 'normal' | 'heavy';
@@ -286,6 +293,7 @@ export interface Team {
   fans?: number;
   seasonObj?: number;
   favPlayer?: string;
+  favPlayers?: string[];
   favChangedTurn?: number;
   budget?: number;
   boardBonus?: number;

@@ -14,10 +14,11 @@ import type {
   Team
 } from '../types/game';
 import { clamp, P, R } from '../utils/math';
-import { BASE, FSD, LINE, POS, TN } from '../data/thaiFootballData';
+import { BASE, FSD, LINE, POS, TN, type ForeignNameRegion } from '../data/thaiFootballData';
 import {
   assignTeamShirtNumbers,
   ensureClubIdentity,
+  genForeignPlayerName,
   getDefaultCoachVis,
   getTeamClubIdentity,
   logFin,
@@ -98,6 +99,39 @@ export const NATIONAL_OPPONENTS: NationalOpponentTemplate[] = [
     names: ['นีล เอเธอริดจ์', 'เควิน อิงเกรโซ', 'ซานโดร เรเยส', 'สเตฟาน ชร็อค', 'แพทริก ไรเชลท์', 'เบิร์น เกลย์น', 'จาร์วีย์ เกย์โอโซ', 'ดีแลน เดอ มุยเตอร์', 'เคมพ์เตอร์', 'เควิน เมนโดซา', 'บียอร์น คริสเตนเซน']
   },
   {
+    code: 'MM',
+    name: 'ทีมชาติเมียนมา',
+    flag: '🇲🇲',
+    kc: ['#dc2626', '#facc15'],
+    baseOvr: 62,
+    tac: 'D',
+    form: '4-4-2',
+    region: 'asean',
+    names: ['มอง มอง ลวิน', 'ออง ตู', 'ส่วย โก', 'จ่อ มิน อู', 'ตาน ตู ออง', 'เย ยินต์ ออง', 'ไนง์ ลิน ตุน', 'ซอ เย ตุน', 'เฮน ฮเต็ด ออง', 'จอว์ ซิน พโย', 'คยอ มิน อู']
+  },
+  {
+    code: 'KH',
+    name: 'ทีมชาติกัมพูชา',
+    flag: '🇰🇭',
+    kc: ['#1d4ed8', '#dc2626'],
+    baseOvr: 61,
+    tac: 'B',
+    form: '4-2-3-1',
+    region: 'asean',
+    names: ['จัน วัฒนากา', 'เสง จันทา', 'แกว โสกเพ็ง', 'เนิค นิเกียต', 'โซก สมบัติ', 'เทส สัมบัต', 'ยูดาย โอกาวะ', 'โซะ อุย', 'เกียว ซกเสลา', 'ร็อธ วิเรค', 'มิน รัตนัก']
+  },
+  {
+    code: 'IN',
+    name: 'ทีมชาติอินเดีย',
+    flag: '🇮🇳',
+    kc: ['#0284c7', '#ffffff'],
+    baseOvr: 69,
+    tac: 'D',
+    form: '4-2-3-1',
+    region: 'asia',
+    names: ['ซูนีล เชตรี', 'ลาลเลียนซูอาลา ชังเต้', 'มันวีร์ ซิงห์', 'ซาฮัล ซามัด', 'สุเรช วางจัม', 'กูร์ปรีต ซานดู', 'ราฮุล เภเก', 'ซันเดช จิงกัน', 'พริทัม โกตาล', 'อนิรุธ ธาปา', 'วิกรัม ปาเทล']
+  },
+  {
     code: 'CN',
     name: 'ทีมชาติจีน',
     flag: '🇨🇳',
@@ -120,6 +154,39 @@ export const NATIONAL_OPPONENTS: NationalOpponentTemplate[] = [
     names: ['อัยเมน ฮุสเซน', 'อาลี ยาซิม', 'โมฮานัด อาลี', 'ซีดาน อิกบาล', 'จาลาล ฮัสซัน', 'เรบิน ซูลากา', 'ฮุสเซน อาลี', 'อิบราฮิม บาเยช', 'อาเมียร์ อัล-อัมมารี', 'เมอร์คาส ดอสกี้', 'ยูสเซฟ อามีน']
   },
   {
+    code: 'AE',
+    name: 'ทีมชาติยูเออี',
+    flag: '🇦🇪',
+    kc: ['#ffffff', '#dc2626'],
+    baseOvr: 76,
+    tac: 'A',
+    form: '4-2-3-1',
+    region: 'asia',
+    names: ['อาลี มับคุต', 'ไคโอ คาเนโด', 'ฟาบิโอ ลิมา', 'ฮาริบ อับดุลลาห์', 'คาลิฟา อัล-ฮัมมาดี', 'คาลิด อีซา', 'อับดุลลาห์ รามาดาน', 'ยะห์ยา อัล-กัสซานี', 'ทูนอน อัล-ซาอาบี', 'คาเล็ด อิบราฮิม', 'มาจิด ราชิด']
+  },
+  {
+    code: 'QA',
+    name: 'ทีมชาติกาตาร์',
+    flag: '🇶🇦',
+    kc: ['#7f1d1d', '#ffffff'],
+    baseOvr: 78,
+    tac: 'A',
+    form: '3-5-2',
+    region: 'asia',
+    names: ['อัคราม อาฟิฟ', 'อัลโมเอซ อาลี', 'ฮัสซัน อัล-ไฮดอส', 'เมชาล บาร์ชัม', 'บูอาเล็ม คูกี', 'เปโดร มิเกล', 'ลูคัส เมนเดส', 'จัสเซ็ม กาเบอร์', 'ทาริค ซัลมาน', 'โมฮัมเหม็ด วาด', 'อาเหม็ด ฟาธี']
+  },
+  {
+    code: 'UZ',
+    name: 'ทีมชาติอุซเบกิสถาน',
+    flag: '🇺🇿',
+    kc: ['#0284c7', '#ffffff'],
+    baseOvr: 78,
+    tac: 'B',
+    form: '3-4-3',
+    region: 'asia',
+    names: ['เอลดอร์ ชอมูโรดอฟ', 'อับบอสเบค ฟายซุลลาเยฟ', 'จาโลลิดดิน มาชาริพอฟ', 'อับดูโกดีร์ คูซานอฟ', 'โอตาเบค ชูคูรอฟ', 'ออสตัน อูรูนอฟ', 'รุสตัม อาชูร์มาตอฟ', 'อุตคีร์ ยูซูปอฟ', 'โอดิลจอน ฮัมโรเบคอฟ', 'ฟาร์รุค ซาฟิเยฟ', 'คิมรอน อัลลิคูลอฟ']
+  },
+  {
     code: 'SA',
     name: 'ทีมชาติซาอุดีอาระเบีย',
     flag: '🇸🇦',
@@ -140,6 +207,17 @@ export const NATIONAL_OPPONENTS: NationalOpponentTemplate[] = [
     form: '4-2-3-1',
     region: 'asia',
     names: ['แมทธิว ไรอัน', 'แฮร์รี ซุตตาร์', 'แจ็คสัน เออร์ไวน์', 'มาร์ติน บอยล์', 'เคร็ก กูดวิน', 'คีอานู บัคคัส', 'คเมอร์ ดุก', 'อาซิซ เบฮิช', 'จอร์แดน บอส', 'ไรลีย์ แม็คกรี', 'เนสโตรี อิรันคุนดา']
+  },
+  {
+    code: 'IR',
+    name: 'ทีมชาติอิหร่าน',
+    flag: '🇮🇷',
+    kc: ['#ffffff', '#dc2626'],
+    baseOvr: 82,
+    tac: 'A',
+    form: '4-2-3-1',
+    region: 'asia',
+    names: ['เมห์ดี ทาเรมี', 'ซาร์ดาร์ อาซมูน', 'อาลีเรซา จาฮันบัคช์', 'อาลีเรซา เบย์รานวานด์', 'ซาอิด เอซาโตลาฮี', 'เอห์ซาน ฮาจซาฟี', 'รามิน เรซาเอียน', 'โชจา คาลิลซาเดห์', 'ซามาน กอดดอส', 'เมห์ดี กาเอดี', 'วาฮิด อามิรี']
   },
   {
     code: 'KR',
@@ -690,12 +768,28 @@ export function generateNationalFixturesForSeason(season: number): NationalTeamM
   const pickByCode = (code: string) =>
     NATIONAL_OPPONENTS.find((o) => o.code === code) || NATIONAL_OPPONENTS[0];
 
+  const pickUniqueCodes = (pool: string[], count: number, exclude: Set<string>): string[] => {
+    const shuffled = pool
+      .filter((c) => !exclude.has(c))
+      .slice()
+      .sort(() => Math.random() - 0.5);
+    const chosen = shuffled.slice(0, count);
+    chosen.forEach((c) => exclude.add(c));
+    return chosen;
+  };
+
   if (!isAsiaYear) {
-    const g1 = pickByCode('SG');
-    const g2 = pickByCode('MY');
-    const g3 = pickByCode('VN');
-    const sf = pickByCode('ID');
-    const fn = pickByCode('VN');
+    const used = new Set<string>();
+    const groupCodes = pickUniqueCodes(['SG', 'MY', 'PH', 'MM', 'KH', 'ID', 'VN'], 3, used);
+    const koCodes = pickUniqueCodes(['VN', 'ID', 'MY', 'PH'], 2, used);
+    while (koCodes.length < 2) {
+      koCodes.push(P(['VN', 'ID', 'MY']));
+    }
+    const g1 = pickByCode(groupCodes[0] || 'SG');
+    const g2 = pickByCode(groupCodes[1] || 'MY');
+    const g3 = pickByCode(groupCodes[2] || 'PH');
+    const sf = pickByCode(koCodes[0]);
+    const fn = pickByCode(koCodes[1]);
     return [
       {
         id: `nt-${season}-1`,
@@ -775,11 +869,17 @@ export function generateNationalFixturesForSeason(season: number): NationalTeamM
     ];
   }
 
-  const f1 = pickByCode('CN');
-  const f2 = pickByCode('IQ');
-  const f3 = pickByCode('SA');
-  const sf = pickByCode('KR');
-  const fn = pickByCode('JP');
+  const used = new Set<string>();
+  const asiaGroupCodes = pickUniqueCodes(['CN', 'IQ', 'IN', 'AE', 'QA', 'UZ', 'SA', 'AU'], 3, used);
+  const asiaKoCodes = pickUniqueCodes(['JP', 'KR', 'IR', 'AU', 'SA', 'UZ'], 2, used);
+  while (asiaKoCodes.length < 2) {
+    asiaKoCodes.push(P(['JP', 'KR', 'IR', 'AU']));
+  }
+  const f1 = pickByCode(asiaGroupCodes[0] || 'CN');
+  const f2 = pickByCode(asiaGroupCodes[1] || 'IQ');
+  const f3 = pickByCode(asiaGroupCodes[2] || 'UZ');
+  const sf = pickByCode(asiaKoCodes[0]);
+  const fn = pickByCode(asiaKoCodes[1]);
   return [
     {
       id: `nt-${season}-1`,
@@ -911,11 +1011,30 @@ export function refreshNationalCampaignOnNewSeason(s: GameState) {
   );
 }
 
+const NATIONAL_CODE_TO_REGION: Record<string, ForeignNameRegion> = {
+  VN: 'vn',
+  ID: 'id',
+  MY: 'my_sg',
+  SG: 'my_sg',
+  PH: 'ph',
+  CN: 'cn',
+  IQ: 'me',
+  SA: 'me',
+  AU: 'au',
+  KR: 'kr',
+  JP: 'jp'
+};
+
 export function buildThailandMatchOpponentTeam(fixture: NationalTeamMatchRecord, teamId: number): Team {
   const tpl =
     NATIONAL_OPPONENTS.find((o) => o.name === fixture.opponentName) ||
     NATIONAL_OPPONENTS[0];
-  const baseTeam = mkTeam(`${tpl.flag} ${tpl.name}`, Math.min(2, fixture.opponentTier), teamId, 0);
+  const nameRegion: ForeignNameRegion = NATIONAL_CODE_TO_REGION[tpl.code] || 'intl';
+  const baseTeam = mkTeam(`${tpl.flag} ${tpl.name}`, Math.min(2, fixture.opponentTier), teamId, 0, {
+    foreign: true,
+    nameRegion,
+    allowImport: false
+  });
   baseTeam.tier = 3;
   baseTeam.foreign = 1;
   baseTeam.kc = [...fixture.opponentKc];
@@ -924,10 +1043,11 @@ export function buildThailandMatchOpponentTeam(fixture: NationalTeamMatchRecord,
   baseTeam.tacFam = 85;
   baseTeam.fans = 160000;
 
-  // Calibrate opponent squad OVR & inject iconic national names
+  // Calibrate opponent squad OVR & inject iconic national names while ensuring substitutes also stay localized
   const targetOvr = fixture.opponentOvr;
   const rolesOrder: Position[] = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'FW', 'FW', 'FW'];
   const customNames = tpl.names.slice();
+  const usedNames = new Set(customNames.filter(Boolean));
   baseTeam.sq.forEach((q, idx) => {
     const jitter = idx < 11 ? R(-2, 4) : R(-6, 1);
     q.ov = clamp(targetOvr + jitter, 52, 92);
@@ -937,6 +1057,12 @@ export function buildThailandMatchOpponentTeam(fixture: NationalTeamMatchRecord,
       if (idx === 0 && rolesOrder[idx]) {
         // leave position untouched unless close
       }
+    } else if (usedNames.has(q.n)) {
+      const freshName = genForeignPlayerName(nameRegion, { allowImport: false, excludeNames: usedNames });
+      usedNames.add(freshName);
+      q.n = freshName;
+    } else {
+      usedNames.add(q.n);
     }
   });
   assignTeamShirtNumbers(baseTeam);

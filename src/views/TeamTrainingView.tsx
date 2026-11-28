@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type {
   TrainingIntensity,
+  NavIntent,
   Player,
   Team,
   GameState,
@@ -8,6 +9,8 @@ import type {
   TalkTopicId,
   TeamTalkId
 } from '../types/game';
+import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
+import { DeltaValue, EffectText } from '../components/DeltaText';
 import { clamp, fmtMoney } from '../utils/math';
 import {
   PLAYER_PERSONALITIES,
@@ -40,9 +43,12 @@ import {
   getPlayerMentalScore,
   getPlayerPhysScore,
   getTeamCareQuotaInfo,
+  getTeamFavoriteNames,
+  getTeamFavoritePlayers,
   getWellbeingTierMeta,
   isPlayerMentalGood,
   isPlayerPhysGood,
+  isTeamFavoritePlayer,
   resolvePersonalityId
 } from '../engine/wellbeing';
 
@@ -54,16 +60,35 @@ export const TeamTrainingView = React.memo<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onToast: (msg: string) => void;
-}>(({ state, onUpdateState, onInspectPlayer, onToast }) => {
+  navIntent?: NavIntent | null;
+}>(({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
   const [trainingMode, setTrainingMode] = useState<'program' | 'talk' | 'missions'>('program');
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>('all');
   const [talkFilter, setTalkFilter] = useState<TalkFilter>('all');
+  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'r');
 
   const me = state.teams[state.me];
   const [selectedMissionPlayer, setSelectedMissionPlayer] = useState<string>(() => me.sq[0]?.n || '');
   const [selectedTalkPlayer, setSelectedTalkPlayer] = useState<string>(
-    () => me.favPlayer || me.sq[0]?.n || ''
+    () => getTeamFavoriteNames(me)[0] || me.sq[0]?.n || ''
   );
+
+  useEffect(() => {
+    if (navIntent?.tab !== 'r') return;
+    if (navIntent.sub === 'talk' || navIntent.focus === 'team-talk' || navIntent.focus?.startsWith('talk:')) {
+      setTrainingMode('talk');
+      if (navIntent.focus?.startsWith('talk:')) {
+        const targetName = navIntent.focus.slice(5);
+        setTalkFilter('all');
+        if (targetName) setSelectedTalkPlayer(targetName);
+      }
+    } else if (navIntent.sub === 'missions') {
+      setTrainingMode('missions');
+    } else if (navIntent.sub === 'program' || navIntent.focus === 'rehab') {
+      setTrainingMode('program');
+      if (navIntent.focus === 'rehab') setRosterFilter('need_care');
+    }
+  }, [navIntent]);
 
   const starters = useMemo(() => xi(me), [me]);
   const starterNames = useMemo(() => new Set(starters.map((s) => s.n)), [starters]);
@@ -92,8 +117,12 @@ export const TeamTrainingView = React.memo<{
   const restedIndivCount = Object.values(indMap).filter((v) => v === 'REST').length;
 
   const careQuota = useMemo(() => getTeamCareQuotaInfo(state, me), [state, me]);
-  const favPlayerObj = me.favPlayer ? me.sq.find((q) => q.n === me.favPlayer) || null : null;
-  const favActiveBoost = favPlayerObj ? getActiveFavBoost(favPlayerObj, me, null) : 0;
+  const favPlayersList = useMemo(() => getTeamFavoritePlayers(me), [me]);
+  const favNamesSet = useMemo(() => new Set(favPlayersList.map((q) => q.n)), [favPlayersList]);
+  const favBoostedList = useMemo(
+    () => favPlayersList.filter((q) => getActiveFavBoost(q, me, null) > 0),
+    [favPlayersList, me]
+  );
 
   const sortedTrainingPlayers = useMemo(() => {
     const base = me.sq.filter((q) => {
@@ -113,19 +142,19 @@ export const TeamTrainingView = React.memo<{
     const base = me.sq.filter((q) => {
       if (talkFilter === 'stressed') return getPlayerMentalScore(q, null) < GOOD_MENTAL_THRESHOLD;
       if (talkFilter === 'tired') return q.inj > 0 || getPlayerPhysScore(q, null) < GOOD_PHYS_THRESHOLD || (q.fit ?? 100) < 74;
-      if (talkFilter === 'fav') return me.favPlayer === q.n || starterNames.has(q.n);
+      if (talkFilter === 'fav') return favNamesSet.has(q.n) || starterNames.has(q.n);
       return true;
     });
     return base.sort((a, b) => {
-      const aFav = me.favPlayer === a.n ? 1 : 0;
-      const bFav = me.favPlayer === b.n ? 1 : 0;
+      const aFav = favNamesSet.has(a.n) ? 1 : 0;
+      const bFav = favNamesSet.has(b.n) ? 1 : 0;
       if (aFav !== bFav) return bFav - aFav;
       const aNeed = (getPlayerMentalScore(a, null) < 60 ? 2 : 0) + (a.inj > 0 || getPlayerPhysScore(a, null) < 62 ? 2 : 0);
       const bNeed = (getPlayerMentalScore(b, null) < 60 ? 2 : 0) + (b.inj > 0 || getPlayerPhysScore(b, null) < 62 ? 2 : 0);
       if (aNeed !== bNeed) return bNeed - aNeed;
       return b.ov - a.ov;
     });
-  }, [me.sq, me.favPlayer, talkFilter, starterNames]);
+  }, [me.sq, favNamesSet, talkFilter, starterNames]);
 
   const talkTargetPlayer =
     me.sq.find((q) => q.n === selectedTalkPlayer) || sortedTalkPlayers[0] || me.sq[0];
@@ -243,6 +272,8 @@ export const TeamTrainingView = React.memo<{
         </div>
       </div>
 
+      <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
+
       {/* Compact Shared Camp HUD Strip */}
       {trainingMode !== 'missions' && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] shrink-0 overflow-x-auto whitespace-nowrap">
@@ -259,11 +290,14 @@ export const TeamTrainingView = React.memo<{
             <span>
               แผนซ้อม <b className="text-[var(--ink)]">{curProg.icon} {curProg.short}</b> · {curInt.icon}
             </span>
-            {favPlayerObj && (
+            {favPlayersList.length > 0 && (
               <>
                 <span className="opacity-30">·</span>
-                <span className={favActiveBoost > 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-amber-700 dark:text-[var(--lamp)] font-semibold'}>
-                  💖 {favPlayerObj.n}{favActiveBoost > 0 ? ` (+${favActiveBoost} OVR)` : ' (รอใจ/กาย ≥72)'}
+                <span className={favBoostedList.length > 0 ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-amber-700 dark:text-[var(--lamp)] font-semibold'}>
+                  💖 ลูกรัก {favPlayersList.length} คน
+                  {favBoostedList.length > 0
+                    ? ` (ปลุกพลัง ${favBoostedList.length}/${favPlayersList.length})`
+                    : ' (รอใจ/กาย ≥72)'}
                 </span>
               </>
             )}
@@ -334,10 +368,18 @@ export const TeamTrainingView = React.memo<{
         /* ==================== TAB 2: TALK & WELLBEING ROOM ==================== */
         <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.35fr] mland:grid-cols-[0.88fr_1.42fr] grid-rows-[minmax(0,1fr)] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
           {/* Left Column: Squad Team Talk (Once per matchday) */}
-          <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col gap-2.5 mland:gap-1.5 h-full overflow-y-auto">
+          <div
+            data-focus-id="team-talk"
+            className={`p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col gap-2.5 mland:gap-1.5 h-full overflow-y-auto ${
+              isFocused('team-talk') ? 'task-focus-spotlight' : ''
+            }`}
+          >
             <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/70">
               <div>
-                <h3 className="font-bold text-sm mland:text-xs">📣 ประชุมทีมทอล์ก (ทั้งสโมสร)</h3>
+                <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5 flex-wrap">
+                  <span>📣 ประชุมทีมทอล์ก (ทั้งสโมสร)</span>
+                  {isFocused('team-talk') && <NavFocusBadge />}
+                </h3>
                 <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
                   เรียกประชุมห้องแต่งตัว 1 ครั้งต่อแมตช์เดย์ — ไม่หักโควตาคุยรายคน
                 </p>
@@ -380,12 +422,16 @@ export const TeamTrainingView = React.memo<{
                       <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)]">
                         {opt.icon} {opt.label}
                       </span>
-                      <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] tabular shrink-0">
-                        {isLast ? '✓ ใช้รอบนี้' : opt.effectHint.split('·')[0].trim()}
+                      <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular shrink-0">
+                        {isLast ? (
+                          <span className="text-[var(--g)]">✓ ใช้รอบนี้</span>
+                        ) : (
+                          <EffectText text={opt.effectHint.split('·')[0].trim()} />
+                        )}
                       </span>
                     </div>
                     <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
-                      {opt.effectHint} · {opt.whenToUse}
+                      <EffectText text={`${opt.effectHint} · ${opt.whenToUse}`} />
                     </div>
                   </button>
                 );
@@ -414,7 +460,7 @@ export const TeamTrainingView = React.memo<{
               <div>
                 <h3 className="font-bold text-sm mland:text-xs">🗣️ ห้องพูดคุย &amp; ดูแลรายบุคคล</h3>
                 <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
-                  เลือกนักเตะเพื่อคุยตัวต่อตัวหรือฟื้นฟูกล้ามเนื้อ (ลูกรักประจำทีมคัดเลือกอัตโนมัติจากฟอร์ม)
+                  เลือกนักเตะเพื่อคุยตัวต่อตัวหรือฟื้นฟูกล้ามเนื้อ (ลูกรักประจำทีม 1–5 คน ปลุกพลังได้เมื่อใจ/กาย ≥72)
                 </p>
               </div>
               <div className="text-[11px] mland:text-[9px] font-bold tabular">
@@ -460,7 +506,7 @@ export const TeamTrainingView = React.memo<{
                       const p = getPlayerPhysScore(q, null);
                       const mMeta = getWellbeingTierMeta(m, 'mental', false);
                       const pMeta = getWellbeingTierMeta(p, 'phys', q.inj > 0);
-                      const isFav = me.favPlayer === q.n;
+                      const isFav = favNamesSet.has(q.n);
                       const talkDone = q.careTalkMd === curTurn;
                       const physDone = q.carePhysMd === curTurn;
                       return (
@@ -500,7 +546,7 @@ export const TeamTrainingView = React.memo<{
                 const p = getPlayerPhysScore(q, null);
                 const mMeta = getWellbeingTierMeta(m, 'mental', false);
                 const pMeta = getWellbeingTierMeta(p, 'phys', q.inj > 0);
-                const isFav = me.favPlayer === q.n;
+                const isFav = favNamesSet.has(q.n);
                 const favBoost = getActiveFavBoost(q, me, null);
                 const talkDone = q.careTalkMd === curTurn;
                 const physDone = q.carePhysMd === curTurn;
@@ -552,8 +598,8 @@ export const TeamTrainingView = React.memo<{
                           </div>
                         </button>
 
-                        <span className="px-2 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap">
-                          {isFav ? '💖 ลูกรักอัตโนมัติ' : 'ลูกรักเลือกอัตโนมัติ'}
+                        <span className="px-2 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap tabular">
+                          {isFav ? '💖 ลูกรักประจำทีม' : `💖 ลูกรัก ${favPlayersList.length}/5`}
                         </span>
                       </div>
 
@@ -587,8 +633,12 @@ export const TeamTrainingView = React.memo<{
                         ) : (
                           <>
                             <span className="truncate">
-                              💖 ลูกรักทีม:{' '}
-                              <b className="text-[var(--ink)]">{me.favPlayer || 'เลือกอัตโนมัติจากฟอร์ม'}</b>
+                              💖 ลูกรักทีม ({favPlayersList.length}/5):{' '}
+                              <b className="text-[var(--ink)]">
+                                {favPlayersList.length > 0
+                                  ? favPlayersList.map((fp) => fp.n.split(' ')[0]).join(', ')
+                                  : 'ยังไม่มีลูกรัก'}
+                              </b>
                             </span>
                             <span className="tabular shrink-0">
                               เงื่อนไข: ใจ/กาย ≥{GOOD_MENTAL_THRESHOLD} รับ +5~10 OVR
@@ -644,9 +694,17 @@ export const TeamTrainingView = React.memo<{
                     </div>
 
                     {/* 4 Interactive Talk Topics + Physio Recovery */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
-                        <span>เลือกหัวข้อพูดคุยตัวต่อตัว ({talkDone ? '✓ คุยแล้วนัดนี้' : 'พร้อมคุย'})</span>
+                    <div
+                      data-focus-id={`talk:${q.n}`}
+                      className={`space-y-1.5 rounded-xl ${
+                        isFocused(`talk:${q.n}`) ? 'p-2 border border-amber-500/70 bg-amber-500/[0.06] task-focus-spotlight' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold gap-2">
+                        <span className="flex items-center gap-1.5">
+                          {isFocused(`talk:${q.n}`) && <NavFocusBadge />}
+                          <span>เลือกหัวข้อพูดคุยตัวต่อตัว ({talkDone ? '✓ คุยแล้วนัดนี้' : 'พร้อมคุย'})</span>
+                        </span>
                         <span className="text-[var(--mut)] font-normal">ใช้ 1 โควตาดูแล</span>
                       </div>
                       <div className="grid grid-cols-2 gap-1.5">
@@ -661,7 +719,9 @@ export const TeamTrainingView = React.memo<{
                             <div className="font-bold text-[11.5px] mland:text-[9.5px] text-[var(--ink)]">
                               {tp.icon} {tp.label}
                             </div>
-                            <div className="text-[10px] mland:text-[8px] text-[var(--g)] font-semibold">{tp.effectHint}</div>
+                            <div className="text-[10px] mland:text-[8px] text-[var(--mut)] font-semibold">
+                              <EffectText text={tp.effectHint} />
+                            </div>
                             <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-tight line-clamp-2">{tp.desc}</div>
                           </button>
                         ))}
@@ -678,10 +738,12 @@ export const TeamTrainingView = React.memo<{
                             {physDone ? '✓ ฟื้นฟูกล้ามเนื้อรอบนี้แล้ว' : '🧊 ส่งกายภาพนวดคลายกล้ามเนื้อตัวต่อตัว'}
                           </div>
                           <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">
-                            เพิ่มสุขภาพกาย +{5 + Math.floor(medLv / 4) + (state.staff?.physio ? 1 : 0)}..{7 + Math.floor(medLv / 4) + (state.staff?.physio ? 1 : 0)} · ความฟิต +3%
+                            <EffectText
+                              text={`เพิ่มสุขภาพกาย +${5 + Math.floor(medLv / 4) + (state.staff?.physio ? 1 : 0)}..${7 + Math.floor(medLv / 4) + (state.staff?.physio ? 1 : 0)} · ความฟิต +3%`}
+                            />
                           </div>
                         </div>
-                        <span className="text-[10.5px] mland:text-[8.5px] font-bold text-sky-700 dark:text-sky-300 shrink-0">
+                        <span className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0">
                           {physDone ? 'เรียบร้อย' : '+กาย & ฟิต'}
                         </span>
                       </button>
@@ -692,12 +754,18 @@ export const TeamTrainingView = React.memo<{
                       <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--g-soft)]/50 border border-[var(--g)]/35 space-y-1 text-[11px] mland:text-[9px]">
                         <div className="flex items-center justify-between gap-2 font-bold">
                           <span className="text-[var(--g)]">🗣️ บทสนทนากับ {activeLog.playerName} · {activeLog.topicLabel}</span>
-                          <span className="tabular text-[var(--ink)]">
-                            {activeLog.deltaMental !== 0
-                              ? `จิตใจ ${activeLog.deltaMental > 0 ? `+${activeLog.deltaMental}` : activeLog.deltaMental}`
-                              : ''}
-                            {activeLog.deltaMental !== 0 && activeLog.deltaPhys > 0 ? ' · ' : ''}
-                            {activeLog.deltaPhys > 0 ? `กาย +${activeLog.deltaPhys}` : ''}
+                          <span className="tabular font-bold">
+                            {activeLog.deltaMental !== 0 && (
+                              <span>
+                                จิตใจ <DeltaValue value={activeLog.deltaMental} />
+                              </span>
+                            )}
+                            {activeLog.deltaMental !== 0 && activeLog.deltaPhys !== 0 ? ' · ' : ''}
+                            {activeLog.deltaPhys !== 0 && (
+                              <span>
+                                กาย <DeltaValue value={activeLog.deltaPhys} />
+                              </span>
+                            )}
                           </span>
                         </div>
                         <div className="text-[var(--mut)]">{activeLog.coachLine}</div>
@@ -752,7 +820,9 @@ export const TeamTrainingView = React.memo<{
                         )}
                       </div>
                       <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">{prog.desc}</div>
-                      <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] tabular">{prog.effectTag}</div>
+                      <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular">
+                        <EffectText text={prog.effectTag} />
+                      </div>
                     </button>
                   );
                 })}
@@ -788,7 +858,9 @@ export const TeamTrainingView = React.memo<{
                       }`}
                     >
                       <div className="font-bold text-xs mland:text-[10px]">{im.icon} {im.label}</div>
-                      <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">{im.desc}</div>
+                      <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">
+                        <EffectText text={im.desc} />
+                      </div>
                     </button>
                   );
                 })}
@@ -811,7 +883,9 @@ export const TeamTrainingView = React.memo<{
               >
                 <div className="min-w-0">
                   <div className="font-bold text-xs mland:text-[10.5px]">🧊 แยกคูลดาวน์ตัวจริงหลังเกม &amp; ซ้อมทีมสำรอง</div>
-                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ตัวจริง 11 คนฟื้นฟิต +5% · ตัวสำรองพัฒนาไวขึ้น 1.15x</div>
+                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
+                    <EffectText text="ตัวจริง 11 คนฟื้นฟิต +5% · ตัวสำรองพัฒนาไวขึ้น 1.15x" />
+                  </div>
                 </div>
                 <span className={`px-2.5 py-0.5 rounded-lg text-[11px] mland:text-[9.5px] font-bold shrink-0 ${plan.restStarters ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)] border border-[var(--line)]'}`}>
                   {plan.restStarters ? 'เปิดอยู่' : 'ปิดอยู่'}
@@ -851,7 +925,9 @@ export const TeamTrainingView = React.memo<{
                   className="p-2.5 mland:p-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/35 text-left cursor-pointer disabled:opacity-45 hover:border-emerald-500 space-y-0.5"
                 >
                   <div className="font-bold text-xs mland:text-[10px] text-emerald-700 dark:text-emerald-300">🧘 ฟื้นฟูกล้ามเนื้อ</div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">ฟรี · คนล้า +{6 + Math.floor(medLv / 2) + stf.physio}% · ขวัญ +2%</div>
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
+                    <EffectText text={`ฟรี · คนล้า +${6 + Math.floor(medLv / 2) + stf.physio}% · ขวัญ +2%`} />
+                  </div>
                 </button>
 
                 <button
@@ -875,11 +951,18 @@ export const TeamTrainingView = React.memo<{
                   className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left cursor-pointer disabled:opacity-45 hover:border-[var(--g)] space-y-0.5"
                 >
                   <div className="font-bold text-xs mland:text-[10px]">⚽ ซ้อมจำลองแผน</div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">{avgAllFit < 60 ? 'ต้องฟิต ≥60%' : `ฟรี · เข้าใจแผน +${4 + stf.asst}% · ฟิต -3%`}</div>
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
+                    {avgAllFit < 60 ? (
+                      'ต้องฟิต ≥60%'
+                    ) : (
+                      <EffectText text={`ฟรี · เข้าใจแผน +${4 + stf.asst}% · ฟิต -3%`} />
+                    )}
+                  </div>
                 </button>
 
                 <button
                   type="button"
+                  data-focus-id="rehab"
                   disabled={sessionUsed || injuredSq.length === 0 || state.money < 15}
                   onClick={() => {
                     SFX.win();
@@ -897,15 +980,28 @@ export const TeamTrainingView = React.memo<{
                       });
                       d.trainingPlan = { ...cur, doubleSessionMd: curTurn };
                     });
-                    onToast(`✚ กายภาพกลุ่มสำเร็จ! ลดวันเจ็บ ${reduced} คน (-1 นัด) · ฟิต +8%`);
+                    clearFocus();
+                    onToast(`✚ กายภาพกลุ่มสำเร็จ! ลดวันเจ็บ ${reduced} คน (หายเร็วขึ้น -1 นัด) · ฟิต +8%`);
                   }}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-sky-500/10 border border-sky-500/35 text-left cursor-pointer disabled:opacity-45 hover:border-sky-500 space-y-0.5"
+                  className={`p-2.5 mland:p-1.5 rounded-xl bg-sky-500/10 border border-sky-500/35 text-left cursor-pointer disabled:opacity-45 hover:border-sky-500 space-y-0.5 ${
+                    isFocused('rehab') ? 'task-focus-spotlight' : ''
+                  }`}
                 >
-                  <div className="font-bold text-xs mland:text-[10px] text-sky-700 dark:text-sky-300 flex items-center gap-1">
+                  <div className="font-bold text-xs mland:text-[10px] text-sky-700 dark:text-sky-300 flex items-center gap-1 flex-wrap">
                     <StatIconBadge kind="injury" size="xs" />
                     <span>กายภาพกลุ่ม ({injuredSq.length})</span>
+                    {isFocused('rehab') && <NavFocusBadge />}
                   </div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">{injuredSq.length === 0 ? 'ไม่มีคนเจ็บ' : `${fmtMoney(15)} · หายเร็วขึ้น -1 นัด`}</div>
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
+                    {injuredSq.length === 0 ? (
+                      'ไม่มีคนเจ็บ'
+                    ) : (
+                      <>
+                        <span className="text-[var(--red)] font-bold">-{fmtMoney(15)}</span> ·{' '}
+                        <span className="text-[var(--g)] font-bold">หายเร็วขึ้น -1 นัด</span>
+                      </>
+                    )}
+                  </div>
                 </button>
               </div>
             </div>
@@ -919,8 +1015,8 @@ export const TeamTrainingView = React.memo<{
                 </div>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] mland:text-[9.5px] tabular">
                   <span>ฟิตเฉลี่ย: <b className={plan.lastReport.fitDeltaAvg >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{plan.lastReport.fitDeltaAvg >= 0 ? `+${plan.lastReport.fitDeltaAvg}` : plan.lastReport.fitDeltaAvg}%</b></span>
-                  <span>เข้าใจแผน: <b className="text-[var(--g)]">+{plan.lastReport.tacFamDelta}%</b></span>
-                  {plan.lastReport.morDelta !== 0 && <span>ขวัญทีม: <b>{plan.lastReport.morDelta > 0 ? `+${plan.lastReport.morDelta}` : plan.lastReport.morDelta}%</b></span>}
+                  <span>เข้าใจแผน: <b className={plan.lastReport.tacFamDelta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{plan.lastReport.tacFamDelta >= 0 ? `+${plan.lastReport.tacFamDelta}` : plan.lastReport.tacFamDelta}%</b></span>
+                  {plan.lastReport.morDelta !== 0 && <span>ขวัญทีม: <b className={plan.lastReport.morDelta > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{plan.lastReport.morDelta > 0 ? `+${plan.lastReport.morDelta}` : plan.lastReport.morDelta}%</b></span>}
                   {plan.lastReport.restedCount > 0 && <span>พักเดี่ยว: <b>{plan.lastReport.restedCount} คน</b></span>}
                 </div>
                 <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">
@@ -938,7 +1034,7 @@ export const TeamTrainingView = React.memo<{
               <div>
                 <h3 className="font-bold text-sm mland:text-xs">👥 จัดการรายบุคคล ({sortedTrainingPlayers.length} คน)</h3>
                 <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
-                  พักเดี่ยว: ฟิต +10% &amp; ลดเจ็บ 50% · ปั้นพิเศษ: โตไว 1.45x ({restedIndivCount} พักอยู่)
+                  <EffectText text={`พักเดี่ยว: ฟิต +10% & ลดเจ็บ 50% · ปั้นพิเศษ: โตไว 1.45x (${restedIndivCount} พักอยู่)`} />
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -1018,7 +1114,7 @@ export const TeamTrainingView = React.memo<{
                   const isFocus = state.focusPlayer === q.n;
                   const isStarter = starterNames.has(q.n);
                   const unavailable = q.inj > 0 || (q.sus || 0) > 0;
-                  const isFav = me.favPlayer === q.n;
+                  const isFav = isTeamFavoritePlayer(me, q.n);
                   const favBoost = getActiveFavBoost(q, me, null);
                   const mScore = getPlayerMentalScore(q, null);
                   const pScore = getPlayerPhysScore(q, null);

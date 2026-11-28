@@ -17,6 +17,59 @@ export const GOOD_MENTAL_THRESHOLD = 72;
 export const GOOD_PHYS_THRESHOLD = 72;
 export const MAX_MGR_CARE_ACTIONS_PER_TURN = 3;
 export const FAV_SWITCH_COOLDOWN_TURNS = 3;
+export const MAX_TEAM_FAV_PLAYERS = 5;
+
+export function getTeamFavoriteNames(team?: Team | null): string[] {
+  if (!team) return [];
+  const rawList = Array.isArray(team.favPlayers)
+    ? team.favPlayers
+    : team.favPlayer
+      ? [team.favPlayer]
+      : [];
+  const squadSet = Array.isArray(team.sq) && team.sq.length > 0 ? new Set(team.sq.map((q) => q.n)) : null;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of rawList) {
+    if (!name || seen.has(name)) continue;
+    if (squadSet && !squadSet.has(name)) continue;
+    seen.add(name);
+    out.push(name);
+    if (out.length >= MAX_TEAM_FAV_PLAYERS) break;
+  }
+  return out;
+}
+
+export function isTeamFavoritePlayer(team: Team | null | undefined, playerName?: string | null): boolean {
+  if (!team || !playerName) return false;
+  return getTeamFavoriteNames(team).includes(playerName);
+}
+
+export function getTeamFavoritePlayers(team?: Team | null): Player[] {
+  if (!team?.sq?.length) return [];
+  const favNames = getTeamFavoriteNames(team);
+  if (!favNames.length) return [];
+  const byName = new Map(team.sq.map((q) => [q.n, q]));
+  return favNames.map((n) => byName.get(n)).filter((q): q is Player => Boolean(q));
+}
+
+function setTeamFavoriteNamesList(team: Team, names: string[]) {
+  const squadSet = Array.isArray(team.sq) && team.sq.length > 0 ? new Set(team.sq.map((q) => q.n)) : null;
+  const seen = new Set<string>();
+  const clean: string[] = [];
+  for (const name of names) {
+    if (!name || seen.has(name)) continue;
+    if (squadSet && !squadSet.has(name)) continue;
+    seen.add(name);
+    clean.push(name);
+    if (clean.length >= MAX_TEAM_FAV_PLAYERS) break;
+  }
+  team.favPlayers = clean;
+  if (clean.length > 0) {
+    team.favPlayer = clean[0];
+  } else {
+    delete team.favPlayer;
+  }
+}
 
 export const WELLBEING_FACTOR_GUIDE = {
   mentalGood: [
@@ -139,7 +192,7 @@ export function getActiveFavBoost(
   team?: Team | null,
   careerP?: PlayerCareerProfile | null
 ): number {
-  if (team && team.favPlayer !== q.n) return 0;
+  if (team && !isTeamFavoritePlayer(team, q.n)) return 0;
   const rawBoost = q.me && careerP?.favBoost != null ? careerP.favBoost : q.favBoost || 0;
   if (rawBoost < 5) return 0;
   if (!isPlayerMentalGood(q, careerP) || !isPlayerPhysGood(q, careerP)) return 0;
@@ -321,7 +374,7 @@ export function initPlayerWellbeing(
     mental -= 10;
     mFactors.push({ label: 'กังวลอาการบาดเจ็บ', delta: -10 });
   }
-  if (opts?.team?.favPlayer === q.n) {
+  if (isTeamFavoritePlayer(opts?.team, q.n)) {
     mental += 5;
     mFactors.push({ label: 'ได้รับความไว้วางใจเป็นลูกรัก', delta: 5 });
   }
@@ -398,7 +451,7 @@ export function ensurePlayerWellbeing(
     else if (q.favBoost != null) careerP.favBoost = q.favBoost;
   }
   if (opts?.team) {
-    if (opts.team.favPlayer === q.n) {
+    if (isTeamFavoritePlayer(opts.team, q.n)) {
       if (isPlayerMentalGood(q, careerP) && isPlayerPhysGood(q, careerP)) {
         if (!q.favBoost || q.favBoost < 5 || q.favBoost > 10) {
           q.favBoost = rollFavoriteBoost(getPlayerMentalScore(q, careerP), getPlayerPhysScore(q, careerP));
@@ -415,11 +468,13 @@ export function ensurePlayerWellbeing(
 
 export function ensureTeamWellbeing(team: Team, state?: GameState | null) {
   if (!team?.sq?.length) return;
-  if (team.favPlayer && !team.sq.some((q) => q.n === team.favPlayer)) {
-    delete team.favPlayer;
+  const hadMultiArray = Array.isArray(team.favPlayers);
+  const validNames = getTeamFavoriteNames(team);
+  if (hadMultiArray) {
+    setTeamFavoriteNamesList(team, validNames);
   }
   team.sq.forEach((q) => ensurePlayerWellbeing(q, { team, state }));
-  if (!team.favPlayer) {
+  if (!hadMultiArray || validNames.length === 0) {
     refreshAiTeamFavoritePlayer(team, state);
   }
 }
@@ -430,11 +485,12 @@ export function syncFavoritePlayerBoost(
   forceReroll = false
 ): number {
   if (!team?.sq?.length) return 0;
-  let activeBoost = 0;
+  const favSet = new Set(getTeamFavoriteNames(team));
+  let maxActiveBoost = 0;
   team.sq.forEach((q) => {
     ensurePlayerWellbeing(q, { team, state });
     const careerP = q.me ? state?.p : null;
-    if (team.favPlayer && q.n === team.favPlayer) {
+    if (favSet.has(q.n)) {
       const mGood = isPlayerMentalGood(q, careerP);
       const pGood = isPlayerPhysGood(q, careerP);
       if (mGood && pGood) {
@@ -444,7 +500,7 @@ export function syncFavoritePlayerBoost(
             getPlayerPhysScore(q, careerP)
           );
         }
-        activeBoost = q.favBoost;
+        maxActiveBoost = Math.max(maxActiveBoost, q.favBoost);
       } else {
         q.favBoost = 0;
       }
@@ -455,7 +511,7 @@ export function syncFavoritePlayerBoost(
       careerP.favBoost = q.favBoost || 0;
     }
   });
-  return activeBoost;
+  return maxActiveBoost;
 }
 
 export function setTeamFavoritePlayer(
@@ -503,24 +559,12 @@ export function setTeamFavoritePlayer(
   }
 
   if (prevFavName) {
-    const oldPl = team.sq.find((q) => q.n === prevFavName);
-    if (oldPl) {
-      oldPl.favBoost = 0;
-      const drop = -R(6, 10);
-      oldPl.mental = clamp((oldPl.mental ?? 68) + drop, 15, 100);
-      oldPl.mentalFactors = [{ label: 'ถูกปลดจากตำแหน่งลูกรักโค้ช', delta: drop }, ...(oldPl.mentalFactors || [])].slice(0, 5);
-      oldPl.mentalNote = 'ถูกปลดจากตำแหน่งลูกรักโค้ช';
-      if (oldPl.me && state.p) {
-        state.p.mental = oldPl.mental;
-        state.p.mentalFactors = oldPl.mentalFactors;
-        state.p.mentalNote = oldPl.mentalNote;
-        state.p.favBoost = 0;
-      }
-    }
+    const remaining = getTeamFavoriteNames(team).filter((n) => n !== prevFavName);
+    setTeamFavoriteNamesList(team, remaining);
   }
 
   if (!playerName) {
-    delete team.favPlayer;
+    setTeamFavoriteNamesList(team, []);
     team.favChangedTurn = curTurn;
     syncFavoritePlayerBoost(team, state, false);
     return {
@@ -535,12 +579,13 @@ export function setTeamFavoritePlayer(
 
   const nextPl = team.sq.find((q) => q.n === playerName);
   if (!nextPl) {
-    delete team.favPlayer;
+    setTeamFavoriteNamesList(team, getTeamFavoriteNames(team));
     syncFavoritePlayerBoost(team, state, false);
     return { changed: true, favName: null, boost: 0, mentalGood: false, physGood: false, cooldownRemaining: 0 };
   }
 
-  team.favPlayer = nextPl.n;
+  const nextList = [nextPl.n, ...getTeamFavoriteNames(team).filter((n) => n !== nextPl.n)].slice(0, MAX_TEAM_FAV_PLAYERS);
+  setTeamFavoriteNamesList(team, nextList);
   team.favChangedTurn = curTurn;
   const gain = 4;
   nextPl.mental = clamp((nextPl.mental ?? 68) + gain, 15, 100);
@@ -567,52 +612,97 @@ export function setTeamFavoritePlayer(
 export function refreshAiTeamFavoritePlayer(team: Team, state?: GameState | null) {
   if (!team?.sq?.length) return;
   const curTurn = state ? (state.season ?? 1) * 100 + (state.md ?? 0) : 0;
-  const curFav = team.favPlayer ? team.sq.find((q) => q.n === team.favPlayer) : null;
-  // Keep current favorite unless missing, severely injured, or performing poorly (and respect cooldown)
+  const hadMultiArray = Array.isArray(team.favPlayers);
+  const prevNames = getTeamFavoriteNames(team);
+  const byName = new Map(team.sq.map((q) => [q.n, q]));
+  const healthyIncumbents = prevNames
+    .map((n) => byName.get(n))
+    .filter((q): q is Player => Boolean(q))
+    .filter(
+      (q) =>
+        q.inj < 3 &&
+        ((q.sra || 0) < 3 || (q.srs || 0) / Math.max(1, q.sra!) >= 6.45)
+    );
+
   const onCooldown =
-    curFav &&
+    hadMultiArray &&
+    healthyIncumbents.length > 0 &&
     team.favChangedTurn != null &&
     curTurn >= team.favChangedTurn &&
     curTurn - team.favChangedTurn < FAV_SWITCH_COOLDOWN_TURNS;
-  if (
-    curFav &&
-    (onCooldown || (curFav.inj < 3 && ((curFav.sra || 0) < 3 || curFav.srs! / Math.max(1, curFav.sra!) >= 6.45)))
-  ) {
+
+  // Keep current favorites while on cooldown or when already populated & performing well
+  if (onCooldown) {
+    setTeamFavoriteNamesList(team, healthyIncumbents.map((q) => q.n));
     syncFavoritePlayerBoost(team, state, false);
     return;
   }
+
   const available = team.sq.filter((q) => q.inj === 0 && (q.sus || 0) === 0);
   const pool = available.length > 0 ? available : team.sq;
+  const maxPick = Math.min(MAX_TEAM_FAV_PLAYERS, pool.length);
+  const targetCount = R(1, Math.max(1, maxPick));
+
+  const shouldHoldExisting =
+    hadMultiArray &&
+    healthyIncumbents.length === prevNames.length &&
+    healthyIncumbents.length > 0 &&
+    healthyIncumbents.length <= MAX_TEAM_FAV_PLAYERS &&
+    Math.random() < 0.72;
+  if (shouldHoldExisting) {
+    syncFavoritePlayerBoost(team, state, false);
+    return;
+  }
+
   const candidates = pool
     .slice()
-    .sort((a, b) => {
-      const aAvg = (a.sra || 0) > 0 ? (a.srs || 0) / Math.max(1, a.sra!) : 6.6;
-      const bAvg = (b.sra || 0) > 0 ? (b.srs || 0) / Math.max(1, b.sra!) : 6.6;
-      const aWellbeing = ((a.mental ?? 70) + (a.phys ?? 75)) * 0.05;
-      const bWellbeing = ((b.mental ?? 70) + (b.phys ?? 75)) * 0.05;
-      const aScore = a.ov + aAvg * 4 + aWellbeing + (a.me ? 2 : 0) + (a.hg ? 2 : 0) + (team.cap === a.n ? 2 : 0);
-      const bScore = b.ov + bAvg * 4 + bWellbeing + (b.me ? 2 : 0) + (b.hg ? 2 : 0) + (team.cap === b.n ? 2 : 0);
-      return bScore - aScore;
-    });
-  if (candidates[0]) {
-    const prevFavName = team.favPlayer;
-    if (prevFavName !== candidates[0].n && state) {
-      team.favChangedTurn = curTurn;
-      if (prevFavName && curTurn > 0) {
-        candidates[0].mental = clamp((candidates[0].mental ?? 68) + 4, 18, 99);
-        candidates[0].mentalFactors = [
-          { label: 'ฟอร์มเข้าตา ระบบยกเป็นลูกรักประจำทีม', delta: 4 },
-          ...(candidates[0].mentalFactors || [])
+    .map((q) => {
+      const avg = (q.sra || 0) > 0 ? (q.srs || 0) / Math.max(1, q.sra!) : 6.6;
+      const wb = ((q.mental ?? 70) + (q.phys ?? 75)) * 0.05;
+      const baseScore = q.ov + avg * 4 + wb + (q.me ? 2 : 0) + (q.hg ? 2 : 0) + (team.cap === q.n ? 2 : 0);
+      return { q, score: baseScore + Math.random() * 16 };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.q);
+
+  const chosen: Player[] = [];
+  const chosenNames = new Set<string>();
+
+  // Preserve some healthy incumbents naturally so favorites don't flip all at once
+  const keepCap = !hadMultiArray ? targetCount : Math.min(targetCount, Math.max(1, Math.ceil(targetCount * 0.6)));
+  healthyIncumbents.forEach((q) => {
+    if (chosen.length < keepCap && !chosenNames.has(q.n)) {
+      chosen.push(q);
+      chosenNames.add(q.n);
+    }
+  });
+
+  for (const cand of candidates) {
+    if (chosen.length >= targetCount) break;
+    if (chosenNames.has(cand.n)) continue;
+    chosen.push(cand);
+    chosenNames.add(cand.n);
+  }
+
+  if (chosen.length > 0) {
+    const prevSet = new Set(prevNames);
+    chosen.forEach((pl) => {
+      if (!prevSet.has(pl.n) && state && curTurn > 0 && prevNames.length > 0) {
+        pl.mental = clamp((pl.mental ?? 68) + 4, 18, 99);
+        pl.mentalFactors = [
+          { label: 'ฟอร์มเข้าตา กลายเป็นลูกรักประจำทีม', delta: 4 },
+          ...(pl.mentalFactors || [])
         ].slice(0, 5);
-        candidates[0].mentalNote = 'ฟอร์มเข้าตา ระบบยกเป็นลูกรักประจำทีม';
-        if (candidates[0].me && state.p) {
-          state.p.mental = candidates[0].mental;
-          state.p.mentalFactors = candidates[0].mentalFactors;
-          state.p.mentalNote = candidates[0].mentalNote;
+        pl.mentalNote = 'ฟอร์มเข้าตา กลายเป็นลูกรักประจำทีม';
+        if (pl.me && state.p) {
+          state.p.mental = pl.mental;
+          state.p.mentalFactors = pl.mentalFactors;
+          state.p.mentalNote = pl.mentalNote;
         }
       }
-    }
-    team.favPlayer = candidates[0].n;
+    });
+    if (state) team.favChangedTurn = curTurn;
+    setTeamFavoriteNamesList(team, chosen.map((q) => q.n));
     syncFavoritePlayerBoost(team, state, true);
   }
 }
@@ -660,13 +750,13 @@ export function updateTeamWellbeingAfterMatchday(
   const turfCond = isMgrUser ? (state.facCond?.turfLv ?? 100) : 85;
   const clubMor = isUserClub ? (state.mor ?? 55) : 55;
 
-  const curFavPlayer = team.favPlayer ? team.sq.find((q) => q.n === team.favPlayer) : null;
-  const favAvgRt = curFavPlayer && (curFavPlayer.sra || 0) > 0 ? (curFavPlayer.srs || 0) / Math.max(1, curFavPlayer.sra!) : 6.8;
+  const favPlayersList = getTeamFavoritePlayers(team);
+  const favNamesSet = new Set(favPlayersList.map((q) => q.n));
   const teamTopOv = team.sq.reduce((mx, x) => Math.max(mx, x.ov), 0);
-  const favUndeserving = Boolean(
-    curFavPlayer &&
-    ((curFavPlayer.sra || 0) >= 2 && favAvgRt < 6.45 || curFavPlayer.ov < teamTopOv - 6)
-  );
+  const undeservingFav = favPlayersList.find((fp) => {
+    const avgRt = (fp.sra || 0) > 0 ? (fp.srs || 0) / Math.max(1, fp.sra!) : 6.8;
+    return ((fp.sra || 0) >= 2 && avgRt < 6.45) || fp.ov < teamTopOv - 6;
+  }) || null;
   let jealousyTriggeredCount = 0;
 
   team.sq.forEach((q) => {
@@ -744,7 +834,7 @@ export function updateTeamWellbeingAfterMatchday(
     }
 
     // --- 4. Status / Trust / Pressure / Jealousy / Contract ---
-    if (team.favPlayer === q.n) {
+    if (favNamesSet.has(q.n)) {
       if (ctx?.matchPlayed && played && rt != null && rt < 6.4) {
         addM('ความกดดันในฐานะลูกรัก (ฟอร์มต่ำกว่าคาด)', -5);
       } else if (ctx?.matchPlayed && !played && (q.inj || 0) === 0 && (q.sus || 0) === 0) {
@@ -753,10 +843,9 @@ export function updateTeamWellbeingAfterMatchday(
         addM('ได้รับความไว้ใจในฐานะลูกรัก', 2);
       }
     } else if (
-      curFavPlayer &&
-      favUndeserving &&
+      undeservingFav &&
       jealousyTriggeredCount < 2 &&
-      q.ov >= curFavPlayer.ov &&
+      q.ov >= undeservingFav.ov &&
       (volatile || !played) &&
       Math.random() < 0.45
     ) {
@@ -831,7 +920,7 @@ export function updateTeamWellbeingAfterMatchday(
           addP('ลงสนามกรำศึกเต็มเกม', -3);
         }
         // Boosted favorite exerts extra effort when playing
-        if (team.favPlayer === q.n && getActiveFavBoost(q, team, careerP) > 0 && q.pos !== 'GK') {
+        if (favNamesSet.has(q.n) && getActiveFavBoost(q, team, careerP) > 0 && q.pos !== 'GK') {
           addP('ลูกรักปลุกพลังทุ่มเทเกินร้อย', -2);
           q.fit = clamp((q.fit ?? 100) - 2, 20, 100);
         }
@@ -910,19 +999,24 @@ export function updateTeamWellbeingAfterMatchday(
   });
 
   if (state.mode === 'p' && team.id === state.me && state.p) {
-    // AI manager evaluates if the career player earned/kept favorite ("ลูกรักโค้ช") status
+    // AI manager evaluates if the career player earned/kept favorite ("ลูกรักโค้ช") status (among up to 5 favorites)
     const meSq = team.sq.find((q) => q.me);
     if (meSq) {
       const recent = (state.p.fm || []).slice(-4);
       const recentAvg = recent.length ? recent.reduce((s, x) => s + x, 0) / recent.length : 6.6;
-      const isFavNow = team.favPlayer === meSq.n;
+      const curFavList = getTeamFavoriteNames(team);
+      const isFavNow = curFavList.includes(meSq.n);
       if (!isFavNow && recent.length >= 2 && recentAvg >= 7.3 && (state.p.sat ?? 0) === 0 && (state.p.inj || 0) === 0) {
-        team.favPlayer = meSq.n;
+        const nextList = [meSq.n, ...curFavList].slice(0, MAX_TEAM_FAV_PLAYERS);
+        setTeamFavoriteNamesList(team, nextList);
         meSq.mental = clamp((meSq.mental ?? 70) + 5, 18, 99);
         state.p.mental = meSq.mental;
         meSq.mentalFactors = [{ label: 'ฟอร์มเด่นจนโค้ชยกเป็นลูกรัก!', delta: 5 }, ...(meSq.mentalFactors || [])].slice(0, 5);
         state.p.mentalFactors = meSq.mentalFactors;
       } else if (isFavNow && recent.length >= 3 && recentAvg < 6.2) {
+        setTeamFavoriteNamesList(team, curFavList.filter((n) => n !== meSq.n));
+        refreshAiTeamFavoritePlayer(team, state);
+      } else if (curFavList.length === 0) {
         refreshAiTeamFavoritePlayer(team, state);
       }
     }
@@ -1204,7 +1298,7 @@ export function applyTeamTalkAction(
     let note = opt.label;
 
     if (talkId === 'inspire') {
-      dM = R(2, 4) + (isResilientPersonality(tr) || team.favPlayer === q.n ? 1 : 0);
+      dM = R(2, 4) + (isResilientPersonality(tr) || isTeamFavoritePlayer(team, q.n) ? 1 : 0);
       note = 'ทีมทอล์กปลุกใจนักสู้';
     } else if (talkId === 'calm') {
       dM = curM < 66 ? R(5, 7) : R(2, 3);
@@ -1315,7 +1409,7 @@ export function applyPlayerCareAction(
 
     const chosenTopic: TalkTopicId =
       topic || (state.mode === 'p' ? 'mindfulness' : 'encourage');
-    const isFav = team.favPlayer === pl.n;
+    const isFav = isTeamFavoritePlayer(team, pl.n);
     const isCap = team.cap === pl.n;
     const tr = resolvePersonalityId(pl, pl.me ? state.p : null);
     const resilient = isResilientPersonality(tr);
@@ -1489,7 +1583,7 @@ export function runAiTeamTalkAndCare(team: Team, state: GameState) {
     let dP = 0;
     let note = opt.label;
     if (talkId === 'inspire') {
-      dM = R(2, 4) + (isResilientPersonality(tr) || team.favPlayer === q.n ? 1 : 0);
+      dM = R(2, 4) + (isResilientPersonality(tr) || isTeamFavoritePlayer(team, q.n) ? 1 : 0);
       note = 'ทีมทอล์กปลุกใจนักสู้';
     } else if (talkId === 'calm') {
       dM = curM < 66 ? R(4, 6) : R(1, 3);
@@ -1528,8 +1622,8 @@ export function runAiTeamTalkAndCare(team: Team, state: GameState) {
   const priority = team.sq
     .slice()
     .sort((a, b) => {
-      const aFav = team.favPlayer === a.n ? 100 : 0;
-      const bFav = team.favPlayer === b.n ? 100 : 0;
+      const aFav = isTeamFavoritePlayer(team, a.n) ? 100 : 0;
+      const bFav = isTeamFavoritePlayer(team, b.n) ? 100 : 0;
       const aNeed =
         aFav +
         ((a.inj || 0) > 0 ? 25 : 0) +
@@ -1548,7 +1642,7 @@ export function runAiTeamTalkAndCare(team: Team, state: GameState) {
     const careerP = pl.me ? state.p : null;
     const curM = getPlayerMentalScore(pl, careerP);
     const curP = getPlayerPhysScore(pl, careerP);
-    const isFav = team.favPlayer === pl.n;
+    const isFav = isTeamFavoritePlayer(team, pl.n);
     const needTalk = curM < (isFav ? GOOD_MENTAL_THRESHOLD + 2 : 62);
     const needPhys = (pl.inj || 0) > 0 || curP < (isFav ? GOOD_PHYS_THRESHOLD + 2 : 66);
 

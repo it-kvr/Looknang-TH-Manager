@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Scissors } from 'lucide-react';
-import type { Player, GameState } from '../types/game';
+import type { NavIntent, Player, GameState } from '../types/game';
+import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
+import { EffectText } from '../components/DeltaText';
 import { clamp } from '../utils/math';
 import { PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, SPN, ATT } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -38,7 +40,8 @@ import {
   getActiveFavBoost,
   getPlayerMentalScore,
   getPlayerPhysScore,
-  getWellbeingTierMeta
+  getWellbeingTierMeta,
+  isTeamFavoritePlayer
 } from '../engine/wellbeing';
 import { PlayerWellbeingCard } from '../components/PlayerWellbeingCard';
 
@@ -47,11 +50,23 @@ export const PlayerCareerView = React.memo<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
-}>(({ state, onUpdateState, onToast, onOpenSeasonStats }) => {
+  navIntent?: NavIntent | null;
+}>(({ state, onUpdateState, onToast, onOpenSeasonStats, navIntent }) => {
   const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'history'>('plan');
   const [skillSubTab, setSkillSubTab] = useState<'perks' | 'traits' | 'roles' | 'sig'>('perks');
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [showAppearanceModal, setShowAppearanceModal] = useState(false);
+  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'p');
+
+  useEffect(() => {
+    if (navIntent?.tab === 'p') {
+      if (navIntent.sub === 'missions') {
+        setCareerTab('missions');
+      } else if (!navIntent.sub || navIntent.sub === 'plan') {
+        setCareerTab('plan');
+      }
+    }
+  }, [navIntent]);
   const p = state.p;
   const meTeam = state.teams[state.me];
   const meSq = useMemo(() => (p && meTeam ? meTeam.sq.find((q) => q.me) : undefined), [meTeam, p]);
@@ -105,7 +120,7 @@ export const PlayerCareerView = React.memo<{
   const kit1 = tc(meTeam, state, false);
   const kit2 = tc(meTeam, state, true);
   const isPitchOrNaturalGK = mySlot ? mySlot === 'GK' : (p.pos === 'GK' || p.sp === 'GK');
-  const isCoachFav = meTeam.favPlayer === p.name || meTeam.favPlayer === fakePlayer.n;
+  const isCoachFav = isTeamFavoritePlayer(meTeam, p.name) || isTeamFavoritePlayer(meTeam, fakePlayer.n);
   const favBoost = getActiveFavBoost(fakePlayer, meTeam, p);
   const myMental = getPlayerMentalScore(fakePlayer, p);
   const myPhys = getPlayerPhysScore(fakePlayer, p);
@@ -232,6 +247,8 @@ export const PlayerCareerView = React.memo<{
           ))}
         </div>
 
+        <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
+
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {careerTab === 'plan' && (
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col justify-between gap-2 mland:gap-1.5 overflow-y-auto">
@@ -307,7 +324,9 @@ export const PlayerCareerView = React.memo<{
                       </div>
                       <div className="flex flex-wrap items-center justify-between gap-1 pt-1 border-t border-[var(--line)]/50 text-[10px] mland:text-[8px] font-bold tabular">
                         <span className="text-[var(--g)]">{tagText}</span>
-                        <span className="text-[var(--mut)]">⚡ ฟื้น +{ac.en}%</span>
+                        <span className={ac.en >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                          ⚡ ฟื้น {ac.en >= 0 ? `+${ac.en}` : ac.en}%
+                        </span>
                       </div>
                     </button>
                   );
@@ -320,21 +339,34 @@ export const PlayerCareerView = React.memo<{
                     : '💪 ความฟิตพร้อมเต็มที่ เหมาะสำหรับเร่งซ้อมพัฒนาค่าพลังหรือดูวิดีโอก่อนแข่ง'}
                 </span>
                 {p.last && (
-                  <span className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-bold">
-                    ผลซ้อมล่าสุด: {p.last}
+                  <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] font-semibold">
+                    ผลซ้อมล่าสุด: <EffectText text={p.last} />
                   </span>
                 )}
               </div>
-              <PlayerWellbeingCard
-                player={fakePlayer}
-                team={meTeam}
-                state={state}
-                isMyTeam
-                isMePlayer
-                onUpdateState={onUpdateState}
-                onToast={onToast}
-                compact
-              />
+              <div
+                data-focus-id="wellbeing"
+                className={`rounded-2xl transition-all ${
+                  isFocused('wellbeing') ? 'p-1 task-focus-spotlight bg-amber-500/[0.04]' : ''
+                }`}
+              >
+                {isFocused('wellbeing') && (
+                  <div className="px-2 pb-1 flex items-center justify-between gap-2">
+                    <NavFocusBadge label="ดูแลสภาพใจ/กายตรงนี้" />
+                    <span className="text-[10px] text-[var(--mut)]">กดปุ่มฟื้นฟูหรือคุยปรับใจด้านล่าง</span>
+                  </div>
+                )}
+                <PlayerWellbeingCard
+                  player={fakePlayer}
+                  team={meTeam}
+                  state={state}
+                  isMyTeam
+                  isMePlayer
+                  onUpdateState={onUpdateState}
+                  onToast={onToast}
+                  compact
+                />
+              </div>
             </div>
           )}
 

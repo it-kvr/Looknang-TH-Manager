@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, Lock, RefreshCw, Search, SlidersHorizontal, Star, Trash2, Unlock, Users, X } from 'lucide-react';
-import type { SubRole, MainTab, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
+import type { SubRole, MainTab, NavIntent, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
+import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -161,8 +162,9 @@ export const MarketView = React.memo<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team | null) => void;
   onToast: (msg: string) => void;
-  navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
+  navIntent?: NavIntent | null;
 }>(({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
+  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'k');
   const me = state.teams[state.me];
   const tx = getLeagueTransferContext(state, me);
   const clubK = ensureClubIdentity(state);
@@ -243,6 +245,9 @@ export const MarketView = React.memo<{
     } else if (navIntent.sub === 'loan') {
       setActiveTab('sell');
       setSellSubView('loaned_out');
+    }
+    if (navIntent.focus === 'contracts-expiring') {
+      setContractFilter('expiring');
     }
   }, [navIntent]);
 
@@ -784,8 +789,8 @@ export const MarketView = React.memo<{
       SFX.win();
       onToast(
         deal.type === 'loan' || deal.type === 'loanopt'
-          ? `🤝 ยืมตัว ${q.n} (${q.ro} · 1 ซีซั่น · ${fmtMoneyNum(deal.wg)}/นัด) สำเร็จ!`
-          : `เซ็นสัญญา ${q.n} (${q.ro} · ${deal.yr} ปี · ${fmtMoneyNum(deal.wg)}/นัด) สำเร็จ!`
+          ? `🤝 ยืมตัว ${q.n} (${q.ro} · 1 ซีซั่น · ${deal.cashNow > 0 ? `-${fmtMoney(deal.cashNow)} · ` : ''}${fmtMoneyNum(deal.wg)}/นัด) สำเร็จ!`
+          : `เซ็นสัญญา ${q.n} (${q.ro} · ${deal.yr} ปี · ${deal.cashNow > 0 ? `-${fmtMoney(deal.cashNow)} · ` : ''}${fmtMoneyNum(deal.wg)}/นัด) สำเร็จ!`
       );
     } else {
       onUpdateState((d) => {
@@ -1503,8 +1508,8 @@ export const MarketView = React.memo<{
                 <div className="divide-y divide-[var(--line)]/55 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2.5">
                   <div className="py-1.5 mland:py-1 flex items-center justify-between gap-2">
                     <span className="text-[var(--mut)]">จ่ายทันที ({cashSubNote})</span>
-                    <b className={!canAfford ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
-                      {fmtMoneyNum(E.cashNow)}
+                    <b className={!canAfford || E.cashNow > 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>
+                      {E.cashNow > 0 ? `-${fmtMoneyNum(E.cashNow)}` : fmtMoneyNum(E.cashNow)}
                     </b>
                   </div>
                   {(E.dueLater > 0 || E.loanOpt > 0 || (offerDraft.type === 'swap' && E.swapQ)) && (
@@ -1515,7 +1520,7 @@ export const MarketView = React.memo<{
                   )}
                   <div className="py-1.5 mland:py-1 flex items-center justify-between gap-2">
                     <span className="text-[var(--mut)]">ค่าเหนื่อย (ขอ ~{fmtMoneyNum(askWage)})</span>
-                    <b className="text-[var(--ink)]">{fmtMoneyNum(E.wg)}/นัด</b>
+                    <b className="text-[var(--red)]">-{fmtMoneyNum(E.wg)}/นัด</b>
                   </div>
                   <div className="py-1.5 mland:py-1 flex items-center justify-between gap-2">
                     <span className="text-[var(--mut)]">งบคงเหลือหลังดีล</span>
@@ -1854,6 +1859,8 @@ export const MarketView = React.memo<{
           );
         })}
       </div>
+
+      <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
 
       {/* SECTION 1: BUY & LOAN PLAYERS */}
       {activeTab === 'buy' && (
@@ -2679,7 +2686,7 @@ export const MarketView = React.memo<{
                     });
                     SFX.win();
                     setCreatedRefresh((n) => n + 1);
-                    onToast(fee > 0 ? `💰 ซื้อ ${q.n} เข้าทีมเรียบร้อย (🌱 เด็กปั้น)!` : `🌱 ดึง ${q.n} เข้าทีมเป็นเด็กปั้นฟรีเรียบร้อย!`);
+                    onToast(fee > 0 ? `💰 ซื้อ ${q.n} เข้าทีมเรียบร้อย (-${fmtMoney(fee)} · 🌱 เด็กปั้น)!` : `🌱 ดึง ${q.n} เข้าทีมเป็นเด็กปั้นฟรีเรียบร้อย!`);
                   };
 
                   const cs = cand.careerStats;
@@ -3116,10 +3123,16 @@ export const MarketView = React.memo<{
       {activeTab === 'sell' && (
         <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
           {/* Left: Incoming Buy & Loan Offers */}
-          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+          <section
+            data-focus-id="incoming-offers"
+            className={`rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden ${
+              isFocused('incoming-offers') ? 'task-focus-spotlight' : ''
+            }`}
+          >
             <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-                💼 ทีมยื่นซื้อ &amp; ขอยืม ({incomingOffers.length})
+              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate flex items-center gap-1.5">
+                <span>💼 ทีมยื่นซื้อ &amp; ขอยืม ({incomingOffers.length})</span>
+                {isFocused('incoming-offers') && <NavFocusBadge />}
               </h3>
               <div className="seg-bar shrink-0">
                 <button
@@ -3829,10 +3842,16 @@ export const MarketView = React.memo<{
           </section>
 
           {/* Right: Scout Report */}
-          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+          <section
+            data-focus-id="scout-report"
+            className={`rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden ${
+              isFocused('scout-report') ? 'task-focus-spotlight' : ''
+            }`}
+          >
             <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
-              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-                {state.scout?.results ? `📋 รายงาน: ${state.scout.label}` : '📋 รายงานผลการส่อง'}
+              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate flex items-center gap-1.5">
+                <span>{state.scout?.results ? `📋 รายงาน: ${state.scout.label}` : '📋 รายงานผลการส่อง'}</span>
+                {isFocused('scout-report') && <NavFocusBadge />}
               </h3>
               {state.scout?.results && (
                 <button
@@ -4030,10 +4049,16 @@ export const MarketView = React.memo<{
       {activeTab === 'con' && (
         <div className="grid grid-cols-1 sm:grid-cols-[1.08fr_0.92fr] mland:grid-cols-[1.08fr_0.92fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
           {/* Left: First-Team Contracts */}
-          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+          <section
+            data-focus-id="contracts-expiring"
+            className={`rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden ${
+              isFocused('contracts-expiring') ? 'task-focus-spotlight' : ''
+            }`}
+          >
             <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-between gap-2">
-              <div className="flex items-baseline gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">📋 สัญญานักเตะ ({displayedContracts.length})</h3>
+                {isFocused('contracts-expiring') && <NavFocusBadge />}
                 <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] hidden sm:inline mland:inline truncate">
                   ≤ 1 ปี ควรรีบต่อก่อนหมด
                 </span>
@@ -4168,7 +4193,7 @@ export const MarketView = React.memo<{
                                 wage: target.con.wg
                               });
                             });
-                            onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
+                            onToast(`ซื้อขาด ${q.n} ถาวรแล้ว! (-${fmtMoney(q.loanOpt || 0)})`);
                           }}
                           className="btn btn-sm btn-primary shrink-0"
                         >

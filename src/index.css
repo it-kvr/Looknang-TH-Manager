@@ -808,19 +808,28 @@ button:not(:disabled):active {
 }
 
 @keyframes task-sweep-beam {
-  0%, 40% {
+  0%, 16% {
     transform: translate3d(-120%, 0, 0) skewX(-18deg);
     opacity: 0;
   }
-  52% {
-    opacity: 0.85;
+  30% {
+    opacity: 0.9;
   }
-  82% {
-    opacity: 0.45;
+  84% {
+    opacity: 0.55;
   }
   100% {
     transform: translate3d(260%, 0, 0) skewX(-18deg);
     opacity: 0;
+  }
+}
+
+@keyframes task-focus-opacity {
+  0%, 100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -831,12 +840,29 @@ button:not(:disabled):active {
 
 .task-alert-glow-soft {
   will-change: opacity;
-  animation: task-alert-breathe 2.45s ease-in-out infinite;
+  animation: task-alert-breathe 2.35s ease-in-out infinite;
 }
 
 .task-sweep-beam {
   will-change: transform, opacity;
-  animation: task-sweep-beam 3.1s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation: task-sweep-beam 2.15s cubic-bezier(0.25, 0.85, 0.35, 1) infinite;
+}
+
+.task-focus-spotlight {
+  position: relative;
+  border-color: var(--lamp) !important;
+  box-shadow: 0 0 0 1.5px rgba(245, 194, 66, 0.65);
+}
+
+.task-focus-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(245, 194, 66, 0.9), 0 0 18px rgba(245, 194, 66, 0.4);
+  will-change: opacity;
+  animation: task-focus-opacity 1.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -860,11 +886,15 @@ button:not(:disabled):active {
   .live-dot-core,
   .task-alert-glow-urg,
   .task-alert-glow-soft,
-  .task-sweep-beam {
+  .task-sweep-beam,
+  .task-focus-spotlight::after {
     animation: none !important;
   }
   .task-alert-glow-urg,
   .task-alert-glow-soft {
+    opacity: 0.85 !important;
+  }
+  .task-focus-spotlight::after {
     opacity: 0.85 !important;
   }
   .task-sweep-beam {

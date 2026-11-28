@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { EffectText } from '../components/DeltaText';
 import {
   FastForward,
   Film,
@@ -3580,8 +3581,10 @@ export const FullTimeMatchStage = React.memo<{
                     {fullTimeAnalysis.pf.motm && <span className="font-bold text-[#9a6700] dark:text-[var(--lamp)]">· 🏆 MoM</span>}
                   </span>
                   <span className="inline-flex items-center gap-2 tabular">
-                    {(fullTimeAnalysis.pf.repGain ?? 0) > 0 && (
-                      <span className="font-bold text-[#9a6700] dark:text-[var(--lamp)]">+{fullTimeAnalysis.pf.repGain} ★ ชื่อเสียง</span>
+                    {(fullTimeAnalysis.pf.repGain ?? 0) !== 0 && (
+                      <span className={`font-bold ${(fullTimeAnalysis.pf.repGain ?? 0) > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                        {(fullTimeAnalysis.pf.repGain ?? 0) > 0 ? `+${fullTimeAnalysis.pf.repGain}` : fullTimeAnalysis.pf.repGain} ★ ชื่อเสียง
+                      </span>
                     )}
                     {fullTimeAnalysis.pf.pts > 0 && (
                       <span className="font-bold text-[var(--g)]">+{fullTimeAnalysis.pf.pts} แต้มพัฒนา!</span>
@@ -5255,10 +5258,10 @@ export const MatchPlayerCoachPanel = React.memo<{
                     <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate leading-tight">
                       {btn.label}
                     </div>
-                    <div className="text-[9px] mland:text-[7.5px] text-[var(--g)] truncate leading-tight">
+                    <div className="text-[9px] mland:text-[7.5px] text-[var(--g)] font-semibold truncate leading-tight">
                       {btn.pro}
                     </div>
-                    <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] truncate leading-tight">
+                    <div className="text-[9px] mland:text-[7.5px] text-[var(--red)] font-semibold truncate leading-tight">
                       {btn.con}
                     </div>
                   </div>
@@ -5283,7 +5286,7 @@ export const MatchPlayerCoachPanel = React.memo<{
                   </div>
                   {rp.effectSummary && (
                     <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] leading-snug">
-                      {rp.effectSummary}
+                      <EffectText text={rp.effectSummary} />
                     </div>
                   )}
                 </div>

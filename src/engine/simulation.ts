@@ -1,14 +1,15 @@
 import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, TransferLogEntry, TransferLogKind, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrainingIntensity, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
-import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
+import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, inferForeignTeamRegion, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { getDefaultSponsorSeed, pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles, localizeForeignTeams } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
 import {
   getActiveFavBoost,
+  getTeamFavoritePlayers,
   initPlayerWellbeing,
   refreshAiTeamFavoritePlayer,
   runAiTeamTalkAndCare,
@@ -3030,14 +3031,24 @@ export function getTeamSeasonObjectiveInfo(
 }
 
 export function ensureAsia(s: GameState) {
-  if (s.asia) return;
-  s.asia = AN.map((n) => {
-    const t = mkTeam(n, 2, s.teams.length, R(0, 8));
-    t.tier = 3;
-    t.foreign = 1;
-    s.teams.push(t);
-    return t.id;
-  });
+  if (!Array.isArray(s.asia)) {
+    s.asia = [];
+  }
+  const existingNames = new Set(
+    s.asia.map((id) => s.teams[id]?.name).filter((n): n is string => Boolean(n))
+  );
+  if (s.asia.length < AN.length) {
+    AN.forEach((n) => {
+      if (s.asia!.length >= AN.length || existingNames.has(n)) return;
+      const t = mkTeam(n, 2, s.teams.length, R(0, 8), { foreign: true, allowImport: true, keepName: true });
+      t.tier = 3;
+      t.foreign = 1;
+      s.teams.push(t);
+      s.asia!.push(t.id);
+      existingNames.add(n);
+    });
+  }
+  localizeForeignTeams(s.teams);
 }
 
 export function initAsia(s: GameState) {
@@ -3053,7 +3064,22 @@ export function initAsia(s: GameState) {
       .sort((a, b) => b[1] - a[1]);
     while (th.length < 3 && rs.length) th.push(rs.shift()![0]);
   }
-  const fo = s.asia!.slice().sort(() => Math.random() - 0.5).slice(0, 13);
+  const shuffledAsia = (s.asia || []).filter((id) => s.teams[id]).sort(() => Math.random() - 0.5);
+  const fo: number[] = [];
+  const usedCountries = new Set<string>();
+  const overflow: number[] = [];
+  shuffledAsia.forEach((id) => {
+    const country = getForeignTeamCountryMeta(s.teams[id]?.name)?.country || s.teams[id]?.name || String(id);
+    if (!usedCountries.has(country) && fo.length < 13) {
+      usedCountries.add(country);
+      fo.push(id);
+    } else {
+      overflow.push(id);
+    }
+  });
+  while (fo.length < 13 && overflow.length) {
+    fo.push(overflow.shift()!);
+  }
   const ids = [...th, ...fo].sort(() => Math.random() - 0.5);
   s.ac = { r: 0, p: ids.slice(), ids, alive: ids.includes(s.me), done: false, log: [] };
   s.pa = false;
@@ -3160,7 +3186,7 @@ export function createNewGame(
   const pv = mode === 'm' && opts.names && opts.t0;
   (pv ? opts.names! : genClubNames()).forEach((arr, ti) => {
     arr.forEach((n) => {
-      teams.push(pv && ti === 0 ? opts.t0![id] : mkTeam(n, ti, id));
+      teams.push(pv && ti === 0 ? opts.t0![id] : mkTeam(n, ti, id, R(-7, 7), { keepName: true }));
       id++;
     });
   });
@@ -5842,7 +5868,7 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
 
   const shortlistedNames = new Set((s.shortlist || []).map((x) => x.n));
   const aiBuyers = s.teams
-    .filter((t) => t.id !== s.me && t.sq.length < LEAGUE_TRANSFER_RULES.maxSquad - 1)
+    .filter((t) => t.id !== s.me && t.tier < 3 && !t.foreign && t.sq.length < LEAGUE_TRANSFER_RULES.maxSquad - 1)
     .sort(() => Math.random() - 0.5)
     .slice(0, maxDeals * 3);
 
@@ -5951,6 +5977,8 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
       (tm) =>
         tm.id !== s.me &&
         tm.id !== buyer.id &&
+        tm.tier < 3 &&
+        !tm.foreign &&
         tm.sq.length > LEAGUE_TRANSFER_RULES.minSquad + 1 &&
         Math.abs(tm.tier - buyer.tier) <= 1
     );
@@ -6894,7 +6922,9 @@ export function afterMatchDay(
     });
   });
 
-  const prevFavBoost = me.favPlayer ? getActiveFavBoost(me.sq.find((q) => q.n === me.favPlayer) || me.sq[0], me, s.p) : 0;
+  const prevFavBoostMap = new Map(
+    getTeamFavoritePlayers(me).map((fp) => [fp.n, getActiveFavBoost(fp, me, fp.me ? s.p : null)])
+  );
   s.teams.forEach((t) => {
     const teamCtx = liveInjMeta?.wellbeingByTeam?.[t.id];
     const lastResChar = (t.fm || '').slice(-1);
@@ -6938,15 +6968,49 @@ export function afterMatchDay(
       }
     }
   });
-  if (me.favPlayer) {
-    const favPl = me.sq.find((q) => q.n === me.favPlayer);
-    if (favPl) {
+  const curFavs = getTeamFavoritePlayers(me);
+  if (curFavs.length > 0) {
+    const boostedNow: { name: string; boost: number }[] = [];
+    const droppedNow: string[] = [];
+    curFavs.forEach((favPl) => {
       const nextBoost = getActiveFavBoost(favPl, me, favPl.me ? s.p : null);
       if (nextBoost > 0) {
-        pushFeed(s, 'ลูกรักโค้ช', `💖 ${favPl.n} สุขภาพใจ/กายดีเยี่ยม! รับพลังเสริมชั่วคราว +${nextBoost} OVR นัดถัดไป`, 'ok');
-      } else if (prevFavBoost > 0) {
-        pushFeed(s, 'ลูกรักโค้ช', `⚠️ ${favPl.n} สุขภาพจิตใจหรือร่างกายยังไม่ถึงเกณฑ์ โบนัสลูกรักชั่วคราวหมดลงแล้ว`, 'urg');
+        boostedNow.push({ name: favPl.n, boost: nextBoost });
+      } else if ((prevFavBoostMap.get(favPl.n) || 0) > 0) {
+        droppedNow.push(favPl.n);
       }
+    });
+    if (boostedNow.length === 1) {
+      pushFeed(
+        s,
+        'ลูกรักโค้ช',
+        `💖 ${boostedNow[0].name} สุขภาพใจ/กายดีเยี่ยม! รับพลังเสริมชั่วคราว +${boostedNow[0].boost} OVR นัดถัดไป`,
+        'ok'
+      );
+    } else if (boostedNow.length > 1) {
+      const summary = boostedNow.map((x) => `${x.name.split(' ')[0]} +${x.boost}`).join(', ');
+      pushFeed(
+        s,
+        'ลูกรักโค้ช',
+        `💖 ลูกรัก ${boostedNow.length} คนพร้อมปลุกพลัง! (${summary} OVR นัดถัดไป)`,
+        'ok'
+      );
+    }
+    if (droppedNow.length === 1) {
+      pushFeed(
+        s,
+        'ลูกรักโค้ช',
+        `⚠️ ${droppedNow[0]} สุขภาพจิตใจหรือร่างกายยังไม่ถึงเกณฑ์ โบนัสลูกรักชั่วคราวหมดลงแล้ว`,
+        'urg'
+      );
+    } else if (droppedNow.length > 1) {
+      const dropNames = droppedNow.map((n) => n.split(' ')[0]).join(', ');
+      pushFeed(
+        s,
+        'ลูกรักโค้ช',
+        `⚠️ ลูกรัก ${droppedNow.length} คน (${dropNames}) สุขภาพยังไม่ถึงเกณฑ์ โบนัสชั่วคราวหมดลงแล้ว`,
+        'urg'
+      );
     }
   }
 
@@ -7748,7 +7812,16 @@ export function growPlayers(s: GameState) {
           }
         }
         const repOv = BASE[t.tier] + R(-1, 5) + (Math.random() < (t.tier >= 2 ? 0.25 : 0.14) ? R(3, 6) : 0);
-        const fresh = mkPlayer(q.pos, repOv, true);
+        const isForeignClub = t.foreign === 1 || t.tier >= 3;
+        const fresh = mkPlayer(
+          q.pos,
+          repOv,
+          true,
+          undefined,
+          isForeignClub
+            ? { foreignRegion: inferForeignTeamRegion(t.name) || 'intl', allowImport: true }
+            : undefined
+        );
         if (fresh.age <= 21) {
           fresh.pot = clamp(repOv + R(10, 22), 68, 95);
         }

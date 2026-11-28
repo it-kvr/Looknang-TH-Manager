@@ -4,6 +4,7 @@ import type { ArchivedMatchReport, MainTab, MatchHighlightClip, Player, Team, Ga
 import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
+import { EffectText } from '../components/DeltaText';
 import { xi, vlu, ensureCon, logFin } from '../engine/playerCore';
 import {
   sortTable,
@@ -26,7 +27,9 @@ import {
   getActiveFavBoost,
   getPlayerMentalScore,
   getPlayerPhysScore,
-  getTeamCareQuotaInfo
+  getTeamCareQuotaInfo,
+  getTeamFavoritePlayers,
+  isTeamFavoritePlayer
 } from '../engine/wellbeing';
 import type { FacilityKey } from '../types/game';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
@@ -44,7 +47,7 @@ export const LeagueView = React.memo<{
   onInspectPlayer: (player: Player, team: Team) => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onShallowPatch?: (patcher: (prev: GameState) => Partial<GameState>) => void;
-  onNavigate?: (tab: MainTab, sub?: string) => void;
+  onNavigate?: (tab: MainTab, sub?: string, focus?: string, hint?: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
   onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
@@ -259,7 +262,8 @@ export const LeagueView = React.memo<{
       const tx = getLeagueTransferContext(state, me);
       const activeDeals = getActivePartnerDeals(state);
       const careQuota = getTeamCareQuotaInfo(state, me);
-      const favPl = me.favPlayer ? me.sq.find((q) => q.n === me.favPlayer) || null : null;
+      const favList = getTeamFavoritePlayers(me);
+      const unboostedFavs = favList.filter((fp) => getActiveFavBoost(fp, me, fp.me ? state.p : null) === 0);
       const avgMental = Math.round(
         me.sq.reduce((sum, q) => sum + getPlayerMentalScore(q, q.me ? state.p : null), 0) / Math.max(1, me.sq.length)
       );
@@ -278,21 +282,26 @@ export const LeagueView = React.memo<{
       }
 
       if (state.money < 0 || (state.bd ?? 55) < 40) {
+        const isMoneyNeg = state.money < 0;
         items.push({
           id: 'club-alert-fin-bd',
           kind: 'alert',
           tone: 'urg',
           urgent: true,
           icon: '⚠️',
-          tag: state.money < 0 ? 'การเงิน' : 'บอร์ดบริหาร',
-          title: state.money < 0 ? `งบติดลบ ${fmtMoney(state.money)}` : `บอร์ดกังวล (${Math.round(state.bd ?? 55)}%)`,
-          detail: state.money < 0 ? 'ตลาดถูกระงับชั่วคราว' : 'เร่งเก็บแต้มเรียกความเชื่อมั่น',
-          actionLabel: state.money < 0 ? 'ดูการเงิน' : 'ดูบอร์ด',
-          onAction: () => onNavigate?.(state.money < 0 ? 'f' : 'u')
+          tag: isMoneyNeg ? 'การเงิน' : 'บอร์ดบริหาร',
+          title: isMoneyNeg ? `งบติดลบ ${fmtMoney(state.money)}` : `บอร์ดกังวล (${Math.round(state.bd ?? 55)}%)`,
+          detail: isMoneyNeg ? 'ตลาดถูกระงับชั่วคราว' : 'เร่งเก็บแต้มเรียกความเชื่อมั่น',
+          actionLabel: isMoneyNeg ? 'ดูการเงิน' : 'ดูบอร์ด',
+          onAction: () =>
+            isMoneyNeg
+              ? onNavigate?.('f', 'overview', 'fin-cashflow', 'ตรวจดูสมดุลรายรับ-รายจ่าย และหาทุนเพิ่มหรือลดรายจ่ายเพื่อพ้นตัวแดง')
+              : onNavigate?.('u', 'info', 'board-directive', 'ตรวจดูความเชื่อมั่นบอร์ดและเป้าหมายซีซั่นในกรอบที่ไฮไลต์')
         });
       }
 
       if (unreadyXi.length > 0) {
+        const unreadyNames = unreadyXi.slice(0, 2).map((q) => q.n.split(' ')[0]).join(', ');
         items.push({
           id: 'xi-unready',
           kind: 'alert',
@@ -306,7 +315,13 @@ export const LeagueView = React.memo<{
             .map((q) => `${q.n.split(' ')[0]} (${q.inj > 0 ? 'เจ็บ' : 'แบน'})`)
             .join(', '),
           actionLabel: 'จัดทัพ',
-          onAction: () => onNavigate?.('q')
+          onAction: () =>
+            onNavigate?.(
+              'q',
+              undefined,
+              'xi-unready',
+              `เปลี่ยนตัวจริงที่เจ็บ/แบน (${unreadyNames}) ออก — กด "⚡ สลับตัวพร้อมลง" ที่แถบแจ้งเตือนหรือลากสลับกับตัวสำรอง`
+            )
         });
       }
 
@@ -339,32 +354,53 @@ export const LeagueView = React.memo<{
             actionLabel = `ซ่อม ${fmtMoneyNum(renCost)}`;
             onAction = () => {
               let done: string[] = [];
+              let paidCost = 0;
               onUpdateState((d) => {
                 const curLv = d[fk] ?? 1;
                 const curCond = getFacilityCondition(d, fk);
                 const costNow = getFacilityRenovateCost(baseCost, curLv, curCond);
                 if (curLv <= 0 || d.money < costNow) return;
                 d.money -= costNow;
+                paidCost = costNow;
                 d.facCond = { ...(d.facCond || {}), [fk]: 100 };
                 logFin(d, `ซ่อมบำรุงตามคำเรียกร้อง (${curCond}% → 100%)`, -costNow);
                 done = checkClubDemandsCompletion(d);
               });
-              onToast?.(done.length ? `✅ ซ่อมบำรุงสำเร็จ!` : '🔧 ปรับปรุงสภาพเรียบร้อยแล้ว');
+              const costTag = paidCost > 0 ? ` (-${fmtMoney(paidCost)})` : '';
+              onToast?.(done.length ? `✅ ซ่อมบำรุงสำเร็จ!${costTag}` : `🔧 ปรับปรุงสภาพเรียบร้อยแล้ว${costTag}`);
             };
           } else {
             actionLabel = 'ไปซ่อม';
-            onAction = () => onNavigate?.('u', 'infra');
+            onAction = () =>
+              onNavigate?.(
+                'u',
+                'infra',
+                `fac:${fk}`,
+                `กดปุ่ม "🔧 ซ่อม" ที่การ์ดที่ไฮไลต์ด้านซ้าย (${req.title})`
+              );
           }
         } else if (req.kind === 'upgrade_fac') {
           const fk = req.targetKey as FacilityKey;
           const lv = state[fk] ?? 1;
           const upgCost = getFacilityUpgradeCost(facBaseCostMap[fk] ?? 80, lv);
-          detailText = `งบ ~${fmtMoneyNum(upgCost)} · ${req.rewardText}`;
+          detailText = `ค่าใช้จ่าย -${fmtMoneyNum(upgCost)} · ${req.rewardText}`;
           actionLabel = 'อัปเกรด';
-          onAction = () => onNavigate?.('u', 'infra');
+          onAction = () =>
+            onNavigate?.(
+              'u',
+              'infra',
+              `fac:${fk}`,
+              `กดปุ่ม "อัปเกรด" ที่การ์ดสิ่งอำนวยความสะดวกที่ไฮไลต์ด้านซ้าย (${req.title})`
+            );
         } else if (req.kind === 'hire_staff') {
           actionLabel = 'จ้างทีมงาน';
-          onAction = () => onNavigate?.('u', 'infra');
+          onAction = () =>
+            onNavigate?.(
+              'u',
+              'infra',
+              `staff:${req.targetKey}`,
+              `กดปุ่ม "จ้าง / อัป" ที่การ์ดทีมงานสตาฟฟ์ที่ไฮไลต์ฝั่งขวา (${req.title})`
+            );
         } else if (req.kind === 'ticket_price') {
           actionLabel = 'ปรับตั๋ว';
           onAction = () => {
@@ -378,10 +414,22 @@ export const LeagueView = React.memo<{
           };
         } else if (req.kind === 'live_stream') {
           actionLabel = 'เปิดสตรีม';
-          onAction = () => onNavigate?.('f', 'commercial');
+          onAction = () =>
+            onNavigate?.(
+              'f',
+              'commercial',
+              'stream',
+              'เลือกแพ็กเกจถ่ายทอดสดที่ต้องการในกรอบที่ไฮไลต์ แล้วกด "💾 บันทึกการเปลี่ยนแปลง"'
+            );
         } else if (req.kind === 'megastore_stock') {
           actionLabel = 'เติมร้าน';
-          onAction = () => onNavigate?.('f', 'megastore');
+          onAction = () =>
+            onNavigate?.(
+              'f',
+              'megastore',
+              'megastore-stock',
+              'กด "+ทุน 25k" / "+พอดี 4 นัด" หรือเปิด "เติมอัตโนมัติ" ในกรอบที่ไฮไลต์'
+            );
         }
 
         items.push({
@@ -412,7 +460,13 @@ export const LeagueView = React.memo<{
           title: dir.title,
           detail: `${prog.progressText} (${Math.round(prog.ratio * 100)}%)`,
           actionLabel: 'ดูเป้า',
-          onAction: () => onNavigate?.('u', 'info')
+          onAction: () =>
+            onNavigate?.(
+              'u',
+              'info',
+              'board-directive',
+              `ตรวจดูความคืบหน้าและกำหนดส่งคำสั่งบอร์ดในกรอบที่ไฮไลต์ (${dir.title})`
+            )
         });
       } else {
         const activeBoardFx = getActiveBoardEffects(state);
@@ -428,7 +482,8 @@ export const LeagueView = React.memo<{
             title: topFx.label,
             detail: `อีก ${Math.max(1, topFx.expiresMd - (state.md ?? 0))} นัด`,
             actionLabel: 'ดูบอร์ด',
-            onAction: () => onNavigate?.('u', 'info')
+            onAction: () =>
+              onNavigate?.('u', 'info', 'board-directive', 'ตรวจดูสถานะบอร์ดและผลกระทบปัจจุบันในกรอบที่ไฮไลต์')
           });
         }
       }
@@ -444,9 +499,15 @@ export const LeagueView = React.memo<{
           icon: isLoan ? '🤝' : '💼',
           tag: 'ข้อเสนอซื้อ-ยืม',
           title: `${incomingOffers.length} ข้อเสนอรอตอบ`,
-          detail: `${topOff.t} ${isLoan ? 'ยืม' : 'ซื้อ'} ${topOff.n} (${fmtMoney(topOff.p)})`,
+          detail: `${topOff.t} ${isLoan ? 'ยืม' : 'ซื้อ'} ${topOff.n} (+${fmtMoney(topOff.p)})`,
           actionLabel: 'เปิดดู',
-          onAction: () => onNavigate?.('k', 'sell')
+          onAction: () =>
+            onNavigate?.(
+              'k',
+              'sell',
+              'incoming-offers',
+              'กด "ขาย / ยอมรับ", "ต่อรองราคา" หรือ "ปฏิเสธ" ที่ข้อเสนอฝั่งซ้าย'
+            )
         });
       }
 
@@ -461,7 +522,13 @@ export const LeagueView = React.memo<{
           title: `พบนักเตะ ${state.scout.results.length} ราย`,
           detail: state.scout.label,
           actionLabel: 'ดูรายชื่อ',
-          onAction: () => onNavigate?.('k', 'scout')
+          onAction: () =>
+            onNavigate?.(
+              'k',
+              'scout',
+              'scout-report',
+              'เลือกนักเตะจากรายงานฝั่งขวาเพื่อยื่นซื้อ/ยืมตัว หรือกดดาว ★ เก็บลงลิสต์'
+            )
         });
       }
 
@@ -478,7 +545,13 @@ export const LeagueView = React.memo<{
           title: expiredCon.length > 0 ? `หมดสัญญา ${expiredCon.length} คน` : `สัญญาเหลือ 1 ปี (${expiringSoon.length} คน)`,
           detail: `${namesPreview}${totalNeed > 2 ? ` +${totalNeed - 2}` : ''}`,
           actionLabel: 'ต่อสัญญา',
-          onAction: () => onNavigate?.('k', 'con')
+          onAction: () =>
+            onNavigate?.(
+              'k',
+              'con',
+              'contracts-expiring',
+              'กรองเฉพาะ "ใกล้หมด" ไว้ให้แล้ว — กดปุ่ม "ต่อสัญญา" ที่นักเตะแต่ละคน'
+            )
         });
       }
 
@@ -513,13 +586,21 @@ export const LeagueView = React.memo<{
           title: `บาดเจ็บ ${injuredList.length} คน`,
           detail: injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj} นัด)`).join(', '),
           actionLabel: 'ฟื้นฟู',
-          onAction: () => onNavigate?.('r')
+          onAction: () =>
+            onNavigate?.(
+              'r',
+              'program',
+              'rehab',
+              'กด "✚ กายภาพกลุ่ม" ในกรอบที่ไฮไลต์ฝั่งซ้าย หรือกด "😴 พัก" ที่คนเจ็บฝั่งขวา'
+            )
         });
       }
 
-      if (favPl && getActiveFavBoost(favPl, me, favPl.me ? state.p : null) === 0 && careQuota.remaining > 0) {
+      if (unboostedFavs.length > 0 && careQuota.remaining > 0) {
+        const favPl = unboostedFavs[0];
         const fm = getPlayerMentalScore(favPl, favPl.me ? state.p : null);
         const fp = getPlayerPhysScore(favPl, favPl.me ? state.p : null);
+        const favShort = favPl.n.split(' ')[0];
         items.push({
           id: 'fav-needs-care',
           kind: 'alert',
@@ -527,10 +608,19 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: '💖',
           tag: 'ลูกรัก & จิตใจ',
-          title: `ลูกรักรอปลุกพลัง (${favPl.n.split(' ')[0]})`,
+          title:
+            unboostedFavs.length === 1
+              ? `ลูกรักรอปลุกพลัง (${favShort})`
+              : `ลูกรักรอปลุกพลัง ${unboostedFavs.length} คน (${favShort})`,
           detail: `ใจ ${fm} · กาย ${fp} (ต้อง ≥72)`,
           actionLabel: 'ดูแลทีม',
-          onAction: () => onNavigate?.('r')
+          onAction: () =>
+            onNavigate?.(
+              'r',
+              'talk',
+              `talk:${favPl.n}`,
+              `เลือกหัวข้อพูดคุยหรือกดฟื้นฟูกล้ามเนื้อให้ ${favPl.n} ในกรอบที่ไฮไลต์ (ทำ ใจ≥72 และ กาย≥72)`
+            )
         });
       } else if (avgMental < 60 && careQuota.remaining > 0) {
         items.push({
@@ -543,7 +633,13 @@ export const LeagueView = React.memo<{
           title: `ขวัญทีมต่ำ (${avgMental}/100)`,
           detail: `เหลือโควตาดูแล ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
           actionLabel: 'พูดคุย',
-          onAction: () => onNavigate?.('r')
+          onAction: () =>
+            onNavigate?.(
+              'r',
+              'talk',
+              'team-talk',
+              'เลือกหัวข้อ "ประชุมทีมทอล์ก" ฝั่งซ้ายเพื่อปลุกขวัญทั้งทีม หรือคุยรายคนฝั่งขวา'
+            )
         });
       }
 
@@ -559,7 +655,13 @@ export const LeagueView = React.memo<{
           title: `ดีล ${expiringDeal.name} เหลือ ${expiringDeal.left} นัด`,
           detail: 'ใกล้ครบสัญญา เตรียมเลือกดีลใหม่',
           actionLabel: 'ดูดีล',
-          onAction: () => onNavigate?.('f', 'commercial')
+          onAction: () =>
+            onNavigate?.(
+              'f',
+              'commercial',
+              'partner-deals',
+              `ตรวจสอบดีล ${expiringDeal.name} และเลือกเซ็นดีลใหม่ในกรอบที่ไฮไลต์`
+            )
         });
       }
 
@@ -576,7 +678,13 @@ export const LeagueView = React.memo<{
           title: `หนี้คงค้าง ${fmtMoney(bankRemain + payDue)}`,
           detail: payDue > 0 ? `ผ่อนปลายปี ${fmtMoneyNum(payDue)}` : 'ค่างวดใกล้ถึงกำหนด',
           actionLabel: 'ดูหนี้',
-          onAction: () => onNavigate?.('f', 'ledger')
+          onAction: () =>
+            onNavigate?.(
+              'f',
+              'ledger',
+              'bank-loan',
+              'กด "จ่าย 1 งวด" หรือ "โปะปิดทั้งหมด" ในกรอบธนาคารที่ไฮไลต์'
+            )
         });
       }
 
@@ -591,7 +699,13 @@ export const LeagueView = React.memo<{
           title: `ค่าเหนื่อยใกล้เต็ม (${tx.wagePct}%)`,
           detail: `${fmtMoneyNum(tx.curWage)} / ${fmtMoneyNum(tx.wageCap)}`,
           actionLabel: 'ดูงบ',
-          onAction: () => onNavigate?.('f', 'overview')
+          onAction: () =>
+            onNavigate?.(
+              'f',
+              'overview',
+              'ffp-wage',
+              'ตรวจเพดานค่าเหนื่อย (FFP) ในกรอบที่ไฮไลต์ — ปล่อยยืมหรือขายนักเตะเพื่อลดภาระค่าเหนื่อย'
+            )
         });
       }
     } else if (state.p) {
@@ -626,7 +740,13 @@ export const LeagueView = React.memo<{
           title: `บาดเจ็บพัก ${p.inj} นัด`,
           detail: 'ฟื้นฟูร่างกายได้ที่หน้าอาชีพ',
           actionLabel: 'ฟื้นฟู',
-          onAction: () => onNavigate?.('p')
+          onAction: () =>
+            onNavigate?.(
+              'p',
+              'plan',
+              'wellbeing',
+              'เลือกแผน "พักผ่อน" และกดปุ่มฟื้นฟู/กายภาพในการ์ดสุขภาพที่ไฮไลต์ด้านล่าง'
+            )
         });
       }
       if ((p.sus || 0) > 0 || (p.yc || 0) >= 2) {
@@ -652,9 +772,15 @@ export const LeagueView = React.memo<{
           title: `ใจ ${p.mental ?? 70} · กาย ${p.phys ?? 70} ค่อนข้างต่ำ`,
           detail: 'คุยปรับใจหรือฟื้นฟูกล้ามเนื้อ',
           actionLabel: 'ดูแลตัวเอง',
-          onAction: () => onNavigate?.('p')
+          onAction: () =>
+            onNavigate?.(
+              'p',
+              'plan',
+              'wellbeing',
+              'กดปุ่มคุยปรับใจหรือฟื้นฟูกล้ามเนื้อในการ์ดสุขภาพที่ไฮไลต์ด้านล่าง'
+            )
         });
-      } else if (mePl && me.favPlayer === p.name && getActiveFavBoost(mePl, me, p) === 0) {
+      } else if (mePl && isTeamFavoritePlayer(me, p.name) && getActiveFavBoost(mePl, me, p) === 0) {
         items.push({
           id: 'player-fav-boost-wait',
           kind: 'alert',
@@ -665,7 +791,13 @@ export const LeagueView = React.memo<{
           title: 'ลูกรักรอปลุกพลัง (+5~10)',
           detail: `ทำใจ ${p.mental ?? 70} และกาย ${p.phys ?? 70} ให้ถึง 72`,
           actionLabel: 'ฟื้นฟู',
-          onAction: () => onNavigate?.('p')
+          onAction: () =>
+            onNavigate?.(
+              'p',
+              'plan',
+              'wellbeing',
+              'ดูแลจิตใจและร่างกายให้ถึง 72 ในการ์ดสุขภาพที่ไฮไลต์เพื่อเปิดโบนัส +5~10 OVR'
+            )
         });
       }
     }
@@ -688,12 +820,12 @@ export const LeagueView = React.memo<{
                       <StatIconBadge kind="injury" size="xs" />
                     </span>
                   )}
-                  {part}
+                  <EffectText text={part} />
                 </React.Fragment>
               ))}
             </span>
           )
-          : f.txt,
+          : <EffectText text={f.txt} />,
         detail: ''
       });
     });
@@ -734,7 +866,7 @@ export const LeagueView = React.memo<{
               ? 'border-[1.5px] border-rose-500/90 dark:border-rose-400/90 shadow-[0_0_14px_rgba(244,63,94,0.28),inset_0_0_10px_rgba(244,63,94,0.14)] task-alert-glow-urg'
               : 'border border-rose-500/65 dark:border-rose-400/65 shadow-[0_0_8px_rgba(244,63,94,0.16)] task-alert-glow-soft'
           }`,
-          sweepBg: 'bg-gradient-to-r from-transparent via-rose-400/20 dark:via-rose-300/20 to-transparent',
+          sweepBg: 'bg-gradient-to-r from-transparent via-rose-400/28 dark:via-rose-300/28 to-transparent',
           dotPing: 'bg-rose-400',
           dotCore: 'bg-rose-500',
           kickerCls: 'text-rose-600 dark:text-rose-400 font-extrabold',
@@ -751,7 +883,7 @@ export const LeagueView = React.memo<{
               ? 'border-[1.5px] border-emerald-500/85 dark:border-emerald-400/85 shadow-[0_0_12px_rgba(16,185,129,0.24),inset_0_0_8px_rgba(16,185,129,0.12)] task-alert-glow-soft'
               : 'border border-emerald-500/55 dark:border-emerald-400/50'
           }`,
-          sweepBg: 'bg-gradient-to-r from-transparent via-emerald-400/22 dark:via-emerald-300/20 to-transparent',
+          sweepBg: 'bg-gradient-to-r from-transparent via-emerald-400/28 dark:via-emerald-300/28 to-transparent',
           dotPing: 'bg-emerald-400',
           dotCore: 'bg-emerald-500',
           kickerCls: 'text-[var(--g)] font-extrabold',
@@ -767,7 +899,7 @@ export const LeagueView = React.memo<{
             ? 'border-[1.5px] border-amber-500/85 dark:border-amber-400/85 shadow-[0_0_12px_rgba(245,158,11,0.24),inset_0_0_8px_rgba(245,158,11,0.12)] task-alert-glow-soft'
             : 'border border-amber-500/55 dark:border-amber-400/50'
         }`,
-        sweepBg: 'bg-gradient-to-r from-transparent via-amber-400/24 dark:via-amber-300/20 to-transparent',
+        sweepBg: 'bg-gradient-to-r from-transparent via-amber-400/30 dark:via-amber-300/28 to-transparent',
         dotPing: 'bg-amber-400',
         dotCore: 'bg-amber-500',
         kickerCls: 'text-amber-700 dark:text-amber-300 font-extrabold',
@@ -939,7 +1071,7 @@ export const LeagueView = React.memo<{
                   </div>
                   <div className="relative min-w-0 flex-1 space-y-0.5">
                     <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-snug break-words">
-                      {it.title}
+                      {typeof it.title === 'string' ? <EffectText text={it.title} /> : it.title}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] mland:text-[8.5px] leading-snug text-[var(--mut)]">
                       {isUnresolvedTask && style.kickerLabel && (
@@ -955,7 +1087,7 @@ export const LeagueView = React.memo<{
                         <>
                           <span aria-hidden="true" className="opacity-45">·</span>
                           <span className="break-words">
-                            {it.detail}
+                            <EffectText text={it.detail} />
                           </span>
                         </>
                       )}
@@ -1723,8 +1855,8 @@ export const LeagueView = React.memo<{
             >
               <Coins className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-[#b47b00] dark:text-[var(--lamp)] shrink-0" />
               <span>รางวัล</span>
-              <span className="text-[#9a6700] dark:text-[var(--lamp)] tabular">
-                {myLeaguePos
+              <span className="text-[var(--g)] font-extrabold tabular">
+                +{myLeaguePos
                   ? fmtMoney(getLeaguePrizeMoney(vt, myLeaguePos, tb.length))
                   : fmtMoney(getLeaguePrizeMoney(vt, 1, tb.length))}
               </span>
@@ -1872,7 +2004,7 @@ export const LeagueView = React.memo<{
                       </span>
                       {isMyCurRank && <MyTeamBadge size="2xs" />}
                     </span>
-                    <span className="font-extrabold tabular text-[#9a6700] dark:text-[var(--lamp)] shrink-0">
+                    <span className="font-extrabold tabular text-[var(--g)] shrink-0">
                       +{fmtMoney(amount)}
                     </span>
                   </div>

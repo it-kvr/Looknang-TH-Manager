@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronRight, Coins, Trophy } from 'lucide-react';
 import type { ArchivedMatchReport, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { fmtMoney } from '../utils/math';
-import { RN, TN } from '../data/thaiFootballData';
+import { RN, TN, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { ASIA_CUP_PRIZE, EXTRA_CUP_META, FA_CUP_PRIZE, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
 import { xi } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
@@ -51,7 +51,8 @@ function teamOvrQuick(team: Team): number {
 
 function tierLabelOf(team: Team): string {
   if (team.tier < 3) return TN[team.tier] || `ลีก ${team.tier + 1}`;
-  return 'สโมสรต่างแดน';
+  const meta = getForeignTeamCountryMeta(team.name);
+  return meta ? `${meta.flag} ${meta.country}` : 'สโมสรต่างแดน';
 }
 
 export const CupView = React.memo<{

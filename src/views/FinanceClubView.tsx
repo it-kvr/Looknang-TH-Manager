@@ -3,6 +3,8 @@ import { Pencil, Check, X, Dices, Palette, ArrowLeftRight, RotateCcw, Trash2, Al
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { AnimatedMoney } from '../components/AnimatedMoney';
+import { EffectText } from '../components/DeltaText';
+import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -18,6 +20,7 @@ import {
 import type {
   Position,
   MainTab,
+  NavIntent,
   Player,
   Team,
   ClubIdentity,
@@ -154,8 +157,9 @@ export const FinanceClubView = React.memo<{
   onInspectPlayer?: (p: Player, t: Team | null) => void;
   onOpenSeasonStats?: (season?: number) => void;
   onOpenManagerCareer?: (initialTab?: 'career' | 'nt') => void;
-  navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
+  navIntent?: NavIntent | null;
 }>(({ tab, state, onUpdateState, onNavigate, onToast, onInspectPlayer, onOpenSeasonStats, onOpenManagerCareer, navIntent }) => {
+  const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, ['f', 'u']);
   const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'megastore' | 'ledger'>('overview');
   const [merchPeriod, setMerchPeriod] = useState<'season' | 'alltime' | 'seasons'>('season');
   const [partnerFilter, setPartnerFilter] = useState<'all' | 'ready' | 'merch'>('all');
@@ -337,8 +341,8 @@ export const FinanceClubView = React.memo<{
     });
     onToast(
       doneDemands.length
-        ? `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1} สำเร็จ! (ตอบรับคำเรียกร้องแล้ว ✓)`
-        : `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1}/${MAX_FACILITY_LV} สำเร็จ!`
+        ? `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1} สำเร็จ! (-${fmtMoney(cost)} · ตอบรับคำเรียกร้องแล้ว ✓)`
+        : `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1}/${MAX_FACILITY_LV} สำเร็จ! (-${fmtMoney(cost)})`
     );
   };
 
@@ -372,8 +376,8 @@ export const FinanceClubView = React.memo<{
     });
     onToast(
       doneDemands.length
-        ? `🔧 ปรับปรุง${title}กลับมาสภาพ 100% และตอบรับคำเรียกร้องแล้ว!`
-        : `🔧 ปรับปรุง${title}กลับมาสภาพ 100% แล้ว`
+        ? `🔧 ปรับปรุง${title}กลับมาสภาพ 100% (-${fmtMoney(cost)}) และตอบรับคำเรียกร้องแล้ว!`
+        : `🔧 ปรับปรุง${title}กลับมาสภาพ 100% แล้ว (-${fmtMoney(cost)})`
     );
   };
 
@@ -445,8 +449,8 @@ export const FinanceClubView = React.memo<{
     });
     onToast(
       doneDemands.length
-        ? `🔧 ปรับปรุงทั้ง ${toFix.length} แห่งเป็น 100% และตอบรับคำเรียกร้องแล้ว!`
-        : `🔧 ปรับปรุงสิ่งอำนวยความสะดวกทั้ง ${toFix.length} แห่งเป็น 100% สำเร็จ!`
+        ? `🔧 ปรับปรุงทั้ง ${toFix.length} แห่งเป็น 100% (-${fmtMoney(totalCost)}) และตอบรับคำเรียกร้องแล้ว!`
+        : `🔧 ปรับปรุงสิ่งอำนวยความสะดวกทั้ง ${toFix.length} แห่งเป็น 100% สำเร็จ! (-${fmtMoney(totalCost)})`
     );
   };
 
@@ -489,7 +493,7 @@ export const FinanceClubView = React.memo<{
       logFin(d, `ก่อสร้างรูปแบบสนาม: ${spec.name}`, -spec.buildCost);
       checkClubDemandsCompletion(d);
     });
-    onToast(`🏗️ ก่อสร้างสนามรูปแบบ "${spec.name}" สำเร็จ!`);
+    onToast(`🏗️ ก่อสร้างสนามรูปแบบ "${spec.name}" สำเร็จ! (-${fmtMoney(spec.buildCost)})`);
   };
 
   const hireStaff = (role: StaffRoleKey, title: string) => {
@@ -513,8 +517,8 @@ export const FinanceClubView = React.memo<{
     });
     onToast(
       doneDemands.length
-        ? `จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} และตอบรับคำเรียกร้องแล้ว!`
-        : `จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} เรียบร้อย`
+        ? `จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} (-${fmtMoney(cost)}) และตอบรับคำเรียกร้องแล้ว!`
+        : `จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} เรียบร้อย (-${fmtMoney(cost)})`
     );
   };
 
@@ -696,7 +700,7 @@ export const FinanceClubView = React.memo<{
                     </b>
                   </span>
                   <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
-                  <span className="shrink-0">สตาฟฟ์ -{fmtMoneyNum(est.staffCost)}/นัด</span>
+                  <span className="shrink-0">สตาฟฟ์ <b className="text-[var(--red)]">-{fmtMoneyNum(est.staffCost)}</b>/นัด</span>
                   <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
                   <span className="truncate">
                     ธนาคาร {fmtMoneyNum(bankRemain)} · ผ่อนปลายปี {fmtMoneyNum(state.payDue || 0)}
@@ -775,15 +779,25 @@ export const FinanceClubView = React.memo<{
           ))}
         </div>
 
+        <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
+
         {/* Sub-tab 1: Cashflow Comparison Table, FFP Health, Trend Chart & Next-Match Boosters */}
         {finTab === 'overview' && (
           <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
             {/* Left Column: Financial Health (FFP) + Home vs Away Comparative Cashflow Sheet */}
             <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
               {/* FFP & Stability Summary */}
-              <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+              <section
+                data-focus-id="ffp-wage"
+                className={`p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${
+                  isFocused('ffp-wage') ? 'task-focus-spotlight' : ''
+                }`}
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-sm mland:text-xs text-[var(--ink)]">⚖️ เสถียรภาพการเงิน &amp; เพดาน FFP</h3>
+                  <h3 className="font-bold text-sm mland:text-xs text-[var(--ink)] flex items-center gap-1.5 flex-wrap">
+                    <span>⚖️ เสถียรภาพการเงิน &amp; เพดาน FFP</span>
+                    {isFocused('ffp-wage') && <NavFocusBadge />}
+                  </h3>
                   <span className={`text-xs mland:text-[10.5px] font-bold tabular ${tx.wagePct >= 95 ? 'text-[var(--red)]' : tx.wagePct >= 80 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
                     ใช้เพดานค่าเหนื่อย {tx.wagePct}%
                   </span>
@@ -822,9 +836,17 @@ export const FinanceClubView = React.memo<{
               </section>
 
               {/* Comparative Matchday Cashflow Sheet (Home vs Away side-by-side table) */}
-              <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+              <section
+                data-focus-id="fin-cashflow"
+                className={`p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 ${
+                  isFocused('fin-cashflow') ? 'task-focus-spotlight' : ''
+                }`}
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-sm mland:text-xs text-[var(--ink)]">💰 ประมาณการรายรับ-รายจ่ายต่อนัด</h3>
+                  <h3 className="font-bold text-sm mland:text-xs text-[var(--ink)] flex items-center gap-1.5 flex-wrap">
+                    <span>💰 ประมาณการรายรับ-รายจ่ายต่อนัด</span>
+                    {isFocused('fin-cashflow') && <NavFocusBadge />}
+                  </h3>
                   <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
                     ความจุ {est.cap.toLocaleString()} ที่นั่ง
                   </span>
@@ -1105,11 +1127,11 @@ export const FinanceClubView = React.memo<{
                             d.promo = 1;
                             logFin(d, 'โปรโมตตั๋ววันแข่ง', -15);
                           });
-                          onToast('เปิดแคมเปญโปรโมตตั๋ววันแข่งแล้ว');
+                          onToast('เปิดแคมเปญโปรโมตตั๋ววันแข่งแล้ว (-15k)');
                         }}
                         className="btn btn-sm btn-secondary whitespace-nowrap"
                       >
-                        โปรโมตตั๋ว (15k)
+                        โปรโมตตั๋ว (<span className="text-[var(--red)] tabular">-15k</span>)
                       </button>
                       <button
                         type="button"
@@ -1120,11 +1142,11 @@ export const FinanceClubView = React.memo<{
                             d.promo = 2;
                             logFin(d, 'บูสต์สปอนเซอร์วันแข่ง', -25);
                           });
-                          onToast('เปิดแคมเปญบูสต์สปอนเซอร์แล้ว');
+                          onToast('เปิดแคมเปญบูสต์สปอนเซอร์แล้ว (-25k)');
                         }}
                         className="btn btn-sm btn-secondary whitespace-nowrap"
                       >
-                        บูสต์สปอนฯ (25k)
+                        บูสต์สปอนฯ (<span className="text-[var(--red)] tabular">-25k</span>)
                       </button>
                     </div>
                   )}
@@ -1281,10 +1303,18 @@ export const FinanceClubView = React.memo<{
               {(() => {
                 const totalDealMerchPct = Math.round(activeDeals.reduce((sum, ad) => sum + (ad.merchBoost || 0), 0) * 100);
                 return (
-                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                  <section
+                    data-focus-id="partner-deals"
+                    className={`p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${
+                      isFocused('partner-deals') ? 'task-focus-spotlight' : ''
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <h3 className="font-bold text-sm mland:text-xs">📄 ดีลพาร์ทเนอร์ธุรกิจ</h3>
+                        <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5 flex-wrap">
+                          <span>📄 ดีลพาร์ทเนอร์ธุรกิจ</span>
+                          {isFocused('partner-deals') && <NavFocusBadge />}
+                        </h3>
                         <p className="text-[10px] text-[var(--mut)]">
                           {maxPartnerSlots < 3
                             ? 'อัปเกรดเมกะสโตร์ Lv.5 เพื่อปลดล็อกช่องสัญญาที่ 3'
@@ -1347,8 +1377,9 @@ export const FinanceClubView = React.memo<{
                                     {ad.category ? <span className="text-[10px] text-[var(--mut)] font-normal"> · {ad.category}</span> : null}
                                   </div>
                                   <div className="text-[10.5px] text-[var(--mut)] tabular truncate">
-                                    +{fmtMoneyNum(ad.perMatch)}/นัด · เหลือ {ad.left} นัด (~{fmtMoney(ad.left * ad.perMatch)})
-                                    {ad.merchBoost ? ` · สโตร์ +${Math.round(ad.merchBoost * 100)}%` : ''}
+                                    <EffectText
+                                      text={`+${fmtMoneyNum(ad.perMatch)}/นัด · เหลือ ${ad.left} นัด (~+${fmtMoney(ad.left * ad.perMatch)})${ad.merchBoost ? ` · สโตร์ +${Math.round(ad.merchBoost * 100)}%` : ''}`}
+                                    />
                                   </div>
                                 </div>
                               </div>
@@ -1402,7 +1433,9 @@ export const FinanceClubView = React.memo<{
                                     {deal.name} <span className="text-[10px] font-medium text-[var(--mut)]">· {deal.category}</span>
                                   </div>
                                   <div className="text-[10.5px] text-[var(--mut)] tabular truncate">
-                                    +{fmtMoneyNum(deal.perMatch)}/นัด · {deal.matches} นัด · โบนัสเซ็น +{fmtMoneyNum(deal.signBonus)}
+                                    <EffectText
+                                      text={`+${fmtMoneyNum(deal.perMatch)}/นัด · ${deal.matches} นัด · โบนัสเซ็น +${fmtMoneyNum(deal.signBonus)}`}
+                                    />
                                   </div>
                                   <div className={`text-[10px] truncate ${deal.reqOk ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
                                     {deal.reqText}
@@ -1518,7 +1551,7 @@ export const FinanceClubView = React.memo<{
                               currentTicketPlan.fanMoodDelta > 0
                                 ? 'text-[var(--g)]'
                                 : currentTicketPlan.fanMoodDelta < 0
-                                  ? 'text-[#9a6700] dark:text-[var(--lamp)]'
+                                  ? 'text-[var(--red)]'
                                   : 'text-[var(--mut)]'
                             }`}
                           >
@@ -1605,8 +1638,12 @@ export const FinanceClubView = React.memo<{
                                   }`}
                                 >
                                   {locked
-                                    ? `🔒 ปลดล็อกเมื่ออัปเกรดสนามเหย้า Lv.${plan.minStadiumLv}+ (ปัจจุบัน Lv.${stLv}) · ${planEffectText}`
-                                    : planEffectText}
+                                    ? (
+                                      <>
+                                        🔒 ปลดล็อกเมื่ออัปเกรดสนามเหย้า Lv.{plan.minStadiumLv}+ (ปัจจุบัน Lv.{stLv}) · <EffectText text={planEffectText} />
+                                      </>
+                                    )
+                                    : <EffectText text={planEffectText} />}
                                 </div>
                               </div>
                             </div>
@@ -1673,12 +1710,18 @@ export const FinanceClubView = React.memo<{
                     : null;
 
                 return (
-                  <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                  <section
+                    data-focus-id="stream"
+                    className={`p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${
+                      isFocused('stream') ? 'task-focus-spotlight' : ''
+                    }`}
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5">
+                        <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5 flex-wrap">
                           <Radio className="w-4 h-4 text-[var(--red)] shrink-0" />
                           <span>ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์</span>
+                          {isFocused('stream') && <NavFocusBadge />}
                         </h3>
                         <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
                           {oppTeam.id !== me.id
@@ -1707,7 +1750,13 @@ export const FinanceClubView = React.memo<{
                             {curStreamPlan.short}
                           </div>
                           <div className="text-[9px] text-[var(--mut)] truncate">
-                            {curStreamPlan.id === 'off' ? 'ไม่มีต้นทุน' : `ต้นทุน -${fmtMoneyNum(activeStreamProj.estOut)}`}
+                            {curStreamPlan.id === 'off' ? (
+                              'ไม่มีต้นทุน'
+                            ) : (
+                              <>
+                                ต้นทุน <span className="text-[var(--red)] font-bold">-{fmtMoneyNum(activeStreamProj.estOut)}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1782,7 +1831,7 @@ export const FinanceClubView = React.memo<{
                                 <div className="text-[10px] text-[var(--mut)] truncate tabular">
                                   {plan.id === 'off'
                                     ? 'ปล่อยช่องกลางลีกถ่ายทอด · ไม่มีค่าใช้จ่าย'
-                                    : `รับ +${fmtMoneyNum(proj.estIn)} · ต้นทุน -${fmtMoneyNum(proj.estOut)} · แฟน +${plan.fanGainBonus}/นัด`}
+                                    : <EffectText text={`รับ +${fmtMoneyNum(proj.estIn)} · ต้นทุน -${fmtMoneyNum(proj.estOut)} · แฟน +${plan.fanGainBonus}/นัด`} />}
                                 </div>
                               </div>
                             </div>
@@ -2261,9 +2310,17 @@ export const FinanceClubView = React.memo<{
                 <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
                   {/* Left Column: Working Capital, Stock Tiers & Souvenirs Breakdown */}
                   <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
-                    <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+                    <section
+                      data-focus-id="megastore-stock"
+                      className={`p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 ${
+                        isFocused('megastore-stock') ? 'task-focus-spotlight' : ''
+                      }`}
+                    >
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-bold text-sm mland:text-xs">เงินทุนหมุนเวียน &amp; ผลประกอบการ (ซ.{state.season})</h3>
+                        <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5 flex-wrap">
+                          <span>เงินทุนหมุนเวียน &amp; ผลประกอบการ (ซ.{state.season})</span>
+                          {isFocused('megastore-stock') && <NavFocusBadge />}
+                        </h3>
                         <span
                           className={`text-[10.5px] font-bold tabular text-right ${
                             megastoreProj.consignmentRisk
@@ -2862,9 +2919,17 @@ export const FinanceClubView = React.memo<{
           <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
             {/* Left Column: Debt & Squad Payroll */}
             <div className="space-y-2.5 mland:space-y-2 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto pr-0.5">
-              <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+              <section
+                data-focus-id="bank-loan"
+                className={`p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${
+                  isFocused('bank-loan') ? 'task-focus-spotlight' : ''
+                }`}
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-sm mland:text-xs">🏦 ธนาคาร &amp; จัดการหนี้สิน</h3>
+                  <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5 flex-wrap">
+                    <span>🏦 ธนาคาร &amp; จัดการหนี้สิน</span>
+                    {isFocused('bank-loan') && <NavFocusBadge />}
+                  </h3>
                   <span className={`text-xs font-bold tabular ${totalDebt > 0 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
                     {totalDebt > 0 ? `หนี้รวม ${fmtMoney(totalDebt)}` : 'ปลอดหนี้สิน'}
                   </span>
@@ -2890,7 +2955,7 @@ export const FinanceClubView = React.memo<{
                             logFin(d, 'ชำระล่วงหน้าเงินกู้ 1 งวด', -per);
                             if (d.bankLoan.left <= 0) d.bankLoan = null;
                           });
-                          onToast('ชำระเงินกู้ล่วงหน้า 1 งวดแล้ว');
+                          onToast(`ชำระเงินกู้ล่วงหน้า 1 งวดแล้ว (-${fmtMoney(per)})`);
                         }}
                         className="btn btn-sm btn-secondary"
                       >
@@ -2905,7 +2970,7 @@ export const FinanceClubView = React.memo<{
                             logFin(d, 'โปะปิดเงินกู้ธนาคาร', -bankRemain);
                             d.bankLoan = null;
                           });
-                          onToast('ปิดยอดหนี้ธนาคารทั้งหมดแล้ว');
+                          onToast(`ปิดยอดหนี้ธนาคารทั้งหมดแล้ว (-${fmtMoney(bankRemain)})`);
                         }}
                         className="btn btn-sm btn-primary"
                       >
@@ -3412,6 +3477,8 @@ export const FinanceClubView = React.memo<{
         ))}
       </div>
 
+      <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
+
       {/* Club Tab 1: Basic Info + Board Confidence & Dressing Room */}
       {clubTab === 'info' && (() => {
         const coachVis = k.managerVis && k.managerVis.length >= 8 ? k.managerVis : getDefaultCoachVis(k.managerName || k.name || 'coach');
@@ -3867,9 +3934,17 @@ export const FinanceClubView = React.memo<{
               {/* Right Column: Season Target & Board + Dressing Room Leaders */}
               <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
                 {/* Panel 1: Season Target & Board Status (no giant duplicate Board % card) */}
-                <div className="p-3 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
+                <div
+                  data-focus-id="board-directive"
+                  className={`p-3 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5 ${
+                    isFocused('board-directive') ? 'task-focus-spotlight' : ''
+                  }`}
+                >
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">เป้าหมายซีซั่น &amp; บอร์ดบริหาร</h3>
+                    <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] flex items-center gap-1.5 flex-wrap">
+                      <span>เป้าหมายซีซั่น &amp; บอร์ดบริหาร</span>
+                      {isFocused('board-directive') && <NavFocusBadge />}
+                    </h3>
                     <span className={`text-[11px] font-bold tabular ${bdStatusCls}`}>
                       เชื่อมั่น {bd}% · {bdStatusText}
                     </span>
@@ -5034,17 +5109,22 @@ export const FinanceClubView = React.memo<{
                         ? 'text-[#9a6700] dark:text-[var(--lamp)]'
                         : 'text-[var(--g)]';
 
+                  const isFacFocused = isFocused(`fac:${key}`);
+
                   return (
                     <div
                       key={key}
+                      data-focus-id={`fac:${key}`}
                       className={`p-2.5 mland:p-2 rounded-xl border space-y-1.5 transition-colors ${
-                        lv <= 0
-                          ? 'bg-[var(--red-soft)]/20 border-[var(--red)]/35'
-                          : isMaxLv
-                            ? 'bg-gradient-to-br from-[var(--g-soft)]/50 to-[var(--surface-2)]/45 border-[var(--g)]/45'
-                            : cond < 75
-                              ? 'bg-[var(--surface-2)]/70 border-[var(--red)]/35'
-                              : 'bg-[var(--surface-2)]/45 border-[var(--line)]/75'
+                        isFacFocused
+                          ? 'bg-amber-500/[0.08] task-focus-spotlight'
+                          : lv <= 0
+                            ? 'bg-[var(--red-soft)]/20 border-[var(--red)]/35'
+                            : isMaxLv
+                              ? 'bg-gradient-to-br from-[var(--g-soft)]/50 to-[var(--surface-2)]/45 border-[var(--g)]/45'
+                              : cond < 75
+                                ? 'bg-[var(--surface-2)]/70 border-[var(--red)]/35'
+                                : 'bg-[var(--surface-2)]/45 border-[var(--line)]/75'
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
@@ -5059,7 +5139,10 @@ export const FinanceClubView = React.memo<{
                         />
                         <div className="flex-1 min-w-0 space-y-0.5">
                           <div className="flex items-center justify-between gap-1.5">
-                            <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
+                            <span className="font-bold text-xs mland:text-[10.5px] truncate flex items-center gap-1.5">
+                              <span className="truncate">{title}</span>
+                              {isFacFocused && <NavFocusBadge />}
+                            </span>
                             <span
                               className={`font-extrabold text-[10.5px] tabular shrink-0 ${
                                 lv <= 0
@@ -5089,7 +5172,7 @@ export const FinanceClubView = React.memo<{
                           </div>
                           <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">{desc}</div>
                           <div className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--g)] tabular truncate">
-                            ✦ {perkLine}
+                            ✦ <EffectText text={perkLine} positiveClassName="text-[var(--g)] font-bold" />
                           </div>
                           {key === 'st' && (
                             <div className="pt-0.5 flex flex-wrap items-center justify-between gap-1.5">
@@ -5285,10 +5368,16 @@ export const FinanceClubView = React.memo<{
                 {staffDefs.map(({ role, title, desc }) => {
                   const lv = clamp(stf[role], 0, MAX_STAFF_LV);
                   const nextCost = STAFF_HIRE_COSTS[lv] ?? 0;
+                  const isStaffFocused = isFocused(`staff:${role}`);
                   return (
                     <div
                       key={role}
-                      className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)]/75 space-y-1.5"
+                      data-focus-id={`staff:${role}`}
+                      className={`p-2.5 mland:p-2 rounded-xl border space-y-1.5 ${
+                        isStaffFocused
+                          ? 'bg-amber-500/[0.08] task-focus-spotlight'
+                          : 'bg-[var(--surface-2)]/45 border-[var(--line)]/75'
+                      }`}
                     >
                       <div className="flex items-start gap-2.5">
                         <StaffRoleSvg
@@ -5300,7 +5389,10 @@ export const FinanceClubView = React.memo<{
                         />
                         <div className="flex-1 min-w-0 space-y-0.5">
                           <div className="flex items-center justify-between gap-1.5">
-                            <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
+                            <span className="font-bold text-xs mland:text-[10.5px] truncate flex items-center gap-1.5">
+                              <span className="truncate">{title}</span>
+                              {isStaffFocused && <NavFocusBadge />}
+                            </span>
                             <span className={`font-extrabold text-[10.5px] tabular shrink-0 ${lv > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                               Lv.{lv}/{MAX_STAFF_LV}
                             </span>
@@ -5965,7 +6057,9 @@ export const FinanceClubView = React.memo<{
                 <span className="truncate">📣 พบปะแฟนบอล</span>
                 <span className="text-[var(--g)] shrink-0">ฟรี</span>
               </div>
-              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">เพิ่มแฟนบอล +2.5% และความคึกคักเข้าสนาม</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                <EffectText text="เพิ่มแฟนบอล +2.5% และความคึกคักเข้าสนาม" />
+              </div>
             </button>
 
             <button
@@ -5983,15 +6077,17 @@ export const FinanceClubView = React.memo<{
                   d.bd = clamp((d.bd ?? 50) + 3, 0, 100);
                   d.clubActMd = curTurn;
                 });
-                onToast(`Open House สำเร็จ! แฟนบอล +${fmtFans(gained)} คน · ขวัญ +5% · บอร์ด +3%`);
+                onToast(`Open House สำเร็จ! (-20k) · แฟนบอล +${fmtFans(gained)} คน · ขวัญ +5% · บอร์ด +3%`);
               }}
               className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
               <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
                 <span className="truncate">🎉 Open House สโมสร</span>
-                <span className="tabular shrink-0 text-[var(--ink)]">20k</span>
+                <span className="tabular shrink-0 text-[var(--red)]">-20k</span>
               </div>
-              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">แฟนบอล +4% · ขวัญ +5% · บอร์ด +3%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                <EffectText text="แฟนบอล +4% · ขวัญ +5% · บอร์ด +3%" />
+              </div>
             </button>
 
             <button
@@ -6007,15 +6103,17 @@ export const FinanceClubView = React.memo<{
                   });
                   d.clubActMd = curTurn;
                 });
-                onToast('เข้าแคมป์สำเร็จ! ขวัญทีม +8% ความฟิต +6%');
+                onToast('เข้าแคมป์สำเร็จ! (-25k) · ขวัญทีม +8% ความฟิต +6%');
               }}
               className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
               <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
                 <span className="truncate">🏃 แคมป์กระชับทีม</span>
-                <span className="tabular shrink-0 text-[var(--ink)]">25k</span>
+                <span className="tabular shrink-0 text-[var(--red)]">-25k</span>
               </div>
-              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">ขวัญทีม +8% · ฟิตทั้งทีม +6%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                <EffectText text="ขวัญทีม +8% · ฟิตทั้งทีม +6%" />
+              </div>
             </button>
 
             <button
@@ -6029,15 +6127,17 @@ export const FinanceClubView = React.memo<{
                   d.mor = clamp((d.mor ?? 50) + 3, 0, 100);
                   d.clubActMd = curTurn;
                 });
-                onToast('ติวเข้มแท็กติกสำเร็จ! ความคุ้นเคยแผน +10% · ขวัญ +3%');
+                onToast('ติวเข้มแท็กติกสำเร็จ! (-15k) · ความคุ้นเคยแผน +10% · ขวัญ +3%');
               }}
               className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
               <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
                 <span className="truncate">🎯 ติวเข้มแท็กติก</span>
-                <span className="tabular shrink-0 text-[var(--ink)]">15k</span>
+                <span className="tabular shrink-0 text-[var(--red)]">-15k</span>
               </div>
-              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">ความคุ้นเคยแผน +10% · ขวัญ +3%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                <EffectText text="ความคุ้นเคยแผน +10% · ขวัญ +3%" />
+              </div>
             </button>
 
             <button
@@ -6055,15 +6155,17 @@ export const FinanceClubView = React.memo<{
                   d.bd = clamp((d.bd ?? 50) + 2, 0, 100);
                   d.clubActMd = curTurn;
                 });
-                onToast(`แมตช์การกุศลสุดประทับใจ! แฟนบอล +${fmtFans(gained)} คน · ชื่อเสียง +4`);
+                onToast(`แมตช์การกุศลสุดประทับใจ! (-10k) · แฟนบอล +${fmtFans(gained)} คน · ชื่อเสียง +4`);
               }}
               className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
               <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
                 <span className="truncate">⚽ แมตช์การกุศล</span>
-                <span className="tabular shrink-0 text-[var(--ink)]">10k</span>
+                <span className="tabular shrink-0 text-[var(--red)]">-10k</span>
               </div>
-              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">แฟนบอล +5% · ชื่อเสียงกุนซือ +4 · บอร์ด +2%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                <EffectText text="แฟนบอล +5% · ชื่อเสียงกุนซือ +4 · บอร์ด +2%" />
+              </div>
             </button>
 
             <button
@@ -6088,17 +6190,19 @@ export const FinanceClubView = React.memo<{
                 });
                 onToast(
                   boostedName
-                    ? `แคมเปญปัง! แฟน +${fmtFans(gained)} และ ${boostedName} มีกำลังใจพัฒนา +1 OVR!`
-                    : `แคมเปญโซเชียลปังมาก! ยอดผู้ติดตามสโมสร +${fmtFans(gained)} คน`
+                    ? `แคมเปญปัง! (-12k) · แฟน +${fmtFans(gained)} และ ${boostedName} มีกำลังใจพัฒนา +1 OVR!`
+                    : `แคมเปญโซเชียลปังมาก! (-12k) · ยอดผู้ติดตามสโมสร +${fmtFans(gained)} คน`
                 );
               }}
               className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
               <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
                 <span className="truncate">📱 แคมเปญโซเชียล</span>
-                <span className="tabular shrink-0 text-[var(--ink)]">12k</span>
+                <span className="tabular shrink-0 text-[var(--red)]">-12k</span>
               </div>
-              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">ยอดผู้ติดตาม +4.5% · กระตุ้นดาวรุ่งในทีม</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                <EffectText text="ยอดผู้ติดตาม +4.5% · กระตุ้นดาวรุ่งในทีม" />
+              </div>
             </button>
           </div>
         </div>
