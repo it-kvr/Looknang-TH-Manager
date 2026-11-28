@@ -15,8 +15,6 @@ import {
   getTeamCareQuotaInfo,
   getTeamFavoritePlayers,
   getWellbeingTierMeta,
-  isPlayerMentalGood,
-  isPlayerPhysGood,
   isTeamFavoritePlayer
 } from '../engine/wellbeing';
 
@@ -63,8 +61,6 @@ export const PlayerWellbeingCard: React.FC<{
   const phys = getPlayerPhysScore(player, careerP);
   const injured = (isMePlayer && careerP?.inj != null ? careerP.inj : player.inj || 0) > 0;
   const suspended = (isMePlayer && careerP?.sus != null ? careerP.sus : player.sus || 0) > 0;
-  const mGood = isPlayerMentalGood(player, careerP);
-  const pGood = isPlayerPhysGood(player, careerP);
   const mMeta = getWellbeingTierMeta(mental, 'mental', false);
   const pMeta = getWellbeingTierMeta(phys, 'phys', injured);
 
@@ -100,47 +96,160 @@ export const PlayerWellbeingCard: React.FC<{
           }
         : null;
 
+  const topMFactor = mFactors[0] || null;
+  const topPFactor = pFactors[0] || null;
+
   return (
     <div
-      className={`rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 ${
-        compact ? 'p-2.5 mland:p-2' : 'p-3 mland:p-2'
+      className={`rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1 ${
+        compact ? 'px-2.5 py-1.5 mland:px-2 mland:py-1' : 'px-3 py-2 mland:px-2 mland:py-1.5'
       }`}
     >
-      {/* Header & Factor Guide Toggle */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] truncate">
-            💖 สภาพจิตใจ·ร่างกาย &amp; ลูกรัก
+      {/* Row 1: Mental Health + Top Factor + Favorite Pill + Guide Toggle */}
+      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-nowrap">
+        <span className="w-[52px] mland:w-[44px] text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] shrink-0 whitespace-nowrap">
+          🧠 จิตใจ
+        </span>
+
+        <div
+          className="relative w-12 sm:w-20 mland:w-16 h-1.5 rounded-full bg-[var(--surface-2)] border border-[var(--line)]/70 overflow-hidden shrink-0"
+          title={`จิตใจ ${mental}/100 (${mMeta.label})`}
+        >
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${mental}%`, backgroundColor: mMeta.barColor }}
+          />
+          <div
+            title={`เกณฑ์จิตใจดี (${GOOD_MENTAL_THRESHOLD})`}
+            className="absolute top-0 bottom-0 w-0.5 bg-[var(--ink)]/55"
+            style={{ left: `${GOOD_MENTAL_THRESHOLD}%` }}
+          />
+        </div>
+
+        <div className="flex items-baseline gap-1 shrink-0 tabular whitespace-nowrap">
+          <span className={`text-[11px] mland:text-[9.5px] font-black ${mMeta.txtCls}`}>
+            {mental}
+            <span className="hidden sm:inline text-[9px] font-semibold opacity-65">/100</span>
           </span>
-          {favBoost > 0 && (
-            <span className="px-1.5 py-[1px] rounded-md bg-rose-600 text-white text-[10px] mland:text-[8.5px] font-black tabular shrink-0">
-              +{favBoost} OVR ชั่วคราว
+          <span className={`text-[9.5px] mland:text-[8px] font-bold ${mMeta.txtCls}`}>· {mMeta.label}</span>
+        </div>
+
+        <span
+          title={topMFactor ? `${topMFactor.label} (${topMFactor.delta >= 0 ? `+${topMFactor.delta}` : topMFactor.delta})` : player.mentalNote || ''}
+          className="hidden sm:inline-flex mland:inline-flex items-center gap-1 min-w-0 flex-1 text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate"
+        >
+          {topMFactor ? (
+            <>
+              <span className="truncate">{topMFactor.label}</span>
+              <span className={`font-bold tabular shrink-0 ${topMFactor.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                {topMFactor.delta >= 0 ? `+${topMFactor.delta}` : topMFactor.delta}
+              </span>
+            </>
+          ) : (
+            <span className="truncate">{player.mentalNote || 'ประเมินจากโอกาสลงสนามล่าสุด'}</span>
+          )}
+        </span>
+
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          {isFav && (
+            <span
+              title={
+                favBoost > 0
+                  ? `ลูกรักประจำทีม (${favPlayersList.length} คน) · ปลุกพลัง +${favBoost} OVR ชั่วคราว`
+                  : `ลูกรักประจำทีม (${favPlayersList.length} คน) · ต้องการใจ/กาย ≥${GOOD_MENTAL_THRESHOLD} (ตอนนี้ 🧠${mental} / ${injured ? 'บาดเจ็บ' : suspended ? 'แบน' : `💪${phys}`})`
+              }
+              className={`inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0 whitespace-nowrap leading-none ${
+                favBoost > 0
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : 'text-rose-500/80 dark:text-rose-400/80'
+              }`}
+            >
+              {favBoost > 0 ? `💖 ลูกรัก +${favBoost}` : '💖 ลูกรัก'}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              SFX.tap();
+              setShowGuide((prev) => !prev);
+            }}
+            className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] hover:text-[var(--ink)] underline decoration-dotted underline-offset-2 cursor-pointer shrink-0 whitespace-nowrap transition-colors"
+          >
+            {showGuide ? 'ซ่อน ▲' : 'เกณฑ์ ▼'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            SFX.tap();
-            setShowGuide((prev) => !prev);
-          }}
-          className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--ink)] underline decoration-dotted underline-offset-4 cursor-pointer shrink-0 transition-colors"
-        >
-          {showGuide ? 'ซ่อนเกณฑ์ ▲' : 'ดูปัจจัยใจ/กาย ▼'}
-        </button>
       </div>
 
-      {/* Collapsible Factor Guide */}
+      {/* Row 2: Physical Health + Top Factor */}
+      <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-nowrap">
+        <span className="w-[52px] mland:w-[44px] text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] shrink-0 whitespace-nowrap">
+          💪 ร่างกาย
+        </span>
+
+        <div
+          className="relative w-12 sm:w-20 mland:w-16 h-1.5 rounded-full bg-[var(--surface-2)] border border-[var(--line)]/70 overflow-hidden shrink-0"
+          title={`ร่างกาย ${phys}/100 (${pMeta.label})`}
+        >
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${phys}%`, backgroundColor: pMeta.barColor }}
+          />
+          <div
+            title={`เกณฑ์ร่างกายดี (${GOOD_PHYS_THRESHOLD})`}
+            className="absolute top-0 bottom-0 w-0.5 bg-[var(--ink)]/55"
+            style={{ left: `${GOOD_PHYS_THRESHOLD}%` }}
+          />
+        </div>
+
+        <div className="flex items-baseline gap-1 shrink-0 tabular whitespace-nowrap">
+          <span className={`text-[11px] mland:text-[9.5px] font-black ${pMeta.txtCls}`}>
+            {phys}
+            <span className="hidden sm:inline text-[9px] font-semibold opacity-65">/100</span>
+          </span>
+          <span className={`text-[9.5px] mland:text-[8px] font-bold ${pMeta.txtCls}`}>· {pMeta.label}</span>
+        </div>
+
+        <span
+          title={topPFactor ? `${topPFactor.label} (${topPFactor.delta >= 0 ? `+${topPFactor.delta}` : topPFactor.delta})` : player.physNote || ''}
+          className="inline-flex items-center gap-1 min-w-0 flex-1 text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate"
+        >
+          {topPFactor ? (
+            <>
+              <span className="truncate">{topPFactor.label}</span>
+              <span className={`font-bold tabular shrink-0 ${topPFactor.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                {topPFactor.delta >= 0 ? `+${topPFactor.delta}` : topPFactor.delta}
+              </span>
+            </>
+          ) : (
+            <span className="truncate">{player.physNote || 'ประเมินจากความฟิตและการฟื้นตัวล่าสุด'}</span>
+          )}
+        </span>
+      </div>
+
+      {/* Collapsible Factor Guide & Full Factor Log */}
       {showGuide && (
-        <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[10px] mland:text-[8.5px] leading-snug">
+        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9.5px] mland:text-[8px] leading-snug">
           <div className="space-y-1">
-            <div className="font-bold text-emerald-600 dark:text-emerald-400">🧠 ปัจจัยช่วยให้จิตใจดี (≥ {GOOD_MENTAL_THRESHOLD})</div>
+            {mFactors.length > 0 && (
+              <div className="pb-1 border-b border-[var(--line)]/60 space-y-0.5">
+                <div className="font-bold text-[var(--ink)]">ปัจจัยจิตใจล่าสุด</div>
+                {mFactors.slice(0, 5).map((f, idx) => (
+                  <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1">
+                    <span className="text-[var(--mut)] truncate">{f.label}</span>
+                    <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                      {f.delta >= 0 ? `+${f.delta}` : f.delta}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="font-bold text-emerald-600 dark:text-emerald-400">🧠 ช่วยให้จิตใจดี (≥ {GOOD_MENTAL_THRESHOLD})</div>
             <ul className="space-y-0.5 text-[var(--mut)] list-disc pl-3.5">
               {WELLBEING_FACTOR_GUIDE.mentalGood.map((txt) => (
                 <li key={txt}>{txt}</li>
               ))}
             </ul>
-            <div className="font-bold text-[var(--red)] pt-1">🧠 สิ่งที่ทำให้จิตใจตก</div>
+            <div className="font-bold text-[var(--red)] pt-0.5">🧠 ทำให้จิตใจตก</div>
             <ul className="space-y-0.5 text-[var(--mut)] list-disc pl-3.5">
               {WELLBEING_FACTOR_GUIDE.mentalBad.map((txt) => (
                 <li key={txt}>{txt}</li>
@@ -148,13 +257,26 @@ export const PlayerWellbeingCard: React.FC<{
             </ul>
           </div>
           <div className="space-y-1">
-            <div className="font-bold text-emerald-600 dark:text-emerald-400">💪 ปัจจัยช่วยให้ร่างกายดี (≥ {GOOD_PHYS_THRESHOLD})</div>
+            {pFactors.length > 0 && (
+              <div className="pb-1 border-b border-[var(--line)]/60 space-y-0.5">
+                <div className="font-bold text-[var(--ink)]">ปัจจัยร่างกายล่าสุด</div>
+                {pFactors.slice(0, 5).map((f, idx) => (
+                  <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1">
+                    <span className="text-[var(--mut)] truncate">{f.label}</span>
+                    <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                      {f.delta >= 0 ? `+${f.delta}` : f.delta}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="font-bold text-emerald-600 dark:text-emerald-400">💪 ช่วยให้ร่างกายดี (≥ {GOOD_PHYS_THRESHOLD})</div>
             <ul className="space-y-0.5 text-[var(--mut)] list-disc pl-3.5">
               {WELLBEING_FACTOR_GUIDE.physGood.map((txt) => (
                 <li key={txt}>{txt}</li>
               ))}
             </ul>
-            <div className="font-bold text-[var(--red)] pt-1">💪 สิ่งที่ทำให้ร่างกายแย่</div>
+            <div className="font-bold text-[var(--red)] pt-0.5">💪 ทำให้ร่างกายแย่</div>
             <ul className="space-y-0.5 text-[var(--mut)] list-disc pl-3.5">
               {WELLBEING_FACTOR_GUIDE.physBad.map((txt) => (
                 <li key={txt}>{txt}</li>
@@ -164,144 +286,8 @@ export const PlayerWellbeingCard: React.FC<{
         </div>
       )}
 
-      {/* Compact Favorite Player Strip */}
-      <div
-        className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl border flex items-center justify-between gap-2 ${
-          isFav && favBoost > 0
-            ? 'bg-gradient-to-r from-rose-500/12 via-amber-500/8 to-emerald-500/10 border-rose-500/40'
-            : isFav
-              ? 'bg-[var(--lamp-soft)]/50 border-[var(--lamp)]/45'
-              : 'bg-[var(--surface-2)]/50 border-[var(--line)]'
-        }`}
-      >
-        <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] mland:text-[9px]">
-          <span className="inline-flex items-center gap-1 font-extrabold text-[var(--ink)] shrink-0">
-            <span>💖</span>
-            <span>{isFav ? 'ลูกรักประจำทีม' : 'ลูกรัก'}</span>
-          </span>
-
-          {isFav ? (
-            <>
-              <span
-                className={`px-1.5 py-[1px] rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0 ${
-                  favBoost > 0
-                    ? 'bg-rose-600 text-white shadow-2xs'
-                    : 'bg-amber-500/15 border border-amber-500/35 text-amber-800 dark:text-[var(--lamp)]'
-                }`}
-              >
-                {favBoost > 0 ? `+${favBoost} OVR ปลุกพลัง` : 'รอปลุกพลัง (+5~10)'}
-              </span>
-              <span className="inline-flex items-center gap-1.5 text-[10px] mland:text-[8px] tabular">
-                <span className={`font-bold ${mGood ? 'text-[var(--g)]' : 'text-amber-700 dark:text-[var(--lamp)]'}`}>
-                  🧠 {mental}/{GOOD_MENTAL_THRESHOLD}{mGood ? '✓' : ''}
-                </span>
-                <span className="opacity-30">·</span>
-                <span className={`font-bold ${!injured && !suspended && pGood ? 'text-[var(--g)]' : 'text-amber-700 dark:text-[var(--lamp)]'}`}>
-                  {injured ? '🏥 บาดเจ็บ' : suspended ? '🟥 แบน' : `💪 ${phys}/${GOOD_PHYS_THRESHOLD}${pGood ? '✓' : ''}`}
-                </span>
-              </span>
-            </>
-          ) : (
-            <span className="text-[var(--mut)] truncate flex items-center gap-1.5">
-              <span className="font-semibold text-[var(--ink)]/85 truncate">
-                {favPlayersList.length > 0
-                  ? `ลูกรักปัจจุบัน: ${favPlayersList.map((fp) => fp.n.split(' ')[0]).join(', ')}`
-                  : 'ยังไม่มีลูกรักในรอบนี้'}
-              </span>
-              <span className="hidden sm:inline opacity-40">·</span>
-              <span className="hidden sm:inline tabular">ใจ/กาย ≥{GOOD_MENTAL_THRESHOLD} รับ +5~10 OVR</span>
-            </span>
-          )}
-        </div>
-
-        <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap tabular">
-          {favPlayersList.length}/5 คน
-        </span>
-      </div>
-
-      {/* 2-Column Mental & Physical Health Breakdown */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5">
-        {/* Mental Health */}
-        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)] space-y-1.5">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]">🧠 สุขภาพจิตใจ</span>
-            <div className="flex items-center gap-1.5 shrink-0 tabular">
-              <span className={`text-[10px] mland:text-[8.5px] font-bold ${mMeta.txtCls}`}>{mMeta.label}</span>
-              <span className="text-[10px] opacity-30">·</span>
-              <span className={`text-xs mland:text-[10.5px] font-black ${mMeta.txtCls}`}>{mental}/100</span>
-            </div>
-          </div>
-          <div className="relative h-2 rounded-full bg-[var(--surface)] border border-[var(--line)]/60 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{ width: `${mental}%`, backgroundColor: mMeta.barColor }}
-            />
-            <div
-              title={`เกณฑ์จิตใจดี (${GOOD_MENTAL_THRESHOLD})`}
-              className="absolute top-0 bottom-0 w-0.5 bg-[var(--ink)]/55"
-              style={{ left: `${GOOD_MENTAL_THRESHOLD}%` }}
-            />
-          </div>
-          <div className="space-y-0.5">
-            {mFactors.length > 0 ? (
-              mFactors.slice(0, 5).map((f, idx) => (
-                <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px]">
-                  <span className="text-[var(--mut)] truncate">{f.label}</span>
-                  <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                    {f.delta >= 0 ? `+${f.delta}` : f.delta}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                {player.mentalNote || 'ประเมินสภาพจิตใจตามโอกาสลงสนามและผลงานล่าสุด'}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Physical Health */}
-        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)] space-y-1.5">
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]">💪 สุขภาพกาย</span>
-            <div className="flex items-center gap-1.5 shrink-0 tabular">
-              <span className={`text-[10px] mland:text-[8.5px] font-bold ${pMeta.txtCls}`}>{pMeta.label}</span>
-              <span className="text-[10px] opacity-30">·</span>
-              <span className={`text-xs mland:text-[10.5px] font-black ${pMeta.txtCls}`}>{phys}/100</span>
-            </div>
-          </div>
-          <div className="relative h-2 rounded-full bg-[var(--surface)] border border-[var(--line)]/60 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{ width: `${phys}%`, backgroundColor: pMeta.barColor }}
-            />
-            <div
-              title={`เกณฑ์ร่างกายดี (${GOOD_PHYS_THRESHOLD})`}
-              className="absolute top-0 bottom-0 w-0.5 bg-[var(--ink)]/55"
-              style={{ left: `${GOOD_PHYS_THRESHOLD}%` }}
-            />
-          </div>
-          <div className="space-y-0.5">
-            {pFactors.length > 0 ? (
-              pFactors.slice(0, 5).map((f, idx) => (
-                <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px]">
-                  <span className="text-[var(--mut)] truncate">{f.label}</span>
-                  <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                    {f.delta >= 0 ? `+${f.delta}` : f.delta}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                {player.physNote || 'ประเมินความฟิต การฟื้นตัว และสภาพร่างกายล่าสุด'}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Interactive Talk & Recovery Actions (hidden when Manager inspects read-only, since talks live in Club Office) */}
-      {canCare && showCareActions ? (
+      {/* Interactive Talk & Recovery Actions (for Player Career mode) */}
+      {canCare && showCareActions && (
         <div className="space-y-1.5 pt-1 border-t border-[var(--line)]/70">
           <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[8.5px]">
             <span className="font-bold text-[var(--ink)]">💬 เลือกแนวทางพูดคุย &amp; ฟื้นฟู</span>
@@ -312,7 +298,6 @@ export const PlayerWellbeingCard: React.FC<{
             )}
           </div>
 
-          {/* Topic Selector Pills (Interactive choices) */}
           <div className="flex flex-wrap gap-1">
             {topics.map((tp) => {
               const active = activeTopicMeta.id === tp.id;
@@ -443,11 +428,7 @@ export const PlayerWellbeingCard: React.FC<{
             </div>
           )}
         </div>
-      ) : canCare && !showCareActions ? (
-        <div className="pt-1.5 border-t border-[var(--line)]/60 text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
-          🚪 พูดคุยส่วนตัวหรือส่งกายภาพได้ที่ <b className="text-[var(--ink)]">สโมสร → ห้องคุย → ห้องออฟฟิศ</b>
-        </div>
-      ) : null}
+      )}
     </div>
   );
 };

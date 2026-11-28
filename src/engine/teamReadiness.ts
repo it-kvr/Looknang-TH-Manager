@@ -438,7 +438,7 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
         detail: `ใจ ${fm} · กาย ${fp} (ต้อง ≥72)`,
         actionLabel: 'เข้าออฟฟิศ',
         nav: {
-          tab: 'u',
+          tab: 'r',
           sub: 'rooms',
           focus: `talk:${favPl.n}`,
           hint: `คุยส่วนตัวหรือส่งกายภาพให้ ${favPl.n} ในห้องออฟฟิศ (ทำ ใจ≥72 และ กาย≥72)`
@@ -456,7 +456,7 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
         detail: `เหลือโควตาออฟฟิศ ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
         actionLabel: 'เข้าห้องประชุม',
         nav: {
-          tab: 'u',
+          tab: 'r',
           sub: 'rooms',
           focus: 'team-talk',
           hint: 'เลือกวาระประชุมรวมใน "ห้องประชุมทีม" เพื่อปลุกขวัญทั้งสโมสร'

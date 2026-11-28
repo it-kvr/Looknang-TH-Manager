@@ -11,6 +11,7 @@ import {
   getTeamClubIdentity,
   xi
 } from '../engine/playerCore';
+import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
 import { ClubCrest, KitJersey, PlayerFace } from './SvgVisuals';
 import { CaptainBadge } from './CaptainBadge';
 import { PositionBadge } from './PositionBadge';
@@ -353,6 +354,8 @@ export const LockerRoomPanel: React.FC<{
               const isStarter = starterNames.has(q.n);
               const isCap = team.cap === q.n;
               const isMe = Boolean(q.me || (!isMgr && state.p?.name === q.n));
+              const isFav = isTeamFavoritePlayer(team, q.n);
+              const qFavBoost = getActiveFavBoost(q, team, isMe ? state.p : null);
 
               return (
                 <button
@@ -382,7 +385,11 @@ export const LockerRoomPanel: React.FC<{
                         {isStarter ? 'ตัวจริง' : 'สำรอง'}
                       </span>
                     </span>
-                    <OvrBadge ov={q.ov} size="2xs" />
+                    <OvrBadge
+                      ov={q.ov + qFavBoost}
+                      size="2xs"
+                      title={qFavBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${qFavBoost} = ${q.ov + qFavBoost}` : undefined}
+                    />
                   </div>
 
                   {/* Locker Compartment Interior */}
@@ -413,6 +420,18 @@ export const LockerRoomPanel: React.FC<{
                     <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate flex items-center gap-1 min-w-0">
                       <span className="truncate">{q.n}</span>
                       {isCap ? <CaptainBadge team={team} state={state} size="xs" className="shrink-0" /> : null}
+                      {isFav ? (
+                        <span
+                          title={qFavBoost > 0 ? `ลูกรักประจำทีม (+${qFavBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+                          className={`inline-flex items-center text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular shrink-0 ${
+                            qFavBoost > 0
+                              ? 'text-rose-600 dark:text-rose-400'
+                              : 'text-rose-500/80 dark:text-rose-400/80'
+                          }`}
+                        >
+                          {qFavBoost > 0 ? `💖+${qFavBoost}` : '💖'}
+                        </span>
+                      ) : null}
                       {isMe ? (
                         <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0" title="ตัวคุณ">
                           ★
@@ -465,28 +484,49 @@ export const LockerRoomPanel: React.FC<{
                 </div>
 
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display text-[var(--ink)] truncate flex items-center gap-1 leading-tight">
-                        <span className="truncate">{selectedPlayer.n}</span>
-                        {team.cap === selectedPlayer.n ? (
-                          <CaptainBadge team={team} state={state} size="sm" className="shrink-0" />
-                        ) : null}
-                        {isSelectedMe ? (
-                          <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">★</span>
-                        ) : null}
-                      </div>
-                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular mt-0.5 leading-tight flex items-center gap-1">
-                        <PositionBadge role={selectedPlayer.ro} size="2xs" />
-                        <span className={isSelectedStarter ? 'text-[var(--g)] font-semibold' : ''}>
-                          {isSelectedStarter ? 'ตัวจริง' : 'สำรอง'}
-                        </span>
-                        <span aria-hidden="true">·</span>
-                        <span>อายุ {selectedPlayer.age}</span>
-                        <span aria-hidden="true">·</span>
-                        <OvrBadge ov={selectedPlayer.ov} size="2xs" prefix="OVR" />
-                      </div>
-                    </div>
+                  {(() => {
+                    const isSelectedFav = isTeamFavoritePlayer(team, selectedPlayer.n);
+                    const selBoost = getActiveFavBoost(selectedPlayer, team, isSelectedMe ? state.p : null);
+                    return (
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display text-[var(--ink)] truncate flex items-center gap-1 leading-tight">
+                            <span className="truncate">{selectedPlayer.n}</span>
+                            {team.cap === selectedPlayer.n ? (
+                              <CaptainBadge team={team} state={state} size="sm" className="shrink-0" />
+                            ) : null}
+                            {isSelectedFav ? (
+                              <span
+                                title={selBoost > 0 ? `ลูกรักประจำทีม (+${selBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+                                className={`inline-flex items-center text-[10px] mland:text-[8.5px] font-extrabold leading-none tabular shrink-0 ${
+                                  selBoost > 0
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : 'text-rose-500/80 dark:text-rose-400/80'
+                                }`}
+                              >
+                                {selBoost > 0 ? `💖+${selBoost}` : '💖'}
+                              </span>
+                            ) : null}
+                            {isSelectedMe ? (
+                              <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">★</span>
+                            ) : null}
+                          </div>
+                          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular mt-0.5 leading-tight flex items-center gap-1">
+                            <PositionBadge role={selectedPlayer.ro} size="2xs" />
+                            <span className={isSelectedStarter ? 'text-[var(--g)] font-semibold' : ''}>
+                              {isSelectedStarter ? 'ตัวจริง' : 'สำรอง'}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span>อายุ {selectedPlayer.age}</span>
+                            <span aria-hidden="true">·</span>
+                            <OvrBadge
+                              ov={selectedPlayer.ov + selBoost}
+                              size="2xs"
+                              prefix="OVR"
+                              title={selBoost > 0 ? `OVR ${selectedPlayer.ov} + ลูกรัก ${selBoost} = ${selectedPlayer.ov + selBoost}` : undefined}
+                            />
+                          </div>
+                        </div>
 
                     <div className="shrink-0 text-right leading-none">
                       <div className="text-lg sm:text-xl mland:text-sm font-extrabold font-display tabular text-[var(--g)]">
@@ -497,6 +537,8 @@ export const LockerRoomPanel: React.FC<{
                       </div>
                     </div>
                   </div>
+                    );
+                  })()}
 
                   <button
                     type="button"

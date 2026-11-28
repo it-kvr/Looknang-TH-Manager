@@ -47,7 +47,6 @@ export const PlayerInspectorModal: React.FC<{
   const isMyTeam = !!liveTeam && liveTeam.id === state.me;
   const isMePlayer = !!livePlayer.me || (state.mode === 'p' && state.p?.name === livePlayer.n);
   const currentNo = liveTeam ? getShirtNo(liveTeam, livePlayer) : livePlayer.no || 10;
-  const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [showAppearanceModal, setShowAppearanceModal] = useState(false);
   const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>(initialTab);
@@ -59,6 +58,7 @@ export const PlayerInspectorModal: React.FC<{
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
   const isFav = !isRetired && isTeamFavoritePlayer(liveTeam, livePlayer.n);
   const favBoost = !isRetired ? getActiveFavBoost(livePlayer, liveTeam, isMePlayer ? state.p : null) : 0;
+  const info = dtInfo(livePlayer, isMePlayer ? state.p : null, favBoost);
   const staminaMeta = getStaminaMeta(livePlayer.fit);
   const fitVal = staminaMeta.f;
   const fitCol = isRetired
@@ -257,7 +257,8 @@ export const PlayerInspectorModal: React.FC<{
             <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 md:h-full mland:h-full md:overflow-y-auto mland:overflow-y-auto pr-0.5 pb-2">
               {/* Signature Athlete Card */}
               <AthleteCard
-                ov={livePlayer.ov}
+                ov={livePlayer.ov + favBoost}
+                boost={favBoost}
                 pot={livePlayer.pot}
                 talent={playerTalent}
                 roleLabel={livePlayer.ro}
@@ -299,7 +300,7 @@ export const PlayerInspectorModal: React.FC<{
                 } · อายุ ${livePlayer.age} ปี`}
                 bio={info.bio}
                 categories={summarizeStatGroups(info.G)}
-                renderStageTopLeft={(palette) =>
+                renderStageTopLeft={(palette, tone) =>
                   isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap || isFav ? (
                     <div className="flex items-center gap-1 min-w-0">
                       {isMePlayer && (
@@ -313,10 +314,14 @@ export const PlayerInspectorModal: React.FC<{
                       {isFav && (
                         <span
                           title={favBoost > 0 ? `ลูกรัก (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม'}
-                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-black leading-none shrink-0 ${
+                          className={`inline-flex items-center text-[9px] mland:text-[7.5px] font-extrabold leading-none tabular shrink-0 ${
                             favBoost > 0
-                              ? 'bg-rose-600 text-white shadow-xs'
-                              : 'bg-rose-500/25 border border-rose-400/60 text-rose-100'
+                              ? tone === 'light'
+                                ? 'text-rose-600'
+                                : 'text-rose-400'
+                              : tone === 'light'
+                                ? 'text-rose-500/80'
+                                : 'text-rose-300/80'
                           }`}
                         >
                           {favBoost > 0 ? `💖+${favBoost}` : '💖'}
@@ -408,7 +413,7 @@ export const PlayerInspectorModal: React.FC<{
                 onUpdateState={onUpdateState}
                 onToast={onToast}
                 compact
-                showCareActions={state.mode !== 'm'}
+                showCareActions={false}
               />
 
               {/* Balanced 3x2 Attribute Card Grid (Equal rows per box) */}
@@ -431,6 +436,7 @@ export const PlayerInspectorModal: React.FC<{
                           key={lbl}
                           label={lbl}
                           value={val}
+                          boost={favBoost}
                           compact
                         />
                       ))}
@@ -887,6 +893,8 @@ export const TeamInspectorModal: React.FC<{
                       const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
                       const f = Math.round(q.fit ?? 100);
                       const unavailable = (q.sus || 0) > 0 || q.inj > 0;
+                      const isRowFav = isTeamFavoritePlayer(team, q.n);
+                      const rBoost = isRowFav ? getActiveFavBoost(q, team, isMe ? state.p : null) : 0;
                       const hasCardOrStat =
                         (q.sg || 0) > 0 ||
                         (q.sa || 0) > 0 ||
@@ -898,7 +906,7 @@ export const TeamInspectorModal: React.FC<{
                           key={q.n}
                           type="button"
                           onClick={() => onInspectPlayer(q, team)}
-                          className={`w-full text-left grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_52px_74px_28px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_42px_64px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
+                          className={`w-full text-left grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_52px_74px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_42px_64px_auto] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
                             unavailable
                               ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09] opacity-85'
                               : isMe
@@ -940,17 +948,14 @@ export const TeamInspectorModal: React.FC<{
                               {q.n}
                             </span>
                             {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
-                            {isTeamFavoritePlayer(team, q.n) && (() => {
-                              const rBoost = getActiveFavBoost(q, team, isMe ? state.p : null);
-                              return (
-                                <span
-                                  title={rBoost > 0 ? `ลูกรักประจำทีม (ปลุกพลัง +${rBoost})` : 'ลูกรักประจำทีม'}
-                                  className="text-[10px] mland:text-[8.5px] font-bold text-rose-500 shrink-0 tabular"
-                                >
-                                  💖{rBoost > 0 ? `+${rBoost}` : ''}
-                                </span>
-                              );
-                            })()}
+                            {isRowFav && (
+                              <span
+                                title={rBoost > 0 ? `ลูกรักประจำทีม (ปลุกพลัง +${rBoost})` : 'ลูกรักประจำทีม'}
+                                className="text-[10px] mland:text-[8.5px] font-bold text-rose-500 shrink-0 tabular"
+                              >
+                                💖{rBoost > 0 ? `+${rBoost}` : ''}
+                              </span>
+                            )}
                             {isMe && (
                               <span
                                 title="ตัวคุณ"
@@ -983,8 +988,12 @@ export const TeamInspectorModal: React.FC<{
                             <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
                           </div>
 
-                          <div className="flex items-center justify-start">
-                            <OvrBadge ov={q.ov} size="2xs" />
+                          <div className="flex items-center justify-end">
+                            <OvrBadge
+                              ov={q.ov + rBoost}
+                              size="2xs"
+                              title={rBoost > 0 ? `OVR พื้นฐาน ${q.ov} + ลูกรัก ${rBoost} = ${q.ov + rBoost}` : undefined}
+                            />
                           </div>
                         </button>
                       );

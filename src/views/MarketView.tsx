@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, Lock, RefreshCw, Search, SlidersHorizontal, Star, Trash2, Unlock, Users, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Globe, Lock, RefreshCw, Search, SlidersHorizontal, Star, Trash2, Unlock, Users, X } from 'lucide-react';
 import type { SubRole, MainTab, NavIntent, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
 import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS, COUNTRY_META_BY_CODE, getCountryMetaByCode, getForeignTeamCountryMeta } from '../data/thaiFootballData';
+import { TN, BASE, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS, CONFED_META, COUNTRY_META_BY_CODE, getCountryMetaByCode, getForeignTeamCountryMeta, getCountriesOrderedByFootballPopularity, type ForeignConfed } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, dtInfo, xi, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { appendPlayerCareerLog } from '../engine/history';
@@ -155,6 +155,51 @@ export function evalOffer(q: Player, st: OfferDraft, me: Team) {
   return { type, pct: st.pct, yr, role, wb, addOnPct, addOnCash, wg, sgBonus, swapQ, swapVal, cashNow, dueLater, loanOpt, chance, clubPct, playerPct, p0 };
 }
 
+const ASEAN_NATIONAL_CODES = new Set(['TH', 'VN', 'ID', 'MY', 'SG', 'PH', 'MM', 'KH']);
+const QUICK_POPULAR_COUNTRY_SHORTS: { code: string; short: string }[] = [
+  { code: 'BR', short: 'บราซิล' },
+  { code: 'AR', short: 'อาร์เจนฯ' },
+  { code: 'GB', short: 'อังกฤษ' },
+  { code: 'ES', short: 'สเปน' },
+  { code: 'JP', short: 'ญี่ปุ่น' },
+  { code: 'KR', short: 'เกาหลีใต้' }
+];
+
+export function isPlayerOpenToDomesticMove(
+  q: Player,
+  me: Team,
+  sellerTeam?: Team | null
+): boolean {
+  if (q.locked || q.me || q.loan) return false;
+  if (!sellerTeam) {
+    // Players in the central transfer market / free agents are open to moving domestically
+    return true;
+  }
+  if (sellerTeam.sq.length <= 16) return false;
+  if (q.pos === 'GK' && sellerTeam.sq.filter((z) => z.pos === 'GK').length <= 2) return false;
+
+  const myBase = BASE[me.tier] ?? 68;
+  if (sellerTeam.tier < 3) {
+    // Already playing in a domestic league club
+    if (sellerTeam.tier <= me.tier + 1) return true;
+    return !!q.listed || q.ov <= myBase + 16;
+  }
+
+  // Foreign club player: willing to come play in Thailand based on league stature, region, age & status
+  const clubMeta = getForeignTeamCountryMeta(sellerTeam.name);
+  const natCode = q.nat || clubMeta?.code || '';
+  const natMeta = getCountryMetaByCode(natCode) || clubMeta;
+  const isAsean = ASEAN_NATIONAL_CODES.has(natCode);
+  const isAsia = natMeta?.confed === 'asia';
+
+  const tierCeiling = me.tier >= 2 ? 78 : me.tier === 1 ? 70 : 65;
+  const regionBonus = isAsean ? 4 : isAsia ? 2 : 0;
+  const ageBonus = q.age >= 33 ? 5 : q.age >= 30 ? 3 : q.age <= 21 ? 2 : 0;
+  const statusBonus = q.listed ? 4 : 0;
+
+  return q.ov <= tierCeiling + regionBonus + ageBonus + statusBonus;
+}
+
 type MarketTab = 'buy' | 'shortlist' | 'sell' | 'scout' | 'con' | 'history';
 
 export const MarketView = React.memo<{
@@ -172,7 +217,8 @@ export const MarketView = React.memo<{
   const [activeTab, setActiveTab] = useState<MarketTab>('buy');
   const [marketSource, setMarketSource] = useState<'mk' | 'club' | 'created'>('mk');
   const [createdRefresh, setCreatedRefresh] = useState(0);
-  const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW' | 'FREE'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW'>('ALL');
+  const [freeOnlyFilter, setFreeOnlyFilter] = useState(false);
   const [loanOnlyFilter, setLoanOnlyFilter] = useState(false);
   const [ageRangeFilter, setAgeRangeFilter] = useState<'ALL' | 'u21' | 'prime' | 'vet'>('ALL');
   const [minOvFilter, setMinOvFilter] = useState<number>(0);
@@ -183,6 +229,10 @@ export const MarketView = React.memo<{
   const [searchQuery, setSearchQuery] = useState('');
   const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER' | 'FOREIGN'>('MY_TIER');
   const [countryFilter, setCountryFilter] = useState<string>('ALL');
+  const [openDomesticOnly, setOpenDomesticOnly] = useState<boolean>(true);
+  const [countryPickerOpen, setCountryPickerOpen] = useState<boolean>(false);
+  const [countryPickerConfed, setCountryPickerConfed] = useState<'ALL' | ForeignConfed>('ALL');
+  const [countryPickerSearch, setCountryPickerSearch] = useState<string>('');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [shortlistFilter, setShortlistFilter] = useState<'all' | 'ready' | 'free' | 'club'>('all');
   const [shortlistSortCol, setShortlistSortCol] = useState<MarketSortCol>('default');
@@ -273,17 +323,83 @@ export const MarketView = React.memo<{
     return true;
   };
 
+  const orderedWorldCountries = useMemo(() => getCountriesOrderedByFootballPopularity(), []);
+
+  const selectCountryFilter = (nextCode: string) => {
+    SFX.tap();
+    setCountryFilter(nextCode);
+    if (marketSource === 'club' && clubTierFilter === 'MY_TIER' && nextCode !== 'ALL' && nextCode !== 'TH') {
+      setClubTierFilter('ALL');
+    }
+  };
+
+  const countryAvailabilityCounts = useMemo(() => {
+    const byCode: Record<string, number> = {};
+    let total = 0;
+    let thai = 0;
+    let foreign = 0;
+
+    if (marketSource === 'mk') {
+      (state.mk || []).forEach((q) => {
+        if (openDomesticOnly && !isPlayerOpenToDomesticMove(q, me, null)) return;
+        const code = q.nat || 'TH';
+        total++;
+        if (code === 'TH') thai++;
+        else foreign++;
+        byCode[code] = (byCode[code] || 0) + 1;
+      });
+    } else if (marketSource === 'club') {
+      state.teams.forEach((t) => {
+        if (t.id === state.me) return;
+        if (clubTierFilter === 'FOREIGN' && t.tier < 3) return;
+        const clubCode = t.tier >= 3 ? getForeignTeamCountryMeta(t.name)?.code || 'INTL' : 'TH';
+        const inMyTierRange = t.tier < 3 && Math.abs(t.tier - me.tier) <= 1;
+        t.sq.forEach((q) => {
+          if (q.me || q.loan) return;
+          if (openDomesticOnly && !isPlayerOpenToDomesticMove(q, me, t)) return;
+          const pCode = q.nat || clubCode;
+          if (pCode === 'TH') {
+            if (clubTierFilter !== 'MY_TIER' || inMyTierRange) {
+              thai++;
+              total++;
+              byCode.TH = (byCode.TH || 0) + 1;
+            }
+          } else {
+            foreign++;
+            total++;
+            byCode[pCode] = (byCode[pCode] || 0) + 1;
+          }
+        });
+      });
+    }
+
+    return { byCode, total, thai, foreign };
+  }, [marketSource, state.mk, state.teams, state.me, me, clubTierFilter, openDomesticOnly]);
+
+  const freeAvailableCount = useMemo(() => {
+    return (state.mk || []).filter(
+      (q) => !!q.free && (!openDomesticOnly || isPlayerOpenToDomesticMove(q, me, null))
+    ).length;
+  }, [state.mk, openDomesticOnly, me]);
+
   const marketList = useMemo(() => {
     const base = (state.mk || [])
       .map((q, i) => ({ q, i }))
       .filter(({ q }) => {
-        const lineOk = filter === 'ALL' || (filter === 'FREE' ? !!q.free : q.pos === filter);
+        const lineOk = filter === 'ALL' || q.pos === filter;
         const subOk = subFilter === 'ALL' || q.ro === subFilter;
+        const freeOk = !freeOnlyFilter || !!q.free;
         const loanOk = !loanOnlyFilter || !q.free;
         const effPrice = q.free ? 0 : q.price || vlu(q);
         const detailOk = matchesBuyDetailFilters(q, effPrice);
         const natCode = q.nat || 'TH';
-        const countryOk = countryFilter === 'ALL' || natCode === countryFilter;
+        const countryOk =
+          countryFilter === 'ALL'
+            ? true
+            : countryFilter === 'FOREIGN'
+              ? natCode !== 'TH'
+              : natCode === countryFilter;
+        const openOk = !openDomesticOnly || isPlayerOpenToDomesticMove(q, me, null);
         const natMeta = getCountryMetaByCode(q.nat);
         const searchOk =
           !normalizedQuery ||
@@ -291,7 +407,7 @@ export const MarketView = React.memo<{
           q.ro.toLowerCase().includes(normalizedQuery) ||
           (SPN[q.ro] || '').toLowerCase().includes(normalizedQuery) ||
           (natMeta?.country || '').toLowerCase().includes(normalizedQuery);
-        return lineOk && subOk && loanOk && detailOk && countryOk && searchOk;
+        return lineOk && subOk && freeOk && loanOk && detailOk && countryOk && openOk && searchOk;
       });
     if (buySortCol === 'default') return base;
     return [...base].sort((a, b) =>
@@ -304,7 +420,7 @@ export const MarketView = React.memo<{
         b.q.free ? 0 : b.q.price || vlu(b.q)
       )
     );
-  }, [state.mk, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, countryFilter, buySortCol, buySortDir, normalizedQuery]);
+  }, [state.mk, me, filter, subFilter, freeOnlyFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, countryFilter, openDomesticOnly, buySortCol, buySortDir, normalizedQuery]);
 
   const clubBasePool = useMemo(() => {
     if (activeTab !== 'buy' || marketSource !== 'club') return [];
@@ -316,19 +432,22 @@ export const MarketView = React.memo<{
       const clubCode = t.tier >= 3 ? getForeignTeamCountryMeta(t.name)?.code || 'INTL' : 'TH';
       t.sq.forEach((q, idx) => {
         if (q.me || q.loan) return;
-        if (countryFilter !== 'ALL') {
-          const pCode = q.nat || clubCode;
-          if (pCode !== countryFilter && clubCode !== countryFilter) return;
+        if (openDomesticOnly && !isPlayerOpenToDomesticMove(q, me, t)) return;
+        const pCode = q.nat || clubCode;
+        if (countryFilter === 'FOREIGN') {
+          if (pCode === 'TH') return;
+        } else if (countryFilter !== 'ALL') {
+          if (pCode !== countryFilter) return;
         }
         items.push({ q, team: t, idx, price: Math.max(8, vlu(q)) });
       });
     });
     return items;
-  }, [activeTab, marketSource, state.teams, state.me, me.tier, clubTierFilter, countryFilter]);
+  }, [activeTab, marketSource, state.teams, state.me, me, clubTierFilter, countryFilter, openDomesticOnly]);
 
   const clubMarketList = useMemo(() => {
     const items = clubBasePool.filter(({ q, team: t, price }) => {
-      const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
+      const lineOk = filter === 'ALL' || q.pos === filter;
       const subOk = subFilter === 'ALL' || q.ro === subFilter;
       const loanOk = !loanOnlyFilter || (t.sq.length > 16 && (q.age <= 26 || q.ov <= 76));
       const detailOk = matchesBuyDetailFilters(q, price);
@@ -347,8 +466,8 @@ export const MarketView = React.memo<{
       if (buySortCol === 'default') return b.q.ov - a.q.ov;
       return comparePlayersByColumn(a.q, b.q, buySortCol, buySortDir, a.price, b.price);
     });
-    return sorted.slice(0, 60);
-  }, [clubBasePool, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, buySortCol, buySortDir, normalizedQuery]);
+    return sorted.slice(0, countryFilter === 'FOREIGN' ? 80 : 60);
+  }, [clubBasePool, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, buySortCol, buySortDir, normalizedQuery, countryFilter]);
 
   const loanInPlayers = useMemo(
     () => me.sq.map((q, i) => ({ q, i })).filter(({ q }) => !!q.loan),
@@ -476,7 +595,7 @@ export const MarketView = React.memo<{
   const createdMarketList = useMemo(() => {
     const items = createdPool.filter((c) => {
       const q = c.player;
-      const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
+      const lineOk = filter === 'ALL' || q.pos === filter;
       const subOk = subFilter === 'ALL' || q.ro === subFilter;
       const detailOk = matchesBuyDetailFilters(q, c.price);
       const searchOk =
@@ -532,37 +651,50 @@ export const MarketView = React.memo<{
   const hasBuyFilters =
     filter !== 'ALL' ||
     subFilter !== 'ALL' ||
+    freeOnlyFilter ||
     loanOnlyFilter ||
     ageRangeFilter !== 'ALL' ||
     minOvFilter > 0 ||
     maxBudgetFilter !== 'ALL' ||
     countryFilter !== 'ALL' ||
+    !openDomesticOnly ||
     buySortCol !== 'default' ||
     searchQuery.trim() !== '';
 
   const resetBuyFilters = () => {
     setFilter('ALL');
     setSubFilter('ALL');
+    setFreeOnlyFilter(false);
     setLoanOnlyFilter(false);
     setAgeRangeFilter('ALL');
     setMinOvFilter(0);
     setMaxBudgetFilter('ALL');
     setCountryFilter('ALL');
+    setOpenDomesticOnly(true);
     setBuySortCol('default');
     setBuySortDir('desc');
     setSearchQuery('');
   };
 
   const activeBuyFilterChips: { key: string; label: string; clear: () => void }[] = [
+    ...(freeOnlyFilter
+      ? [{ key: 'free', label: '🆓 นักเตะเซ็นฟรี', clear: () => setFreeOnlyFilter(false) }]
+      : []),
     ...(filter !== 'ALL'
-      ? [{ key: 'pos', label: filter === 'FREE' ? 'ฟรีเอเยนต์' : `ตำแหน่ง: ${filter}`, clear: () => { setFilter('ALL'); setSubFilter('ALL'); } }]
+      ? [{ key: 'pos', label: `ตำแหน่ง: ${filter}`, clear: () => { setFilter('ALL'); setSubFilter('ALL'); } }]
       : []),
     ...(subFilter !== 'ALL' ? [{ key: 'role', label: `บทบาท: ${subFilter}`, clear: () => setSubFilter('ALL') }] : []),
     ...(countryFilter !== 'ALL'
       ? (() => {
+          if (countryFilter === 'FOREIGN') {
+            return [{ key: 'nat', label: '✈️ ต่างชาติทุกประเทศ', clear: () => setCountryFilter('ALL') }];
+          }
           const cm = getCountryMetaByCode(countryFilter);
           return [{ key: 'nat', label: cm ? `${cm.flag} ${cm.country}` : countryFilter, clear: () => setCountryFilter('ALL') }];
         })()
+      : []),
+    ...(!openDomesticOnly && marketSource !== 'created'
+      ? [{ key: 'openDomestic', label: 'รวมนักเตะที่ไม่สนย้ายเข้าลีก', clear: () => setOpenDomesticOnly(true) }]
       : []),
     ...(ageRangeFilter !== 'ALL'
       ? [{
@@ -1889,23 +2021,21 @@ export const MarketView = React.memo<{
       {activeTab === 'buy' && (
         <div className="grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[268px_1fr] mland:grid-cols-[228px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-rows-[minmax(0,1fr)] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
           {/* Left Filter & Source Sidebar */}
-          <aside className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 max-h-[52vh] sm:max-h-none mland:max-h-none overflow-hidden shadow-2xs">
+          <aside className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 max-h-[54vh] sm:max-h-none mland:max-h-none overflow-hidden shadow-2xs">
             {/* Sidebar Header */}
-            <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/55 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-6 h-6 mland:w-5 mland:h-5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] inline-flex items-center justify-center shrink-0">
-                  <SlidersHorizontal className="w-3.5 h-3.5 mland:w-2.5 mland:h-2.5" />
+            <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 border-b border-[var(--line)] bg-[var(--surface-2)]/60 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-5 h-5 mland:w-4 mland:h-4 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] inline-flex items-center justify-center shrink-0">
+                  <SlidersHorizontal className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
                 </span>
-                <div className="min-w-0 flex items-center gap-1.5">
-                  <h3 className="font-extrabold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">ตัวกรองตลาด</h3>
-                  {activeBuyFilterChips.length > 0 && (
-                    <span className="px-1.5 py-[1px] rounded-md bg-[var(--g)] text-white text-[9.5px] mland:text-[8px] font-black tabular shrink-0">
-                      {activeBuyFilterChips.length}
-                    </span>
-                  )}
-                </div>
+                <h3 className="font-extrabold text-[11.5px] mland:text-[10px] text-[var(--ink)] truncate">ตัวกรองตลาด</h3>
+                {activeBuyFilterChips.length > 0 && (
+                  <span className="px-1.5 py-[1px] rounded-md bg-[var(--g)] text-white text-[9px] mland:text-[8px] font-black tabular shrink-0">
+                    {activeBuyFilterChips.length}
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {hasBuyFilters && (
                   <button
                     type="button"
@@ -1913,7 +2043,7 @@ export const MarketView = React.memo<{
                       SFX.tap();
                       resetBuyFilters();
                     }}
-                    className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--red)] hover:underline cursor-pointer"
+                    className="text-[10px] mland:text-[8.5px] font-bold text-[var(--red)] hover:underline cursor-pointer"
                   >
                     ล้างค่า
                   </button>
@@ -1921,7 +2051,7 @@ export const MarketView = React.memo<{
                 <button
                   type="button"
                   onClick={() => setShowMobileFilters((v) => !v)}
-                  className="sm:hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] font-bold text-[var(--ink)] cursor-pointer"
+                  className="sm:hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] font-bold text-[var(--ink)] cursor-pointer"
                 >
                   <span>{showMobileFilters ? 'ซ่อน' : 'ตัวกรอง'}</span>
                   {showMobileFilters ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -1929,8 +2059,8 @@ export const MarketView = React.memo<{
               </div>
             </div>
 
-            {/* Always-visible Quick Source + Search on Mobile, Full Stack on Desktop */}
-            <div className="shrink-0 p-2.5 mland:p-2 border-b border-[var(--line)]/70 space-y-2 mland:space-y-1.5 bg-[var(--surface)]">
+            {/* Always-visible Quick Source, Search & Quick Deal Filter */}
+            <div className="shrink-0 p-2 mland:p-1.5 border-b border-[var(--line)]/70 space-y-1.5 mland:space-y-1 bg-[var(--surface)]">
               <div className="p-0.5 rounded-xl bg-[var(--surface-2)]/85 border border-[var(--line)]/70 grid grid-cols-3 gap-0.5">
                 <button
                   type="button"
@@ -1938,7 +2068,7 @@ export const MarketView = React.memo<{
                     SFX.tap();
                     setMarketSource('mk');
                   }}
-                  className={`py-1.5 mland:py-1 px-1 rounded-[9px] text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer transition-all ${
+                  className={`py-1 mland:py-0.5 px-1 rounded-[8px] text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer transition-all ${
                     marketSource === 'mk'
                       ? 'bg-[var(--g)] text-white shadow-2xs'
                       : 'text-[var(--mut)] hover:text-[var(--ink)]'
@@ -1952,9 +2082,9 @@ export const MarketView = React.memo<{
                   onClick={() => {
                     SFX.tap();
                     setMarketSource('club');
-                    if (filter === 'FREE') setFilter('ALL');
+                    setFreeOnlyFilter(false);
                   }}
-                  className={`py-1.5 mland:py-1 px-1 rounded-[9px] text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer transition-all ${
+                  className={`py-1 mland:py-0.5 px-1 rounded-[8px] text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer transition-all ${
                     marketSource === 'club'
                       ? 'bg-[var(--g)] text-white shadow-2xs'
                       : 'text-[var(--mut)] hover:text-[var(--ink)]'
@@ -1968,9 +2098,9 @@ export const MarketView = React.memo<{
                   onClick={() => {
                     SFX.tap();
                     setMarketSource('created');
-                    if (filter === 'FREE') setFilter('ALL');
+                    setFreeOnlyFilter(false);
                   }}
-                  className={`py-1.5 mland:py-1 px-1 rounded-[9px] text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer transition-all ${
+                  className={`py-1 mland:py-0.5 px-1 rounded-[8px] text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer transition-all ${
                     marketSource === 'created'
                       ? 'bg-[var(--g)] text-white shadow-2xs'
                       : 'text-[var(--mut)] hover:text-[var(--ink)]'
@@ -1989,33 +2119,89 @@ export const MarketView = React.memo<{
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={marketSource === 'club' ? 'ค้นชื่อนักเตะ, สโมสร, ตำแหน่ง...' : 'ค้นชื่อนักเตะ หรือตำแหน่ง...'}
                   aria-label="ค้นหานักเตะ"
-                  className="w-full pl-8 pr-7 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)] text-xs mland:text-[10px] text-[var(--ink)] placeholder:text-[var(--mut)]/75 focus:bg-[var(--surface)] focus:outline-none focus:border-[var(--g)] transition-colors"
+                  className="w-full pl-8 pr-7 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)] text-[11px] mland:text-[9.5px] text-[var(--ink)] placeholder:text-[var(--mut)]/75 focus:bg-[var(--surface)] focus:outline-none focus:border-[var(--g)] transition-colors"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
                     aria-label="ล้างคำค้นหา"
-                    className="w-5 h-5 rounded-md inline-flex items-center justify-center absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] cursor-pointer"
+                    className="w-5 h-5 rounded-md inline-flex items-center justify-center absolute right-1 top-1/2 -translate-y-1/2 text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] cursor-pointer"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 )}
               </div>
+
+              {marketSource === 'mk' && (
+                <div className="grid grid-cols-[1.4fr_1fr] gap-1">
+                  <button
+                    type="button"
+                    aria-pressed={freeOnlyFilter}
+                    onClick={() => {
+                      SFX.tap();
+                      setFreeOnlyFilter((v) => {
+                        const next = !v;
+                        if (next) setLoanOnlyFilter(false);
+                        return next;
+                      });
+                    }}
+                    title="แสดงเฉพาะนักเตะเซ็นฟรีไร้ค่าตัว (ใช้ร่วมกับตัวกรองตำแหน่ง/สัญชาติได้)"
+                    className={`py-1 mland:py-0.5 px-2 rounded-lg border text-[10.5px] mland:text-[9px] font-bold flex items-center justify-between gap-1 cursor-pointer transition-all ${
+                      freeOnlyFilter
+                        ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-2xs'
+                        : 'bg-[var(--g-soft)]/55 border-[var(--g)]/35 text-[var(--g)] hover:bg-[var(--g-soft)] hover:border-[var(--g)]/60'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1 min-w-0 truncate">
+                      <span className="shrink-0 leading-none">🆓</span>
+                      <span className="truncate">นักเตะเซ็นฟรี</span>
+                    </span>
+                    <span
+                      className={`px-1.5 py-[1px] rounded-md text-[9px] mland:text-[8px] font-extrabold tabular shrink-0 ${
+                        freeOnlyFilter ? 'bg-white/20 text-white' : 'bg-[var(--surface)]/90 text-[var(--g)]'
+                      }`}
+                    >
+                      {freeAvailableCount}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={loanOnlyFilter}
+                    onClick={() => {
+                      SFX.tap();
+                      setLoanOnlyFilter((v) => {
+                        const next = !v;
+                        if (next) setFreeOnlyFilter(false);
+                        return next;
+                      });
+                    }}
+                    className={`py-1 mland:py-0.5 px-1.5 rounded-lg border text-[10.5px] mland:text-[9px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-all truncate ${
+                      loanOnlyFilter
+                        ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-2xs'
+                        : 'bg-[var(--surface-2)]/65 border-[var(--line)] text-[var(--ink)]/85 hover:border-[var(--g)]/50'
+                    }`}
+                  >
+                    <span className="shrink-0 leading-none">🤝</span>
+                    <span className="truncate">ยืมตัวได้</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Detailed Filter Controls */}
-            <div className={`${showMobileFilters ? 'flex' : 'hidden sm:flex mland:flex'} flex-col flex-1 min-h-0 overflow-y-auto px-3 py-2.5 mland:px-2.5 mland:py-2 divide-y divide-[var(--line)]/60`}>
-              {/* Position & Role */}
-              <div className="pb-2.5 mland:pb-1.5 space-y-1.5 mland:space-y-1">
-                <div className="flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                  <span>ตำแหน่งหลัก &amp; บทบาท</span>
-                  {filter !== 'ALL' && (
+            {/* Detailed Filter Controls (Compact Card Groups) */}
+            <div className={`${showMobileFilters ? 'flex' : 'hidden sm:flex mland:flex'} flex-col flex-1 min-h-0 overflow-y-auto p-2 mland:p-1.5 space-y-1.5 mland:space-y-1`}>
+              {/* Position, Role & Budget */}
+              <div className="rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/65 p-1.5 mland:p-1 space-y-1.5 mland:space-y-1">
+                <div className="flex items-center justify-between px-0.5 text-[9.5px] mland:text-[8px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
+                  <span>ตำแหน่ง &amp; งบประมาณ</span>
+                  {(filter !== 'ALL' || subFilter !== 'ALL' || maxBudgetFilter !== 'ALL') && (
                     <button
                       type="button"
                       onClick={() => {
                         setFilter('ALL');
                         setSubFilter('ALL');
+                        setMaxBudgetFilter('ALL');
                       }}
                       className="text-[var(--g)] normal-case font-bold hover:underline cursor-pointer"
                     >
@@ -2023,52 +2209,79 @@ export const MarketView = React.memo<{
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {([['ALL', 'ทั้งหมด'], ['GK', 'GK'], ['DF', 'กองหลัง'], ['MF', 'กองกลาง'], ['FW', 'กองหน้า'], ...(marketSource === 'mk' ? [['FREE', 'เซ็นฟรี'] as const] : [])] as const).map(([k, l]) => {
+
+                <div className="p-0.5 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 grid grid-cols-5 gap-0.5">
+                  {([
+                    ['ALL', 'ทุก', 'ทุกตำแหน่ง'],
+                    ['GK', 'GK', 'ผู้รักษาประตู'],
+                    ['DF', 'DF', 'กองหลัง'],
+                    ['MF', 'MF', 'กองกลาง'],
+                    ['FW', 'FW', 'กองหน้า']
+                  ] as const).map(([k, label, title]) => {
                     const active = filter === k;
                     return (
                       <button
                         key={k}
                         type="button"
+                        title={title}
                         onClick={() => {
                           SFX.tap();
                           setFilter(k);
                           setSubFilter('ALL');
                         }}
-                        className={`py-1 mland:py-0.5 px-1.5 rounded-lg border text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-all truncate ${
+                        className={`py-1 mland:py-0.5 rounded-[6px] text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-all truncate ${
                           active
-                            ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-2xs'
-                            : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)]/85 hover:border-[var(--g)]/55 hover:bg-[var(--surface-2)]'
+                            ? 'bg-[var(--g)] text-white shadow-2xs'
+                            : 'text-[var(--mut)] hover:text-[var(--ink)]'
                         }`}
                       >
-                        {l}
+                        {label}
                       </button>
                     );
                   })}
                 </div>
-                <select
-                  aria-label="กรองตำแหน่งย่อย"
-                  value={subFilter}
-                  onChange={(e) => setSubFilter(e.target.value as 'ALL' | SubRole)}
-                  className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
-                >
-                  <option value="ALL">บทบาทเฉพาะ: ทั้งหมด</option>
-                  {availableSubRoles.map((role) => (
-                    <option key={role} value={role}>
-                      {role} · {SPN[role] || role}
-                    </option>
-                  ))}
-                </select>
+
+                <div className="grid grid-cols-2 gap-1">
+                  <select
+                    aria-label="กรองตำแหน่งย่อย"
+                    value={subFilter}
+                    onChange={(e) => setSubFilter(e.target.value as 'ALL' | SubRole)}
+                    className="w-full min-w-0 px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)] truncate"
+                  >
+                    <option value="ALL">บทบาท: ทั้งหมด</option>
+                    {availableSubRoles.map((role) => (
+                      <option key={role} value={role}>
+                        {role} · {SPN[role] || role}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    aria-label="กรองงบประมาณสูงสุด"
+                    disabled={freeOnlyFilter}
+                    title={freeOnlyFilter ? 'นักเตะเซ็นฟรีไม่มีค่าตัว' : 'จำกัดงบค่าตัวสูงสุด'}
+                    value={freeOnlyFilter ? 'ALL' : maxBudgetFilter}
+                    onChange={(e) => setMaxBudgetFilter(e.target.value as 'ALL' | 'AFFORD' | '15' | '35' | '70' | '120')}
+                    className={`w-full min-w-0 px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-semibold text-[var(--ink)] focus:outline-none focus:border-[var(--g)] truncate ${
+                      freeOnlyFilter ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                    }`}
+                  >
+                    <option value="ALL">{freeOnlyFilter ? 'เซ็นฟรี 0฿' : 'งบ: ไม่จำกัด'}</option>
+                    <option value="AFFORD">ไม่เกินงบที่มี ({fmtMoneyNum(Math.max(0, Math.floor(state.money)))})</option>
+                    <option value="15">≤ {fmtMoneyNum(15)}</option>
+                    <option value="35">≤ {fmtMoneyNum(35)}</option>
+                    <option value="70">≤ {fmtMoneyNum(70)}</option>
+                    <option value="120">≤ {fmtMoneyNum(120)}</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Age & OVR */}
-              <div className="py-2.5 mland:py-1.5 space-y-2 mland:space-y-1">
-                <div className="space-y-1">
-                  <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                    ช่วงอายุ
-                  </div>
-                  <div className="p-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/70 grid grid-cols-4 gap-0.5">
-                    {([['ALL', 'ทั้งหมด'], ['u21', '≤21'], ['prime', '22–28'], ['vet', '29+']] as const).map(([k, l]) => (
+              {/* Age & OVR (Compact Inline Rows) */}
+              <div className="rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/65 p-1.5 mland:p-1 space-y-1">
+                <div className="grid grid-cols-[34px_1fr] mland:grid-cols-[30px_1fr] items-center gap-1">
+                  <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[var(--mut)] pl-0.5">อายุ</span>
+                  <div className="p-0.5 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 grid grid-cols-4 gap-0.5">
+                    {([['ALL', 'ทุก'], ['u21', '≤21'], ['prime', '22-28'], ['vet', '29+']] as const).map(([k, l]) => (
                       <button
                         key={k}
                         type="button"
@@ -2076,9 +2289,9 @@ export const MarketView = React.memo<{
                           SFX.tap();
                           setAgeRangeFilter(k);
                         }}
-                        className={`py-1 mland:py-0.5 rounded-[6px] text-[10px] mland:text-[8.5px] font-bold tabular cursor-pointer transition-all ${
+                        className={`py-0.5 rounded-[5px] text-[9.5px] mland:text-[8px] font-bold tabular cursor-pointer transition-all truncate ${
                           ageRangeFilter === k
-                            ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
+                            ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/40'
                             : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
                         }`}
                       >
@@ -2088,11 +2301,9 @@ export const MarketView = React.memo<{
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                    OVR ขั้นต่ำ
-                  </div>
-                  <div className="p-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/70 grid grid-cols-5 gap-0.5">
+                <div className="grid grid-cols-[34px_1fr] mland:grid-cols-[30px_1fr] items-center gap-1">
+                  <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[var(--mut)] pl-0.5">OVR</span>
+                  <div className="p-0.5 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 grid grid-cols-5 gap-0.5">
                     {([0, 65, 70, 75, 80] as const).map((ov) => (
                       <button
                         key={ov}
@@ -2101,9 +2312,9 @@ export const MarketView = React.memo<{
                           SFX.tap();
                           setMinOvFilter(ov);
                         }}
-                        className={`py-1 mland:py-0.5 rounded-[6px] text-[10px] mland:text-[8.5px] font-bold tabular cursor-pointer transition-all ${
+                        className={`py-0.5 rounded-[5px] text-[9.5px] mland:text-[8px] font-bold tabular cursor-pointer transition-all truncate ${
                           minOvFilter === ov
-                            ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
+                            ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/40'
                             : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
                         }`}
                       >
@@ -2114,108 +2325,209 @@ export const MarketView = React.memo<{
                 </div>
               </div>
 
-              {/* Budget & Extra Options */}
-              <div className="pt-2.5 mland:pt-1.5 space-y-2 mland:space-y-1.5">
-                <div className="space-y-0.5">
-                  <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                    งบค่าตัวสูงสุด
-                  </div>
-                  <select
-                    aria-label="กรองงบประมาณสูงสุด"
-                    value={maxBudgetFilter}
-                    onChange={(e) => setMaxBudgetFilter(e.target.value as 'ALL' | 'AFFORD' | '15' | '35' | '70' | '120')}
-                    className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
-                  >
-                    <option value="ALL">ไม่จำกัดงบ</option>
-                    <option value="AFFORD">ไม่เกินงบที่มี ({fmtMoneyNum(Math.max(0, Math.floor(state.money)))})</option>
-                    <option value="15">≤ {fmtMoneyNum(15)}</option>
-                    <option value="35">≤ {fmtMoneyNum(35)}</option>
-                    <option value="70">≤ {fmtMoneyNum(70)}</option>
-                    <option value="120">≤ {fmtMoneyNum(120)}</option>
-                  </select>
-                </div>
-
-                {marketSource !== 'created' && (
-                  <div className="space-y-0.5">
-                    <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                      สัญชาติ / ประเทศ
+              {/* Nationality & Domestic-Move Filter */}
+              {marketSource !== 'created' && (
+                <div className="rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/65 p-1.5 mland:p-1 space-y-1.5 mland:space-y-1">
+                  <div className="flex items-center justify-between gap-1 px-0.5">
+                    <span className="text-[9.5px] mland:text-[8px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
+                      สัญชาติ
+                    </span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {countryFilter !== 'ALL' && (
+                        <button
+                          type="button"
+                          onClick={() => selectCountryFilter('ALL')}
+                          className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] hover:underline cursor-pointer shrink-0"
+                        >
+                          ล้าง
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setCountryPickerSearch('');
+                          setCountryPickerOpen(true);
+                        }}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-colors max-w-[140px] truncate ${
+                          countryFilter !== 'ALL' && countryFilter !== 'TH' && countryFilter !== 'FOREIGN'
+                            ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]'
+                            : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/50'
+                        }`}
+                      >
+                        {(() => {
+                          const selectedMeta =
+                            countryFilter !== 'ALL' && countryFilter !== 'TH' && countryFilter !== 'FOREIGN'
+                              ? getCountryMetaByCode(countryFilter)
+                              : null;
+                          if (selectedMeta) {
+                            const cnt = countryAvailabilityCounts.byCode[selectedMeta.code] || 0;
+                            return (
+                              <>
+                                <span className="shrink-0">{selectedMeta.flag}</span>
+                                <span className="truncate">{selectedMeta.country} ({cnt})</span>
+                              </>
+                            );
+                          }
+                          return (
+                            <>
+                              <Globe className="w-2.5 h-2.5 text-[var(--g)] shrink-0" />
+                              <span className="truncate">เลือก {orderedWorldCountries.length} ชาติ</span>
+                            </>
+                          );
+                        })()}
+                        <ChevronDown className="w-2.5 h-2.5 opacity-70 shrink-0" />
+                      </button>
                     </div>
-                    <select
-                      aria-label="กรองตามสัญชาติ"
-                      value={countryFilter}
-                      onChange={(e) => {
-                        SFX.tap();
-                        setCountryFilter(e.target.value);
-                      }}
-                      className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
+                  </div>
+
+                  {/* 3-Way Scope Segmented Pills */}
+                  <div className="p-0.5 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 grid grid-cols-3 gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => selectCountryFilter('ALL')}
+                      className={`py-1 mland:py-0.5 px-1 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
+                        countryFilter === 'ALL'
+                          ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
+                          : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                      }`}
                     >
-                      <option value="ALL">ทุกประเทศทั่วโลก</option>
-                      <option value="TH">🇹🇭 ไทย</option>
-                      {Object.values(COUNTRY_META_BY_CODE)
-                        .slice()
-                        .sort((a, b) => a.country.localeCompare(b.country, 'th'))
-                        .map((cm) => (
-                          <option key={cm.code} value={cm.code}>
-                            {cm.flag} {cm.country}
-                          </option>
-                        ))}
-                    </select>
+                      🌍 ทั้งหมด
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectCountryFilter('TH')}
+                      className={`py-1 mland:py-0.5 px-1 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
+                        countryFilter === 'TH'
+                          ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
+                          : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                      }`}
+                    >
+                      🇹🇭 ไทย ({countryAvailabilityCounts.thai})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => selectCountryFilter('FOREIGN')}
+                      title="กรองชาวต่างชาติทุกประเทศ"
+                      className={`py-1 mland:py-0.5 px-1 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
+                        countryFilter === 'FOREIGN'
+                          ? 'bg-[var(--g)] text-white shadow-2xs border border-[var(--g)]'
+                          : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                      }`}
+                    >
+                      ✈️ ต่างชาติ ({countryAvailabilityCounts.foreign})
+                    </button>
                   </div>
-                )}
 
-                {marketSource === 'club' && (
-                  <div className="space-y-1">
-                    <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
-                      ขอบเขตสโมสร
-                    </div>
-                    <div className="p-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/70 grid grid-cols-3 gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setClubTierFilter('MY_TIER');
-                        }}
-                        className={`py-1 mland:py-0.5 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
-                          clubTierFilter === 'MY_TIER'
-                            ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
-                            : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
-                        }`}
-                      >
-                        ลีกใกล้เคียง
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setClubTierFilter('ALL');
-                        }}
-                        className={`py-1 mland:py-0.5 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
-                          clubTierFilter === 'ALL'
-                            ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
-                            : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
-                        }`}
-                      >
-                        ทุกลีก
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setClubTierFilter('FOREIGN');
-                        }}
-                        className={`py-1 mland:py-0.5 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
-                          clubTierFilter === 'FOREIGN'
-                            ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
-                            : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
-                        }`}
-                      >
-                        🌏 ต่างแดน
-                      </button>
-                    </div>
+                  {/* Popular Football Nations Quick Chips */}
+                  <div className="grid grid-cols-3 gap-1">
+                    {QUICK_POPULAR_COUNTRY_SHORTS.map(({ code, short }) => {
+                      const cm = COUNTRY_META_BY_CODE[code];
+                      if (!cm) return null;
+                      const active = countryFilter === code;
+                      const cnt = countryAvailabilityCounts.byCode[code] || 0;
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          onClick={() => selectCountryFilter(active ? 'FOREIGN' : code)}
+                          title={`${cm.country} (${cnt} คน)`}
+                          className={`py-0.5 px-1 rounded-md border text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all flex items-center justify-center gap-0.5 truncate ${
+                            active
+                              ? 'bg-[var(--g-soft)] border-[var(--g)]/70 text-[var(--g)] shadow-2xs'
+                              : cnt > 0
+                                ? 'bg-[var(--surface)]/80 border-[var(--line)] text-[var(--ink)]/90 hover:border-[var(--g)]/45'
+                                : 'bg-[var(--surface)]/35 border-[var(--line)]/55 text-[var(--mut)]/70'
+                          }`}
+                        >
+                          <span className="shrink-0 leading-none">{cm.flag}</span>
+                          <span className="truncate">{short}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
 
-                {marketSource !== 'created' && (
+                  {/* Open-to-Domestic-Move Toggle */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={openDomesticOnly}
+                    onClick={() => {
+                      SFX.tap();
+                      setOpenDomesticOnly((v) => !v);
+                    }}
+                    title="คัดเฉพาะนักเตะที่มีโอกาสเปิดใจย้ายมาค้าแข้งในลีกประเทศไทย"
+                    className={`w-full px-2 py-1 mland:py-0.5 rounded-lg border text-[10px] mland:text-[8.5px] font-bold flex items-center justify-between gap-1.5 cursor-pointer transition-colors ${
+                      openDomesticOnly
+                        ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]'
+                        : 'bg-[var(--surface)]/75 border-[var(--line)] text-[var(--ink)]/85 hover:border-[var(--g)]/40'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1 min-w-0 truncate">
+                      <span className="shrink-0">✈️</span>
+                      <span className="truncate">เปิดโอกาสย้ายในประเทศ</span>
+                    </span>
+                    <span
+                      className={`w-6 h-3.5 rounded-full p-0.5 inline-flex items-center transition-colors shrink-0 ${
+                        openDomesticOnly ? 'bg-[var(--g)] justify-end' : 'bg-[var(--line)] justify-start'
+                      }`}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-white shadow-2xs" />
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {/* Club Scope & Loan Filter (Club Source) */}
+              {marketSource === 'club' && (
+                <div className="rounded-xl bg-[var(--surface-2)]/35 border border-[var(--line)]/65 p-1.5 mland:p-1 space-y-1.5 mland:space-y-1">
+                  <div className="px-0.5 text-[9.5px] mland:text-[8px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
+                    ขอบเขตสโมสร &amp; ดีลยืมตัว
+                  </div>
+                  <div className="p-0.5 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 grid grid-cols-3 gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setClubTierFilter('MY_TIER');
+                      }}
+                      className={`py-1 mland:py-0.5 px-1 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
+                        clubTierFilter === 'MY_TIER'
+                          ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
+                          : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                      }`}
+                    >
+                      ลีกใกล้เคียง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setClubTierFilter('ALL');
+                      }}
+                      className={`py-1 mland:py-0.5 px-1 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
+                        clubTierFilter === 'ALL'
+                          ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
+                          : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                      }`}
+                    >
+                      ทุกลีก
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setClubTierFilter('FOREIGN');
+                      }}
+                      className={`py-1 mland:py-0.5 px-1 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
+                        clubTierFilter === 'FOREIGN'
+                          ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
+                          : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                      }`}
+                    >
+                      🌏 ต่างแดน
+                    </button>
+                  </div>
                   <button
                     type="button"
                     role="switch"
@@ -2223,29 +2535,28 @@ export const MarketView = React.memo<{
                     onClick={() => {
                       SFX.tap();
                       setLoanOnlyFilter((v) => !v);
-                      if (!loanOnlyFilter && filter === 'FREE') setFilter('ALL');
                     }}
-                    className={`w-full px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border text-[11px] mland:text-[9.5px] font-bold flex items-center justify-between gap-2 cursor-pointer transition-colors ${
+                    className={`w-full px-2 py-1 mland:py-0.5 rounded-lg border text-[10px] mland:text-[8.5px] font-bold flex items-center justify-between gap-1.5 cursor-pointer transition-colors ${
                       loanOnlyFilter
                         ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]'
-                        : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)]/85 hover:border-[var(--g)]/40'
+                        : 'bg-[var(--surface)]/75 border-[var(--line)] text-[var(--ink)]/85 hover:border-[var(--g)]/40'
                     }`}
                   >
                     <span>🤝 เฉพาะยืมตัวได้</span>
                     <span
-                      className={`w-7 h-4 rounded-full p-0.5 inline-flex items-center transition-colors shrink-0 ${
+                      className={`w-6 h-3.5 rounded-full p-0.5 inline-flex items-center transition-colors shrink-0 ${
                         loanOnlyFilter ? 'bg-[var(--g)] justify-end' : 'bg-[var(--line)] justify-start'
                       }`}
                     >
-                      <span className="w-3 h-3 rounded-full bg-white shadow-2xs" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-white shadow-2xs" />
                     </span>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {marketSource === 'mk' && (
-              <div className="shrink-0 p-2.5 mland:p-2 border-t border-[var(--line)] bg-[var(--surface-2)]/45">
+              <div className="shrink-0 p-2 mland:p-1.5 border-t border-[var(--line)] bg-[var(--surface-2)]/45">
                 <button
                   type="button"
                   disabled={state.money < 15}
@@ -2258,7 +2569,7 @@ export const MarketView = React.memo<{
                     });
                     onToast('อัปเดตรายชื่อตลาดใหม่ครบทุกตำแหน่งแล้ว');
                   }}
-                  className="btn btn-sm btn-surface w-full justify-between px-3"
+                  className="btn btn-sm btn-surface w-full justify-between px-2.5"
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <RefreshCw className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--g)]" />
@@ -4748,6 +5059,218 @@ export const MarketView = React.memo<{
 
       {renderNegotiationModal()}
       {renderRenewModal()}
+      {countryPickerOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/68 flex items-center justify-center stage-viewport overflow-hidden"
+          onClick={() => setCountryPickerOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-[680px] mland:max-w-[min(94vw,680px)] max-h-[86vh] mland:max-h-[92vh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+          >
+            {/* Header */}
+            <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]/60 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-extrabold text-sm mland:text-xs text-[var(--ink)] flex items-center gap-1.5 truncate">
+                  <Globe className="w-4 h-4 text-[var(--g)] shrink-0" />
+                  <span className="truncate">เลือกสัญชาติ / ประเทศ</span>
+                </h3>
+                <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate mt-0.5">
+                  จัดเรียงตามความนิยมฟุตบอลโลก · {openDomesticOnly ? 'เฉพาะแข้งที่เปิดโอกาสย้ายมาค้าแข้งในประเทศ' : 'แสดงนักเตะทุกระดับ'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCountryPickerOpen(false)}
+                aria-label="ปิดหน้าต่างเลือกประเทศ"
+                className="btn-icon w-7 h-7 mland:w-6 mland:h-6 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Search & Quick Global Presets */}
+            <div className="shrink-0 p-3 mland:p-2 border-b border-[var(--line)]/70 space-y-2 mland:space-y-1.5 bg-[var(--surface)]">
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectCountryFilter('ALL');
+                    setCountryPickerOpen(false);
+                  }}
+                  className={`px-2.5 py-2 mland:py-1.5 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between gap-1.5 ${
+                    countryFilter === 'ALL'
+                      ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] shadow-2xs'
+                      : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/45'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[11px] mland:text-[9.5px] font-extrabold truncate">🌍 ทุกประเทศ</div>
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">{countryAvailabilityCounts.total} คน</div>
+                  </div>
+                  {countryFilter === 'ALL' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectCountryFilter('TH');
+                    setCountryPickerOpen(false);
+                  }}
+                  className={`px-2.5 py-2 mland:py-1.5 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between gap-1.5 ${
+                    countryFilter === 'TH'
+                      ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] shadow-2xs'
+                      : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/45'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[11px] mland:text-[9.5px] font-extrabold truncate">🇹🇭 ไทย</div>
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">{countryAvailabilityCounts.thai} คน</div>
+                  </div>
+                  {countryFilter === 'TH' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectCountryFilter('FOREIGN');
+                    setCountryPickerOpen(false);
+                  }}
+                  className={`px-2.5 py-2 mland:py-1.5 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between gap-1.5 ${
+                    countryFilter === 'FOREIGN'
+                      ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-2xs'
+                      : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/45'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[11px] mland:text-[9.5px] font-extrabold truncate">✈️ ต่างชาติทั้งหมด</div>
+                    <div className={`text-[9.5px] mland:text-[8px] tabular ${countryFilter === 'FOREIGN' ? 'text-white/85' : 'text-[var(--mut)]'}`}>
+                      {countryAvailabilityCounts.foreign} คน
+                    </div>
+                  </div>
+                  {countryFilter === 'FOREIGN' && <Check className="w-3.5 h-3.5 shrink-0" />}
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-1.5">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-[var(--mut)] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={countryPickerSearch}
+                    onChange={(e) => setCountryPickerSearch(e.target.value)}
+                    placeholder="ค้นหาชื่อประเทศ เช่น บราซิล, อังกฤษ, ญี่ปุ่น, BR..."
+                    className="w-full pl-8 pr-7 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)] text-xs mland:text-[10px] text-[var(--ink)] placeholder:text-[var(--mut)]/75 focus:bg-[var(--surface)] focus:outline-none focus:border-[var(--g)]"
+                  />
+                  {countryPickerSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setCountryPickerSearch('')}
+                      aria-label="ล้างคำค้นหาประเทศ"
+                      className="w-5 h-5 rounded-md inline-flex items-center justify-center absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Confederation Filter Tabs */}
+                <div className="p-0.5 rounded-xl bg-[var(--surface-2)]/80 border border-[var(--line)]/75 flex items-center gap-0.5 overflow-x-auto shrink-0">
+                  {([
+                    ['ALL', '🔥 ยอดนิยม'],
+                    ['europe', `${CONFED_META.europe.icon} ${CONFED_META.europe.short}`],
+                    ['americas', `${CONFED_META.americas.icon} ${CONFED_META.americas.short}`],
+                    ['asia', `${CONFED_META.asia.icon} ${CONFED_META.asia.short}`],
+                    ['africa', `${CONFED_META.africa.icon} ${CONFED_META.africa.short}`]
+                  ] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setCountryPickerConfed(key);
+                      }}
+                      className={`px-2 py-1 mland:py-0.5 rounded-[8px] text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap cursor-pointer transition-all ${
+                        countryPickerConfed === key
+                          ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
+                          : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Popularity-Sorted Country Grid */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2">
+              {(() => {
+                const qNorm = countryPickerSearch.trim().toLowerCase();
+                const list = orderedWorldCountries.filter((cm) => {
+                  if (countryPickerConfed !== 'ALL' && cm.confed !== countryPickerConfed) return false;
+                  if (qNorm && !cm.country.toLowerCase().includes(qNorm) && !cm.code.toLowerCase().includes(qNorm)) return false;
+                  return true;
+                });
+                if (list.length === 0) {
+                  return (
+                    <div className="py-10 text-center text-xs text-[var(--mut)]">
+                      ไม่พบประเทศที่ตรงกับคำค้นหา "{countryPickerSearch}"
+                    </div>
+                  );
+                }
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2">
+                    {list.map((cm) => {
+                      const cnt = countryAvailabilityCounts.byCode[cm.code] || 0;
+                      const active = countryFilter === cm.code;
+                      const popRank = orderedWorldCountries.findIndex((x) => x.code === cm.code) + 1;
+                      return (
+                        <button
+                          key={cm.code}
+                          type="button"
+                          onClick={() => {
+                            selectCountryFilter(cm.code);
+                            setCountryPickerOpen(false);
+                          }}
+                          className={`px-2.5 py-2 mland:py-1.5 rounded-xl border text-left cursor-pointer transition-all flex items-center gap-2 min-w-0 ${
+                            active
+                              ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] shadow-2xs'
+                              : cnt > 0
+                                ? 'bg-[var(--surface-2)]/45 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/50 hover:bg-[var(--surface-2)]'
+                                : 'bg-[var(--surface-2)]/20 border-[var(--line)]/65 text-[var(--mut)] opacity-65 hover:opacity-100 hover:border-[var(--line)]'
+                          }`}
+                        >
+                          <span className="text-xl mland:text-base leading-none shrink-0">{cm.flag}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold text-xs mland:text-[10px] truncate flex items-center gap-1">
+                              <span className="truncate">{cm.country}</span>
+                            </div>
+                            <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] flex items-center gap-1 truncate">
+                              <span>#{popRank}</span>
+                              <span>·</span>
+                              <span className="truncate">{CONFED_META[cm.confed].short}</span>
+                            </div>
+                          </div>
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${
+                              active
+                                ? 'bg-[var(--g)] text-white'
+                                : cnt > 0
+                                  ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--g)]'
+                                  : 'bg-[var(--surface)]/70 border border-[var(--line)]/60 text-[var(--mut)]'
+                            }`}
+                          >
+                            {cnt}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
       {sellModalNames && sellModalNames.length > 0 && (
         <SquadSellModal
           state={state}

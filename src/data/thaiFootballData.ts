@@ -86,6 +86,58 @@ export function getCountryMetaByCode(code?: string | null): CountryCatalogMeta |
   return COUNTRY_META_BY_CODE[upper] || null;
 }
 
+export const FOOTBALL_POPULARITY_COUNTRY_ORDER: readonly string[] = [
+  'BR', // บราซิล
+  'AR', // อาร์เจนตินา
+  'GB', // อังกฤษ
+  'ES', // สเปน
+  'FR', // ฝรั่งเศส
+  'DE', // เยอรมนี
+  'IT', // อิตาลี
+  'PT', // โปรตุเกส
+  'NL', // เนเธอร์แลนด์
+  'JP', // ญี่ปุ่น
+  'KR', // เกาหลีใต้
+  'CO', // โคลอมเบีย
+  'MA', // โมร็อกโก
+  'SN', // เซเนกัล
+  'NG', // ไนจีเรีย
+  'EG', // อียิปต์
+  'MX', // เม็กซิโก
+  'SA', // ซาอุดีอาระเบีย
+  'IR', // อิหร่าน
+  'AU', // ออสเตรเลีย
+  'US', // สหรัฐอเมริกา
+  'UZ', // อุซเบกิสถาน
+  'QA', // กาตาร์
+  'AE', // ยูเออี
+  'IQ', // อิรัก
+  'VN', // เวียดนาม
+  'ID', // อินโดนีเซีย
+  'MY', // มาเลเซีย
+  'CN', // จีน
+  'ZA', // แอฟริกาใต้
+  'SG', // สิงคโปร์
+  'IN', // อินเดีย
+  'MM', // เมียนมา
+  'PH', // ฟิลิปปินส์
+  'KH' // กัมพูชา
+];
+
+const COUNTRY_POPULARITY_RANK: Record<string, number> = Object.fromEntries(
+  FOOTBALL_POPULARITY_COUNTRY_ORDER.map((code, idx) => [code, idx])
+);
+
+export function getCountriesOrderedByFootballPopularity(confed?: ForeignConfed): CountryCatalogMeta[] {
+  const list = Object.values(COUNTRY_META_BY_CODE).filter((cm) => !confed || cm.confed === confed);
+  return list.sort((a, b) => {
+    const ra = COUNTRY_POPULARITY_RANK[a.code] ?? 999;
+    const rb = COUNTRY_POPULARITY_RANK[b.code] ?? 999;
+    if (ra !== rb) return ra - rb;
+    return a.country.localeCompare(b.country, 'th');
+  });
+}
+
 export const FOREIGN_NAME_POOLS: Record<ForeignNameRegion, { first: string[]; last: string[] }> = {
   jp: {
     first: [

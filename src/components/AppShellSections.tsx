@@ -5,6 +5,7 @@ import type { GameMode, GameState, MainTab, Player, Team } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { ovMe } from '../engine/playerCore';
+import { getActiveFavBoost } from '../engine/wellbeing';
 import { fmtFans, fmtFansShort } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from './SvgVisuals';
 import { StaminaBar } from './StaminaBar';
@@ -164,6 +165,12 @@ export const AppTopHud = React.memo<{
   const fansDelta = useNumericDelta(state.mode === 'm' ? myFansCount : 0, `${saveEpoch}-${state.mode}`, 1);
   const staminaDelta = useNumericDelta(state.mode === 'p' ? myStaminaVal : 0, `${saveEpoch}-${state.mode}`, 0.5);
   const repDelta = useNumericDelta(state.mode === 'p' ? myRepVal : 0, `${saveEpoch}-${state.mode}`, 0.5);
+  const myCareerBaseOv = state.mode === 'p' && state.p ? ovMe(state.p) : 60;
+  const myCareerFavBoost =
+    state.mode === 'p' && state.p && mePlayer
+      ? getActiveFavBoost(mePlayer, me, state.p)
+      : 0;
+  const myCareerDispOv = myCareerBaseOv + myCareerFavBoost;
   const nextNt = state.mode === 'm' && state.natTeam?.active
     ? state.natTeam.fixtures.find((f) => !f.played) ?? null
     : null;
@@ -209,7 +216,13 @@ export const AppTopHud = React.memo<{
                   <AnimatedMoney value={state.money} resetKey={saveEpoch} deltaPlacement="below" />
                 </span>
               ) : (
-                <OvrBadge ov={state.p ? ovMe(state.p) : 60} size="2xs" prefix="OVR" className="sm:hidden" />
+                <OvrBadge
+                  ov={myCareerDispOv}
+                  size="2xs"
+                  prefix="OVR"
+                  title={myCareerFavBoost > 0 ? `OVR ${myCareerBaseOv} + ลูกรัก ${myCareerFavBoost} = ${myCareerDispOv}` : undefined}
+                  className="sm:hidden"
+                />
               )}
             </div>
             <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-x-1.5 truncate tabular leading-tight mt-0.5 mland:mt-0">
@@ -288,11 +301,17 @@ export const AppTopHud = React.memo<{
                 <button
                   type="button"
                   onClick={() => { SFX.tap(); onNavigateToTab('p'); }}
-                  title="ข้อมูลนักเตะ"
+                  title={myCareerFavBoost > 0 ? `OVR ${myCareerBaseOv} + ลูกรัก ${myCareerFavBoost} = ${myCareerDispOv}` : 'ข้อมูลนักเตะ'}
                   className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                 >
                   <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">OVR</div>
-                  <OvrBadge ov={state.p ? ovMe(state.p) : 60} variant="inline" size="xs" className="mt-0.5" />
+                  <OvrBadge
+                    ov={myCareerDispOv}
+                    variant="inline"
+                    size="xs"
+                    title={myCareerFavBoost > 0 ? `OVR ${myCareerBaseOv} + ลูกรัก ${myCareerFavBoost} = ${myCareerDispOv}` : undefined}
+                    className="mt-0.5"
+                  />
                 </button>
                 <button
                   type="button"

@@ -946,6 +946,8 @@ export const SquadTacticsView = React.memo<{
         : '';
 
     const isUnreadyHighlight = Boolean(slotSp && unavailable && isFocused('xi-unready'));
+    const isFav = isTeamFavoritePlayer(me, q.n);
+    const rowFavBoost = getActiveFavBoost(q, me, isMe ? state.p : null);
 
     return (
       <div
@@ -965,7 +967,7 @@ export const SquadTacticsView = React.memo<{
             onInspectPlayer(q, me);
           }
         }}
-        className={`w-full grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_72px_48px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_62px_42px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
+        className={`w-full grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_72px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_62px_auto] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
           isTarget
             ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
             : isSource
@@ -1019,6 +1021,18 @@ export const SquadTacticsView = React.memo<{
         <div className="flex items-center justify-start gap-1 min-w-0">
           <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">{q.n}</span>
           {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
+          {isFav && (
+            <span
+              title={rowFavBoost > 0 ? `ลูกรักประจำทีม (+${rowFavBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+              className={`inline-flex items-center text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular shrink-0 ${
+                rowFavBoost > 0
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : 'text-rose-500/80 dark:text-rose-400/80'
+              }`}
+            >
+              {rowFavBoost > 0 ? `💖+${rowFavBoost}` : '💖'}
+            </span>
+          )}
           {isMe && (
             <span
               title="ตัวคุณ"
@@ -1042,7 +1056,11 @@ export const SquadTacticsView = React.memo<{
 
         <div className="flex items-center justify-end gap-0.5">
           <FormTrendBadge trend={formTrend} size="xs" />
-          <OvrBadge ov={q.ov} size="2xs" />
+          <OvrBadge
+            ov={q.ov + rowFavBoost}
+            size="2xs"
+            title={rowFavBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${rowFavBoost} = ${q.ov + rowFavBoost}` : undefined}
+          />
         </div>
       </div>
     );
@@ -2136,7 +2154,7 @@ export const SquadTacticsView = React.memo<{
                     >
                       <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
                         <span className="font-extrabold text-[var(--ink)] shrink-0">
-                          💖 ลูกรักประจำทีม ({favList.length}/5):
+                          💖 ลูกรักประจำทีม ({favList.length} คน):
                         </span>
                         {favList.length > 0 ? (
                           favList.map((fp) => {
@@ -2164,7 +2182,7 @@ export const SquadTacticsView = React.memo<{
                                   {fm}/{fph}
                                 </span>
                                 {fb > 0 && (
-                                  <span className="px-1 rounded bg-rose-600 text-white text-[9.5px] mland:text-[8px] font-black tabular">
+                                  <span className="text-[10px] mland:text-[8.5px] font-black text-rose-600 dark:text-rose-400 tabular">
                                     +{fb}
                                   </span>
                                 )}
@@ -2367,10 +2385,10 @@ export const SquadTacticsView = React.memo<{
                                 {isFav && (
                                   <span
                                     title={favBoost > 0 ? `ลูกรักประจำทีม (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥72)'}
-                                    className={`px-1 rounded text-[9px] mland:text-[7.5px] font-black shrink-0 ${
+                                    className={`inline-flex items-center text-[10px] mland:text-[8.5px] font-extrabold leading-none tabular shrink-0 ${
                                       favBoost > 0
-                                        ? 'bg-rose-600 text-white'
-                                        : 'bg-rose-500/15 border border-rose-500/40 text-rose-700 dark:text-rose-300'
+                                        ? 'text-rose-600 dark:text-rose-400'
+                                        : 'text-rose-500/80 dark:text-rose-400/80'
                                     }`}
                                   >
                                     {favBoost > 0 ? `💖+${favBoost}` : '💖'}
@@ -2433,10 +2451,17 @@ export const SquadTacticsView = React.memo<{
 
                           <div className="flex items-center justify-center gap-0.5">
                             <FormTrendBadge trend={formTrend} size="xs" />
-                            <OvrBadge ov={q.ov} size="sm" />
+                            <OvrBadge
+                              ov={q.ov + favBoost}
+                              size="sm"
+                              title={favBoost > 0 ? `OVR พื้นฐาน ${q.ov} + ลูกรัก ${favBoost} = ${q.ov + favBoost}` : undefined}
+                            />
                             {favBoost > 0 ? (
-                              <span className="text-[9.5px] mland:text-[8px] font-black text-rose-600 dark:text-rose-400 tabular">
-                                +{favBoost}
+                              <span
+                                title={`รวมโบนัสลูกรัก +${favBoost} (จากพื้นฐาน ${q.ov})`}
+                                className="text-[9.5px] mland:text-[8px] font-black text-rose-600 dark:text-rose-400 tabular"
+                              >
+                                (+{favBoost})
                               </span>
                             ) : (
                               <span className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>

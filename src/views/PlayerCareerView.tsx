@@ -105,7 +105,11 @@ export const PlayerCareerView = React.memo<{
     );
   }, [meSq, p, ov, injCount, susCount, ycCount, rcCount, myShirtNo]);
 
-  const details = useMemo(() => (fakePlayer && p ? dtInfo(fakePlayer, p) : null), [fakePlayer, p]);
+  const favBoost = useMemo(
+    () => (fakePlayer && p ? getActiveFavBoost(fakePlayer, meTeam, p) : 0),
+    [fakePlayer, meTeam, p]
+  );
+  const details = useMemo(() => (fakePlayer && p ? dtInfo(fakePlayer, p, favBoost) : null), [fakePlayer, p, favBoost]);
   const myTalent = useMemo(() => (fakePlayer && p ? getPlayerTalent(fakePlayer, p) : 60), [fakePlayer, p]);
   const starters = useMemo(() => (meTeam ? xi(meTeam) : []), [meTeam]);
   const mySlot = useMemo(() => {
@@ -121,7 +125,6 @@ export const PlayerCareerView = React.memo<{
   const kit2 = tc(meTeam, state, true);
   const isPitchOrNaturalGK = mySlot ? mySlot === 'GK' : (p.pos === 'GK' || p.sp === 'GK');
   const isCoachFav = isTeamFavoritePlayer(meTeam, p.name) || isTeamFavoritePlayer(meTeam, fakePlayer.n);
-  const favBoost = getActiveFavBoost(fakePlayer, meTeam, p);
   const myMental = getPlayerMentalScore(fakePlayer, p);
   const myPhys = getPlayerPhysScore(fakePlayer, p);
   const mentalMeta = getWellbeingTierMeta(myMental, 'mental', false);
@@ -132,7 +135,8 @@ export const PlayerCareerView = React.memo<{
       <div className="flex flex-col gap-1.5 mland:gap-1 h-full min-h-0 overflow-y-auto pr-0.5 pb-2">
         {/* Collectible Career Athlete Card */}
         <AthleteCard
-          ov={ov}
+          ov={ov + favBoost}
+          boost={favBoost}
           pot={myPot}
           talent={myTalent}
           roleLabel={p.sp}
@@ -158,7 +162,7 @@ export const PlayerCareerView = React.memo<{
           subtitle={`${meTeam.name} · อายุ ${p.age} ปี`}
           bio={details.bio}
           categories={summarizeStatGroups(details.G)}
-          renderStageTopLeft={(palette) => (
+          renderStageTopLeft={(palette, tone) => (
             <div className="flex items-center gap-1 min-w-0">
               <span className={`text-[9.5px] mland:text-[7.5px] font-bold tabular whitespace-nowrap ${palette.repText}`}>
                 ★ {p.rep ?? 10}
@@ -166,10 +170,14 @@ export const PlayerCareerView = React.memo<{
               {isCoachFav && (
                 <span
                   title={favBoost > 0 ? `ลูกรักโค้ช (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักโค้ชประจำทีม'}
-                  className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-black leading-none shrink-0 ${
+                  className={`inline-flex items-center text-[9px] mland:text-[7.5px] font-extrabold leading-none tabular shrink-0 ${
                     favBoost > 0
-                      ? 'bg-rose-600 text-white shadow-xs'
-                      : 'bg-rose-500/25 border border-rose-400/60 text-rose-100'
+                      ? tone === 'light'
+                        ? 'text-rose-600'
+                        : 'text-rose-400'
+                      : tone === 'light'
+                        ? 'text-rose-500/80'
+                        : 'text-rose-300/80'
                   }`}
                 >
                   {favBoost > 0 ? `💖+${favBoost}` : '💖'}
@@ -698,6 +706,7 @@ export const PlayerCareerView = React.memo<{
                 onUpdateState={onUpdateState}
                 onToast={onToast}
                 compact
+                showCareActions={false}
               />
               <div
                 className={`grid grid-cols-1 gap-1.5 mland:gap-1 ${
@@ -716,6 +725,7 @@ export const PlayerCareerView = React.memo<{
                           key={lbl}
                           label={lbl}
                           value={val}
+                          boost={favBoost}
                           compact
                         />
                       ))}

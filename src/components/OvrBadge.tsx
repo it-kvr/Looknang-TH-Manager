@@ -175,17 +175,18 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
     );
   }
 
+  const wide3 = val >= 100;
   if (variant === 'subtle') {
     const sizeCls =
       size === '2xs'
-        ? `${prefix || !fixedWidth ? 'px-1.5 mland:px-1' : 'w-[25px] mland:w-[22px] px-0.5'} h-[18px] mland:h-[15px] rounded-[5px] text-[10px] mland:text-[8.5px]`
+        ? `${prefix || !fixedWidth || wide3 ? 'px-1.5 mland:px-1' : 'w-[25px] mland:w-[22px] px-0.5'} h-[18px] mland:h-[15px] rounded-[5px] text-[10px] mland:text-[8.5px]`
         : size === 'xs'
-          ? `${prefix || !fixedWidth ? 'px-1.5 mland:px-1' : 'w-[29px] mland:w-[25px] px-0.5'} h-[20px] mland:h-[17px] rounded-md text-[10.5px] mland:text-[9px]`
+          ? `${prefix || !fixedWidth || wide3 ? 'px-1.5 mland:px-1' : 'w-[29px] mland:w-[25px] px-0.5'} h-[20px] mland:h-[17px] rounded-md text-[10.5px] mland:text-[9px]`
           : size === 'md'
-            ? `${prefix || !fixedWidth ? 'px-2.5 mland:px-2' : 'w-[36px] mland:w-[30px] px-1'} h-[26px] mland:h-[21px] rounded-lg text-xs sm:text-[13px] mland:text-[10.5px]`
+            ? `${prefix || !fixedWidth || wide3 ? 'px-2.5 mland:px-2' : 'w-[36px] mland:w-[30px] px-1'} h-[26px] mland:h-[21px] rounded-lg text-xs sm:text-[13px] mland:text-[10.5px]`
             : size === 'lg'
-              ? `${prefix || !fixedWidth ? 'px-3 mland:px-2' : 'w-[42px] mland:w-[34px] px-1'} h-[30px] mland:h-[24px] rounded-xl text-sm mland:text-xs`
-              : `${prefix || !fixedWidth ? 'px-2 mland:px-1.5' : 'w-[33px] mland:w-[28px] px-1'} h-[22px] mland:h-[18px] rounded-lg text-[11.5px] mland:text-[9.5px]`;
+              ? `${prefix || !fixedWidth || wide3 ? 'px-3 mland:px-2' : 'w-[42px] mland:w-[34px] px-1'} h-[30px] mland:h-[24px] rounded-xl text-sm mland:text-xs`
+              : `${prefix || !fixedWidth || wide3 ? 'px-2 mland:px-1.5' : 'w-[33px] mland:w-[28px] px-1'} h-[22px] mland:h-[18px] rounded-lg text-[11.5px] mland:text-[9.5px]`;
     return (
       <span
         title={resolvedTitle}
@@ -200,14 +201,14 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
   // Default: 'badge' — sleek gradient tier badge consistent everywhere
   const badgeSizeCls =
     size === '2xs'
-      ? `${prefix || !fixedWidth ? 'px-1.5 mland:px-1' : 'w-[25px] mland:w-[22px] px-0.5'} h-[18px] mland:h-[15px] rounded-[5px] text-[10px] mland:text-[8.5px]`
+      ? `${prefix || !fixedWidth || wide3 ? 'px-1.5 mland:px-1' : 'w-[25px] mland:w-[22px] px-0.5'} h-[18px] mland:h-[15px] rounded-[5px] text-[10px] mland:text-[8.5px]`
       : size === 'xs'
-        ? `${prefix || !fixedWidth ? 'px-1.5 mland:px-1' : 'w-[29px] mland:w-[25px] px-0.5'} h-[20px] mland:h-[17px] rounded-md text-[10.5px] mland:text-[9px]`
+        ? `${prefix || !fixedWidth || wide3 ? 'px-1.5 mland:px-1' : 'w-[29px] mland:w-[25px] px-0.5'} h-[20px] mland:h-[17px] rounded-md text-[10.5px] mland:text-[9px]`
         : size === 'md'
-          ? `${prefix || !fixedWidth ? 'px-2.5 mland:px-2' : 'w-[36px] mland:w-[30px] px-1'} h-[26px] mland:h-[21px] rounded-lg text-xs sm:text-[13px] mland:text-[10.5px]`
+          ? `${prefix || !fixedWidth || wide3 ? 'px-2.5 mland:px-2' : 'w-[36px] mland:w-[30px] px-1'} h-[26px] mland:h-[21px] rounded-lg text-xs sm:text-[13px] mland:text-[10.5px]`
           : size === 'lg'
-            ? `${prefix || !fixedWidth ? 'px-3 mland:px-2' : 'w-[42px] mland:w-[34px] px-1'} h-[30px] mland:h-[24px] rounded-xl text-sm mland:text-xs`
-            : `${prefix || !fixedWidth ? 'px-2 mland:px-1.5' : 'w-[33px] mland:w-[28px] px-1'} h-[22px] mland:h-[18px] rounded-lg text-[11.5px] mland:text-[9.5px]`;
+            ? `${prefix || !fixedWidth || wide3 ? 'px-3 mland:px-2' : 'w-[42px] mland:w-[34px] px-1'} h-[30px] mland:h-[24px] rounded-xl text-sm mland:text-xs`
+            : `${prefix || !fixedWidth || wide3 ? 'px-2 mland:px-1.5' : 'w-[33px] mland:w-[28px] px-1'} h-[22px] mland:h-[18px] rounded-lg text-[11.5px] mland:text-[9.5px]`;
 
   return (
     <span

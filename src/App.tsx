@@ -169,25 +169,30 @@ export default function App() {
   }, []);
 
   const navigateToTab = useCallback((tab: MainTab, sub?: string, focus?: string, hint?: string) => {
-    const resolvedTab: MainTab = tab === 'f' && sub === 'infra' ? 'u' : tab;
-    setNavIntent({ tab: resolvedTab, sub, focus, hint, ts: Date.now() });
+    const isTalkRedirect =
+      (tab === 'u' && sub === 'rooms') ||
+      focus === 'team-talk' ||
+      Boolean(focus?.startsWith('talk:'));
+    const resolvedTab: MainTab = isTalkRedirect ? 'r' : tab === 'f' && sub === 'infra' ? 'u' : tab;
+    const resolvedSub = isTalkRedirect ? 'rooms' : sub;
+    setNavIntent({ tab: resolvedTab, sub: resolvedSub, focus, hint, ts: Date.now() });
     setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
     navigateShallow((d) => {
-      if (tab === 'c') {
+      if (resolvedTab === 'c') {
         return { v: 't', tv: 4, sub: 0 };
       }
-      if (tab === 'q' && sub === 'training') {
+      if (resolvedTab === 'q' && resolvedSub === 'training') {
         return { v: 'r', tv: 0, sub: 0 };
       }
-      if (tab === 'f' && sub === 'infra') {
+      if (resolvedTab === 'f' && resolvedSub === 'infra') {
         return { v: 'u', tv: 0, sub: 0 };
       }
       return {
-        v: tab,
-        tv: tab === 't' ? (sub === 'cup' ? 4 : sub === 'awards' ? 2 : 0) : 0,
-        sub: tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : sub === 'locker' ? 3 : 0) : 0,
-        ...(tab === 't' ? { lg: d.teams[d.me].tier } : {})
+        v: resolvedTab,
+        tv: resolvedTab === 't' ? (resolvedSub === 'cup' ? 4 : resolvedSub === 'awards' ? 2 : 0) : 0,
+        sub: resolvedTab === 'q' ? (resolvedSub === 'tactics' ? 1 : resolvedSub === 'squad' ? 2 : resolvedSub === 'locker' ? 3 : 0) : 0,
+        ...(resolvedTab === 't' ? { lg: d.teams[d.me].tier } : {})
       };
     });
   }, [navigateShallow]);

@@ -82,9 +82,10 @@ export const TeamOfficeView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer?: (player: Player, team: Team | null) => void;
+  onOpenPrivateTalk?: (playerName: string) => void;
   onToast: (msg: string) => void;
   isFocused?: (id: string) => boolean;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast, isFocused }) => {
+}> = ({ state, onUpdateState, onInspectPlayer, onOpenPrivateTalk, onToast, isFocused }) => {
   const me = state.teams[state.me];
   const curTurn = (state.season ?? 1) * 100 + (state.md ?? 0);
 
@@ -308,7 +309,7 @@ export const TeamOfficeView: React.FC<{
             </h3>
           </div>
           <span className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular shrink-0">
-            {me.sq.length + 1} คน · ลูกรัก {favNamesSet.size}/5
+            {me.sq.length + 1} คน · ลูกรัก {favNamesSet.size} คน
           </span>
         </div>
 
@@ -437,6 +438,10 @@ export const TeamOfficeView: React.FC<{
                   key={q.n}
                   type="button"
                   onClick={() => {
+                    if (onOpenPrivateTalk) {
+                      onOpenPrivateTalk(q.n);
+                      return;
+                    }
                     SFX.tap();
                     setSelectedParticipant({ kind: 'player', playerName: q.n });
                   }}
@@ -725,6 +730,10 @@ export const TeamOfficeView: React.FC<{
                         key={player.n}
                         type="button"
                         onClick={() => {
+                          if (onOpenPrivateTalk) {
+                            onOpenPrivateTalk(player.n);
+                            return;
+                          }
                           SFX.tap();
                           setSelectedParticipant({ kind: 'player', playerName: player.n });
                         }}

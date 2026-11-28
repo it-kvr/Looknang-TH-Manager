@@ -1735,11 +1735,17 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null): DtResult {
   return res;
 }
 
-export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
+export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null, favBoost = 0) {
   const D0 = DT(q, careerP);
   const a = D0.a;
   const f = Math.round(q.fit ?? 100);
-  const d = D0.d;
+  const boost = Math.max(0, Math.round(favBoost || 0));
+  const d =
+    boost > 0
+      ? Object.fromEntries(
+          Object.entries(D0.d).map(([k, v]) => [k, clamp(Math.round(v + boost), 1, 199)])
+        )
+      : D0.d;
   const gk = q.pos === 'GK';
   const tlVal = D0.tlVal;
   const G: [string, [string, number, string?][]][] = [

@@ -14,6 +14,7 @@ import { clamp } from '../utils/math';
 import { AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
+import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
 import { fmtFansShort } from '../engine/simulation';
 import { FormationPitch, PlayerFace, ClubCrest, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { LiveStreamBadge, MatchPlayerThumb } from './MatchSharedComponents';
@@ -958,7 +959,10 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
             <div className="font-bold truncate flex items-center gap-1">
               <span>{dragUi.player.n.split(' ')[0]}</span>
               <PositionBadge role={dragUi.role || dragUi.player.ro} size="xs" />
-              <OvrBadge ov={dragUi.player.ov} size="2xs" />
+              <OvrBadge
+                ov={dragUi.player.ov + getActiveFavBoost(dragUi.player, meTeamOrig, dragUi.player.me ? state.p : null)}
+                size="2xs"
+              />
             </div>
             <div className="text-[10px] font-semibold text-[var(--mut)] truncate">
               {dropTarget
@@ -1331,6 +1335,8 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
                   const meKitColor = pl.pos === 'GK' ? (meIsHome ? homeGkKit : awayGkKit) : (meIsHome ? homeKit : awayKit);
                   const meTrimColor = pl.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
                   const isMePlayer = Boolean(pl.me || (state.mode === 'p' && state.p?.name === pl.n));
+                  const isFav = isTeamFavoritePlayer(meTeamOrig, pl.n);
+                  const favBoost = getActiveFavBoost(pl, meTeamOrig, isMePlayer ? state.p : null);
                   const rowCols = canQuickSub
                     ? 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_28px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_24px_auto]'
                     : 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_30px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_26px]';
@@ -1412,6 +1418,18 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
                         {meTeamOrig.cap === pl.n && (
                           <CaptainBadge team={meTeamOrig} state={state} size="xs" className="shrink-0" />
                         )}
+                        {isFav && (
+                          <span
+                            title={favBoost > 0 ? `ลูกรักประจำทีม (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+                            className={`inline-flex items-center text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular shrink-0 ${
+                              favBoost > 0
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : 'text-rose-500/80 dark:text-rose-400/80'
+                            }`}
+                          >
+                            {favBoost > 0 ? `💖+${favBoost}` : '💖'}
+                          </span>
+                        )}
                         {isMePlayer && (
                           <span
                             title="ตัวคุณ"
@@ -1438,7 +1456,11 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
 
                       {/* 7. พลัง */}
                       <div className="flex items-center justify-start">
-                        <OvrBadge ov={pl.ov} size="2xs" />
+                        <OvrBadge
+                          ov={pl.ov + favBoost}
+                          size="2xs"
+                          title={favBoost > 0 ? `OVR ${pl.ov} + ลูกรัก ${favBoost} = ${pl.ov + favBoost}` : undefined}
+                        />
                       </div>
 
                       {canQuickSub && (

@@ -4,6 +4,7 @@ import { clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
 import { PCOL, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_OUTFITS } from '../data/thaiFootballData';
 import { getShirtNo, visOf, getFormationSlots, playerPen, xi, colLum, colDist, tc, pickGK } from '../engine/playerCore';
+import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
 import { getClubCaptainPalette } from './CaptainBadge';
 import { getPositionCanvasPalette } from './PositionBadge';
 import { getOvrCanvasPalette } from './OvrBadge';
@@ -1484,7 +1485,10 @@ export const FormationPitch: React.FC<{
 
         const ratingVal = meta?.rating;
         const useRating = statMode === 'rating' && ratingVal != null;
-        const ovPal = getOvrCanvasPalette(q.ov);
+        const favBoost = getActiveFavBoost(q, team, q.me ? state.p : null);
+        const isFav = isTeamFavoritePlayer(team, q.n);
+        const dispOv = q.ov + favBoost;
+        const ovPal = getOvrCanvasPalette(dispOv);
         const rtPal = useRating ? getRatingCanvasPalette(ratingVal, meta?.isMotm) : ovPal;
         const rtBg = rtPal.bg;
         const rtFg = rtPal.text;
@@ -1625,9 +1629,9 @@ export const FormationPitch: React.FC<{
             </text>
 
             {/* Bottom-Right: OVR or Match Rating */}
-            <rect x={cx + 3} y={cy + 5.5} width={useRating ? '21.5' : '19'} height="12.5" rx="4.5" fill={rtBg} stroke={rtStroke} strokeWidth="1.1" />
-            <text x={cx + (useRating ? 13.8 : 12.5)} y={cy + 14.8} textAnchor="middle" fontSize="9" fontWeight="800" fontFamily="Sarabun" fill={rtFg}>
-              {useRating ? ratingVal.toFixed(1) : q.ov}
+            <rect x={cx + 3} y={cy + 5.5} width={useRating || dispOv >= 100 ? '21.5' : '19'} height="12.5" rx="4.5" fill={rtBg} stroke={rtStroke} strokeWidth="1.1" />
+            <text x={cx + (useRating || dispOv >= 100 ? 13.8 : 12.5)} y={cy + 14.8} textAnchor="middle" fontSize="9" fontWeight="800" fontFamily="Sarabun" fill={rtFg}>
+              {useRating ? ratingVal.toFixed(1) : dispOv}
             </text>
 
             {/* Top-Left: MOTM Crown and/or Captain Badge */}
@@ -1688,6 +1692,66 @@ export const FormationPitch: React.FC<{
                 <path d="M-2.8 0h5.6M0-2.8v5.6" stroke="#e5484d" strokeWidth="1.9" strokeLinecap="round" />
               </g>
             )}
+            {isFav && (() => {
+              const favX = clamp(
+                !hasCard && !isInj
+                  ? cx + 15.5
+                  : goalsCount === 0 && assistsCount === 0
+                    ? cx + 18.5
+                    : meta?.isMotm
+                      ? cx + 18.5
+                      : cx - 16.5,
+                14,
+                286
+              );
+              const favY =
+                !hasCard && !isInj
+                  ? cy - 10
+                  : goalsCount === 0 && assistsCount === 0
+                    ? cy + 0.5
+                    : cy - 18;
+              return (
+                <g transform={`translate(${favX},${favY})`} className="pointer-events-none select-none">
+                  <title>{favBoost > 0 ? `ลูกรักประจำทีม (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}</title>
+                  {favBoost > 0 ? (
+                    <>
+                      <path
+                        transform="translate(-4.6,0.2) scale(1.02)"
+                        d="M0 2.6 C-0.3 2.3 -3.2 0.3 -3.2 -1.3 A1.7 1.7 0 0 1 0 -2.1 A1.7 1.7 0 0 1 3.2 -1.3 C3.2 0.3 0.3 2.3 0 2.6 Z"
+                        fill="#fb7185"
+                        stroke="#4c0519"
+                        strokeWidth="0.95"
+                        strokeLinejoin="round"
+                      />
+                      <text
+                        x="3.8"
+                        y="0.2"
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize="7.6"
+                        fontWeight="900"
+                        fontFamily="Kanit, Sarabun, sans-serif"
+                        fill="#fb7185"
+                        stroke="#280410"
+                        strokeWidth="2"
+                        paintOrder="stroke"
+                      >
+                        +{favBoost}
+                      </text>
+                    </>
+                  ) : (
+                    <path
+                      transform="translate(0,0.2) scale(1.05)"
+                      d="M0 2.6 C-0.3 2.3 -3.2 0.3 -3.2 -1.3 A1.7 1.7 0 0 1 0 -2.1 A1.7 1.7 0 0 1 3.2 -1.3 C3.2 0.3 0.3 2.3 0 2.6 Z"
+                      fill="#fb7185"
+                      stroke="#4c0519"
+                      strokeWidth="0.95"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                </g>
+              );
+            })()}
 
             {/* Mid-Left Edge: Sub In / Sub Out Arrow Badge (matches StatIconBadge) */}
             {hasSubIn && (

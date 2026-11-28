@@ -21,6 +21,7 @@ import { getPlayerMissionView, getPlayerTalent } from '../engine/missions';
 import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
+import { ClubTalkRoomsPanel } from '../components/ClubTalkRoomsPanel';
 import { TalentBadge } from '../components/TalentBadge';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
@@ -43,11 +44,11 @@ type RosterFilter = 'all' | 'need_care' | 'starters' | 'youth';
 export const TeamTrainingView = React.memo<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
-  onInspectPlayer: (player: Player, team: Team) => void;
+  onInspectPlayer: (player: Player, team: Team | null) => void;
   onToast: (msg: string) => void;
   navIntent?: NavIntent | null;
 }>(({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
-  const [trainingMode, setTrainingMode] = useState<'program' | 'missions'>('program');
+  const [trainingMode, setTrainingMode] = useState<'program' | 'missions' | 'rooms'>('program');
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>('all');
   const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'r');
 
@@ -58,6 +59,12 @@ export const TeamTrainingView = React.memo<{
     if (navIntent?.tab !== 'r') return;
     if (navIntent.sub === 'missions') {
       setTrainingMode('missions');
+    } else if (
+      navIntent.sub === 'rooms' ||
+      navIntent.focus === 'team-talk' ||
+      navIntent.focus?.startsWith('talk:')
+    ) {
+      setTrainingMode('rooms');
     } else if (navIntent.sub === 'program' || navIntent.focus === 'rehab') {
       setTrainingMode('program');
       if (navIntent.focus === 'rehab') setRosterFilter('need_care');
@@ -137,10 +144,19 @@ export const TeamTrainingView = React.memo<{
           >
             🎯 ภารกิจส่วนบุคคล
           </button>
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); setTrainingMode('rooms'); }}
+            className={`seg-btn ${trainingMode === 'rooms' ? 'seg-btn-active' : ''}`}
+          >
+            🚪 ห้องคุย
+          </button>
         </div>
         <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
           {trainingMode === 'missions' ? (
             <span>สะสมทุกภารกิจพร้อมกัน · อัปขั้นอัตโนมัติตามค่าพรสวรรค์</span>
+          ) : trainingMode === 'rooms' ? (
+            <span>พูดคุยเฉพาะภายในทีม · คุยส่วนตัวในห้องออฟฟิศ &amp; ประชุมรวม</span>
           ) : (
             <span>
               ศูนย์ฝึก Lv.{trLv} · สตาฟฟ์ฟิต +{stf.fit * 2}% · ใจเฉลี่ย <b className={getWellbeingTierMeta(avgMental, 'mental', false).txtCls}>{avgMental}</b> · กายเฉลี่ย <b className={getWellbeingTierMeta(avgPhys, 'phys', false).txtCls}>{avgPhys}</b>
@@ -152,7 +168,7 @@ export const TeamTrainingView = React.memo<{
       <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
 
       {/* Compact Shared Camp HUD Strip */}
-      {trainingMode !== 'missions' && (
+      {trainingMode === 'program' && (
         <div className="flex items-center justify-between gap-2 px-3 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] shrink-0 overflow-x-auto whitespace-nowrap">
           <div className="flex items-center gap-2 shrink-0 tabular">
             <span>
@@ -193,8 +209,17 @@ export const TeamTrainingView = React.memo<{
         </div>
       )}
 
-      {/* ==================== TAB 3: INDIVIDUAL MISSIONS ==================== */}
-      {trainingMode === 'missions' && missionTargetPlayer ? (
+      {/* ==================== TAB 3: TALK ROOMS ==================== */}
+      {trainingMode === 'rooms' ? (
+        <ClubTalkRoomsPanel
+          state={state}
+          onUpdateState={onUpdateState}
+          onInspectPlayer={onInspectPlayer}
+          onToast={onToast}
+          navIntent={navIntent}
+          isFocused={isFocused}
+        />
+      ) : trainingMode === 'missions' && missionTargetPlayer ? (
         <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[205px_1fr] grid-rows-[minmax(0,1fr)] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
           <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5 h-full flex flex-col min-h-0">
             <div className="text-xs mland:text-[10.5px] font-bold px-1 shrink-0">👥 เลือกนักเตะ ({me.sq.length} คน)</div>
@@ -202,6 +227,8 @@ export const TeamTrainingView = React.memo<{
               {sortedMissionSquad.map((q) => {
                 const selected = q.n === missionTargetPlayer.n;
                 const { talent, passedStages } = getPlayerMissionView(q, null, state);
+                const isFav = isTeamFavoritePlayer(me, q.n);
+                const mFavBoost = getActiveFavBoost(q, me, null);
                 return (
                   <button
                     key={q.n}
@@ -218,9 +245,27 @@ export const TeamTrainingView = React.memo<{
                           <PositionBadge role={q.ro} size="2xs" />
                           <span className="truncate">{q.n}</span>
                           {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
+                          {isFav && (
+                            <span
+                              title={mFavBoost > 0 ? `ลูกรักประจำทีม (+${mFavBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+                              className={`inline-flex items-center text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular shrink-0 ${
+                                mFavBoost > 0
+                                  ? 'text-rose-600 dark:text-rose-400'
+                                  : 'text-rose-500/80 dark:text-rose-400/80'
+                              }`}
+                            >
+                              {mFavBoost > 0 ? `💖+${mFavBoost}` : '💖'}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5 flex items-center gap-1 tabular">
-                          <OvrBadge ov={q.ov} variant="inline" size="xs" prefix="OVR" />
+                          <OvrBadge
+                            ov={q.ov + mFavBoost}
+                            variant="inline"
+                            size="xs"
+                            prefix="OVR"
+                            title={mFavBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${mFavBoost} = ${q.ov + mFavBoost}` : undefined}
+                          />
                           {passedStages > 0 ? <span>· ✓{passedStages}</span> : null}
                         </div>
                       </div>
@@ -605,8 +650,10 @@ export const TeamTrainingView = React.memo<{
                             {isFav && (
                               <span
                                 title={favBoost > 0 ? `ลูกรักประจำทีม (+${favBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม'}
-                                className={`px-1 rounded text-[9px] mland:text-[7.5px] font-black shrink-0 ${
-                                  favBoost > 0 ? 'bg-rose-600 text-white' : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                                className={`inline-flex items-center text-[10px] mland:text-[8.5px] font-extrabold leading-none tabular shrink-0 ${
+                                  favBoost > 0
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : 'text-rose-500/80 dark:text-rose-400/80'
                                 }`}
                               >
                                 {favBoost > 0 ? `💖+${favBoost}` : '💖'}
@@ -618,7 +665,13 @@ export const TeamTrainingView = React.memo<{
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <StaminaBar value={f} variant="inline" barWidthClass="w-12 sm:w-14 mland:w-10" />
                             <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular inline-flex items-center gap-1 flex-wrap">
-                              <OvrBadge ov={q.ov} variant="inline" size="xs" prefix="OVR" />
+                              <OvrBadge
+                                ov={q.ov + favBoost}
+                                variant="inline"
+                                size="xs"
+                                prefix="OVR"
+                                title={favBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${favBoost} = ${q.ov + favBoost}` : undefined}
+                              />
                               <span aria-hidden="true">·</span>
                               <span className={`font-bold ${mMeta.txtCls}`} title={`สุขภาพจิตใจ ${mScore}/100`}>
                                 🧠{mScore}

@@ -17,6 +17,7 @@ import {
   wagOf
 } from '../engine/playerCore';
 import { evaluateNationalTeamCallup } from '../engine/simulation';
+import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
@@ -42,6 +43,8 @@ export const PlayerClubTransferView = React.memo<{
   const meTeam = state.teams[state.me];
   const meSq = p && meTeam ? meTeam.sq.find((q) => q.me || q.n === p.name) || null : null;
   const ov = p ? ovMe(p) : 0;
+  const myFavBoost = p && meTeam && meSq ? getActiveFavBoost(meSq, meTeam, p) : 0;
+  const isMyFav = Boolean(p && meTeam && meSq && isTeamFavoritePlayer(meTeam, meSq.n));
   const starters = useMemo(() => (meTeam ? xi(meTeam) : []), [meTeam]);
   const myAltRoles = useMemo(() => ((p?.altRoles || meSq?.altRoles || []) as SubRole[]), [p?.altRoles, meSq?.altRoles]);
 
@@ -290,7 +293,24 @@ export const PlayerClubTransferView = React.memo<{
             <span className={`px-2 py-1 rounded-lg border ${isMyStarter ? 'bg-[var(--g-soft)] border-[var(--g)]/40 text-[var(--g)]' : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'}`}>
               {isMyStarter ? '⭐ ตัวจริง XI' : '🪑 สำรอง/หมุนเวียน'}
             </span>
-            <OvrBadge ov={ov} size="sm" prefix="OVR" />
+            {isMyFav && (
+              <span
+                title={myFavBoost > 0 ? `ลูกรักโค้ช (+${myFavBoost} OVR ชั่วคราว)` : 'ลูกรักโค้ช (รอใจ/กาย ≥ 72)'}
+                className={`inline-flex items-center text-[10.5px] font-extrabold leading-none tabular shrink-0 ${
+                  myFavBoost > 0
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-rose-500/80 dark:text-rose-400/80'
+                }`}
+              >
+                {myFavBoost > 0 ? `💖 ลูกรัก +${myFavBoost}` : '💖 ลูกรัก'}
+              </span>
+            )}
+            <OvrBadge
+              ov={ov + myFavBoost}
+              size="sm"
+              prefix="OVR"
+              title={myFavBoost > 0 ? `OVR ${ov} + ลูกรัก ${myFavBoost} = ${ov + myFavBoost}` : undefined}
+            />
           </div>
           <div className="seg-bar grid grid-cols-2 shrink-0">
             <button
@@ -373,6 +393,8 @@ export const PlayerClubTransferView = React.memo<{
                 {samePosTeam.map((q, idx) => {
                   const isMe = Boolean(q.me || q.n === p.name);
                   const isStarter = starters.some((s) => s.n === q.n);
+                  const isQFav = isTeamFavoritePlayer(meTeam, q.n);
+                  const qBoost = getActiveFavBoost(q, meTeam, isMe ? p : null);
                   return (
                     <div
                       key={q.n}
@@ -389,6 +411,18 @@ export const PlayerClubTransferView = React.memo<{
                             <PositionBadge role={q.ro} size="2xs" />
                             <span className="truncate">{q.n}</span>
                             {meTeam.cap === q.n && <CaptainBadge team={meTeam} state={state} size="xs" className="shrink-0" />}
+                            {isQFav && (
+                              <span
+                                title={qBoost > 0 ? `ลูกรักประจำทีม (+${qBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+                                className={`inline-flex items-center text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular shrink-0 ${
+                                  qBoost > 0
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : 'text-rose-500/80 dark:text-rose-400/80'
+                                }`}
+                              >
+                                {qBoost > 0 ? `💖+${qBoost}` : '💖'}
+                              </span>
+                            )}
                             {isMe && <span className="text-[var(--g)] font-extrabold shrink-0">(คุณ)</span>}
                             {(q.hg || q.customCreated) ? <span className="text-[10px] shrink-0" title="เด็กปั้นสโมสร">🌱</span> : null}
                           </div>
@@ -398,7 +432,11 @@ export const PlayerClubTransferView = React.memo<{
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
-                        <OvrBadge ov={q.ov} size="xs" />
+                        <OvrBadge
+                          ov={q.ov + qBoost}
+                          size="xs"
+                          title={qBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${qBoost} = ${q.ov + qBoost}` : undefined}
+                        />
                         <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular inline-flex items-center gap-1">
                           <span className="inline-flex items-center gap-0.5"><StatIconBadge kind="goal" size="xs" /> {q.sg || 0}</span>
                           <span>·</span>
@@ -561,27 +599,48 @@ export const PlayerClubTransferView = React.memo<{
                     );
                   })
                 ) : (
-                  divisionPosLeaderboard.top5.map(({ player: q, team: t }, idx) => (
-                    <div
-                      key={`${t.id}-${q.n}`}
-                      onClick={() => { SFX.tap(); onInspectPlayer(q, t); }}
-                      className={`px-2.5 py-1.5 mland:py-1 rounded-xl border flex items-center justify-between gap-2 cursor-pointer text-xs mland:text-[10px] ${
-                        q.me || q.n === p.name ? 'bg-[var(--g-soft)] border-[var(--g)]' : 'bg-[var(--surface-2)]/65 border-[var(--line)] hover:border-[var(--g)]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-extrabold text-[var(--mut)] w-4 text-left tabular shrink-0">{idx + 1}</span>
-                        <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
-                          <PlayerFace player={q} team={t} state={state} careerProfile={q.me || q.n === p.name ? state.p : null} size={24} />
+                  divisionPosLeaderboard.top5.map(({ player: q, team: t }, idx) => {
+                    const isDFav = isTeamFavoritePlayer(t, q.n);
+                    const dBoost = getActiveFavBoost(q, t, q.me || q.n === p.name ? state.p : null);
+                    return (
+                      <div
+                        key={`${t.id}-${q.n}`}
+                        onClick={() => { SFX.tap(); onInspectPlayer(q, t); }}
+                        className={`px-2.5 py-1.5 mland:py-1 rounded-xl border flex items-center justify-between gap-2 cursor-pointer text-xs mland:text-[10px] ${
+                          q.me || q.n === p.name ? 'bg-[var(--g-soft)] border-[var(--g)]' : 'bg-[var(--surface-2)]/65 border-[var(--line)] hover:border-[var(--g)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-extrabold text-[var(--mut)] w-4 text-left tabular shrink-0">{idx + 1}</span>
+                          <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
+                            <PlayerFace player={q} team={t} state={state} careerProfile={q.me || q.n === p.name ? state.p : null} size={24} />
+                          </div>
+                          <PositionBadge role={q.ro} size="2xs" />
+                          <span className="font-bold truncate">{q.n}</span>
+                          {t.cap === q.n && <CaptainBadge team={t} state={state} size="xs" className="shrink-0" />}
+                          {isDFav && (
+                            <span
+                              title={dBoost > 0 ? `ลูกรักประจำทีม (+${dBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+                              className={`inline-flex items-center text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular shrink-0 ${
+                                dBoost > 0
+                                  ? 'text-rose-600 dark:text-rose-400'
+                                  : 'text-rose-500/80 dark:text-rose-400/80'
+                              }`}
+                            >
+                              {dBoost > 0 ? `💖+${dBoost}` : '💖'}
+                            </span>
+                          )}
+                          <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">({t.name})</span>
                         </div>
-                        <PositionBadge role={q.ro} size="2xs" />
-                        <span className="font-bold truncate">{q.n}</span>
-                        {t.cap === q.n && <CaptainBadge team={t} state={state} size="xs" className="shrink-0" />}
-                        <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">({t.name})</span>
+                        <OvrBadge
+                          ov={q.ov + dBoost}
+                          size="xs"
+                          prefix="OVR"
+                          title={dBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${dBoost} = ${q.ov + dBoost}` : undefined}
+                        />
                       </div>
-                      <OvrBadge ov={q.ov} size="xs" prefix="OVR" />
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

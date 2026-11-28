@@ -618,7 +618,7 @@ export const LeagueView = React.memo<{
           actionLabel: 'เข้าออฟฟิศ',
           onAction: () =>
             onNavigate?.(
-              'u',
+              'r',
               'rooms',
               `talk:${favPl.n}`,
               `คุยส่วนตัวหรือส่งกายภาพให้ ${favPl.n} ในห้องออฟฟิศ (ทำ ใจ≥72 และ กาย≥72)`
@@ -637,7 +637,7 @@ export const LeagueView = React.memo<{
           actionLabel: 'เข้าห้องประชุม',
           onAction: () =>
             onNavigate?.(
-              'u',
+              'r',
               'rooms',
               'team-talk',
               'เลือกวาระประชุมรวมใน "ห้องประชุมทีม" เพื่อปลุกขวัญทั้งสโมสร'

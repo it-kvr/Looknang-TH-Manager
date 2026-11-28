@@ -630,7 +630,7 @@ export const ClubTalkRoomsPanel: React.FC<{
                         </span>
                       ) : (
                         <span className="text-[var(--mut)] tabular shrink-0">
-                          💖 ลูกรัก ({favPlayersList.length}/5):{' '}
+                          💖 ลูกรัก ({favPlayersList.length} คน):{' '}
                           <b className="text-[var(--ink)]">
                             {favPlayersList.length > 0
                               ? favPlayersList.map((fp) => fp.n.split(' ')[0]).join(', ')
@@ -988,11 +988,12 @@ export const ClubTalkRoomsPanel: React.FC<{
             )}
           </div>
 
-          {/* Own Club Meeting Hall: Coach Briefing & Squad Individual Care */}
+          {/* Own Club Meeting Hall: Coach Briefing & Squad Readiness */}
           <TeamOfficeView
             state={state}
             onUpdateState={onUpdateState}
             onInspectPlayer={onInspectPlayer}
+            onOpenPrivateTalk={enterOfficeWithPlayer}
             onToast={onToast}
             isFocused={isFocused}
           />

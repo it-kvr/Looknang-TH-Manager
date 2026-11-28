@@ -21,6 +21,7 @@ import { computeTurfMatchModifiers, getStadiumStyleSpec, getTurfGradeSpec } from
 import { SFX } from '../utils/audioTheme';
 import { clamp } from '../utils/math';
 import { getFormationSlots, getShirtNo, matchKits, pickBestCaptain, pickGK, playerPen, xi } from '../engine/playerCore';
+import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
 import {
   EXTRA_CUP_META,
   computeMatchAttendance,
@@ -500,9 +501,11 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const pickedIsStarter = swapPickName ? myXiNameSet.has(swapPickName) : false;
     const isCrossGroupSwap = Boolean(swapPickName && swapPickName !== pl.n && pickedIsStarter !== isStarter);
     const showSwapCol = canEditRow && !compact;
+    const isFav = isTeamFavoritePlayer(team, pl.n);
+    const rowFavBoost = getActiveFavBoost(pl, team, isMePlayer ? state.p : null);
     const gridColsCls = showSwapCol
-      ? 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_26px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_23px_auto]'
-      : 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_28px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_24px]';
+      ? 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_auto_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_auto_auto]'
+      : 'grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_auto] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_auto]';
 
     return (
       <div
@@ -558,6 +561,18 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         <div className="flex items-center justify-start gap-1 min-w-0">
           <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">{pl.n}</span>
           {isCap && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
+          {isFav && (
+            <span
+              title={rowFavBoost > 0 ? `ลูกรักประจำทีม (+${rowFavBoost} OVR ชั่วคราว)` : 'ลูกรักประจำทีม (รอใจ/กาย ≥ 72)'}
+              className={`inline-flex items-center text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular shrink-0 ${
+                rowFavBoost > 0
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : 'text-rose-500/80 dark:text-rose-400/80'
+              }`}
+            >
+              {rowFavBoost > 0 ? `💖+${rowFavBoost}` : '💖'}
+            </span>
+          )}
           {isMePlayer && (
             <span
               title="ตัวคุณ"
@@ -579,8 +594,12 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           <PlayerStatusBadge sus={pl.sus} inj={pl.inj} fit={fit} variant="cell" />
         </div>
 
-        <div className="flex items-center justify-start">
-          <OvrBadge ov={pl.ov} size="2xs" />
+        <div className="flex items-center justify-end">
+          <OvrBadge
+            ov={pl.ov + rowFavBoost}
+            size="2xs"
+            title={rowFavBoost > 0 ? `OVR ${pl.ov} + ลูกรัก ${rowFavBoost} = ${pl.ov + rowFavBoost}` : undefined}
+          />
         </div>
 
         {showSwapCol && (

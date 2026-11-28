@@ -20,6 +20,7 @@ import {
 
 export interface AthleteCardProps {
   ov: number;
+  boost?: number;
   pot?: number;
   talent: number;
   roleLabel: string;
@@ -51,6 +52,7 @@ export interface AthleteCardProps {
 
 export const AthleteCard: React.FC<AthleteCardProps> = ({
   ov,
+  boost = 0,
   pot,
   talent,
   roleLabel,
@@ -124,7 +126,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
             title={roleLabel}
             className="inline-flex items-center gap-0.5 whitespace-nowrap shrink-0"
           >
-            <PositionBadge role={roleLabel} size="2xs" />
+            <PositionBadge role={roleLabel} size="xs" />
             {altRolesCount > 0 && (
               <span className={`text-[8px] mland:text-[6.5px] font-bold opacity-75 ${cardPalette.subText}`}>
                 +{altRolesCount}
@@ -136,13 +138,17 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
               type="button"
               onClick={onShirtClick}
               title={shirtButtonTitle || 'สลับเบอร์เสื้อ'}
-              className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7px] font-extrabold tabular cursor-pointer transition-colors shrink-0 whitespace-nowrap ${cardPalette.lockerBtn}`}
+              className={`inline-flex items-center justify-center h-[16px] mland:h-[14px] px-1.5 mland:px-1 rounded-[4px] font-display text-[9px] mland:text-[7.5px] font-extrabold leading-none tracking-tight tabular cursor-pointer transition-colors shrink-0 whitespace-nowrap ${cardPalette.lockerBtn}`}
             >
               #{shirtNo} ▾
             </button>
           ) : (
             <span
-              className={`text-[9.5px] mland:text-[7.5px] font-bold tabular shrink-0 whitespace-nowrap ${cardPalette.mutedText}`}
+              className={`inline-flex items-center justify-center h-[16px] mland:h-[14px] px-1.5 mland:px-1 rounded-[4px] border font-display text-[9px] mland:text-[7.5px] font-extrabold leading-none tracking-tight tabular shrink-0 whitespace-nowrap ${
+                isLight
+                  ? 'bg-slate-200/80 border-slate-300/80 text-slate-700'
+                  : 'bg-white/10 border-white/15 text-white/85'
+              }`}
             >
               #{shirtNo}
             </span>
@@ -315,11 +321,18 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
       >
         {categories.map((cat) => {
           const val = cat.value;
+          const activeBoost = Math.max(0, Math.round(boost || 0));
+          const baseVal = Math.max(1, val - activeBoost);
           const tier = statTierMeta(val);
+          const scaleMax = Math.max(100, val);
+          const basePct = clamp(Math.round((baseVal / scaleMax) * 100), 8, 100);
+          const totalPct = clamp(Math.round((val / scaleMax) * 100), basePct, 100);
+          const boostPct = activeBoost > 0 ? Math.max(5, totalPct - basePct) : 0;
+          const adjustedBasePct = boostPct > 0 ? Math.max(5, totalPct - boostPct) : basePct;
           return (
             <div
               key={cat.key}
-              title={`${cat.fullLabel}: ${val}`}
+              title={activeBoost > 0 ? `${cat.fullLabel}: พื้นฐาน ${baseVal} + ลูกรัก ${activeBoost} = ${val}` : `${cat.fullLabel}: ${val}`}
               className={`rounded-lg py-0.5 px-[2px] space-y-0.5 min-w-0 ${cardPalette.statCell}`}
             >
               <div
@@ -328,22 +341,39 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                 {cat.shortLabel}
               </div>
               <div
-                className={`text-[11px] mland:text-[8.5px] font-extrabold font-display tabular leading-tight ${
+                className={`inline-flex items-baseline justify-center gap-[1px] font-display tabular leading-tight whitespace-nowrap ${
+                  activeBoost > 0 ? 'text-[10px] mland:text-[7.5px]' : 'text-[11px] mland:text-[8.5px]'
+                } font-extrabold ${
                   isLight ? tier.textClass : tier.darkTextClass
                 }`}
               >
-                {val}
+                <span>{val}</span>
+                {activeBoost > 0 && (
+                  <span className={`text-[7.5px] mland:text-[5.5px] font-black ${isLight ? 'text-rose-600' : 'text-rose-400'}`}>
+                    +{activeBoost}
+                  </span>
+                )}
               </div>
               <div
-                className={`h-1.5 mland:h-1 rounded-full overflow-hidden mx-[2px] ${cardPalette.statTrack}`}
+                className={`h-1.5 mland:h-1 rounded-full overflow-hidden mx-[2px] flex items-stretch ${cardPalette.statTrack}`}
               >
                 <div
-                  className="h-full rounded-full transition-all"
+                  className="h-full transition-all"
                   style={{
-                    width: `${clamp(val, 8, 100)}%`,
-                    background: statBarColor(val)
+                    width: `${adjustedBasePct}%`,
+                    background: statBarColor(baseVal),
+                    borderRadius: boostPct > 0 ? '9999px 0 0 9999px' : '9999px'
                   }}
                 />
+                {boostPct > 0 && (
+                  <div
+                    className="h-full rounded-r-full transition-all"
+                    style={{
+                      width: `${boostPct}%`,
+                      background: 'linear-gradient(90deg, #f43f5e, #fb7185)'
+                    }}
+                  />
+                )}
               </div>
             </div>
           );
