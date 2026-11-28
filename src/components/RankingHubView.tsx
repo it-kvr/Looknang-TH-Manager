@@ -15,7 +15,7 @@ import {
   Zap
 } from 'lucide-react';
 import type { GameState, Player, Position, StatKey, Team } from '../types/game';
-import { TN, BASE } from '../data/thaiFootballData';
+import { TN, BASE, CONFED_META, getCountryMetaByCode, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { DT, vlu, wagOf } from '../engine/playerCore';
@@ -146,11 +146,12 @@ const calcClubTrophyInfo = (t: Team) => {
   return { total: list.length, prestige, majorCount, latestSeason };
 };
 
-const getTierShortLabel = (tier: number): string => {
+const getTierShortLabel = (tier: number, teamName?: string): string => {
   if (tier === 0) return 'จังหวัด';
   if (tier === 1) return 'ดิวิชั่น 2';
   if (tier === 2) return 'ดิวิชั่น 1';
-  return 'ต่างแดน';
+  const meta = teamName ? getForeignTeamCountryMeta(teamName) : null;
+  return meta ? `${meta.flag} ${meta.country}` : '🌍 ต่างแดน';
 };
 
 interface ClubRowEntry {
@@ -211,6 +212,8 @@ export const RankingHubView = React.memo<{
 
   const [entity, setEntity] = useState<EntityMode>('clubs');
   const [scope, setScope] = useState<ScopeKey>('domestic');
+  const [confedFilter, setConfedFilter] = useState<'all' | ForeignConfed>('all');
+  const [countryFilter, setCountryFilter] = useState<string>('ALL');
   const [query, setQuery] = useState('');
 
   const [clubCat, setClubCat] = useState<ClubCategory>('power');
@@ -223,14 +226,35 @@ export const RankingHubView = React.memo<{
   const [myClubOnly, setMyClubOnly] = useState(false);
   const [playerLimit, setPlayerLimit] = useState(60);
 
+  const worldCountries = useMemo(() => {
+    const map = new Map<string, { code: string; flag: string; country: string; confed: ForeignConfed; count: number }>();
+    state.teams.forEach((t) => {
+      if (t.tier < 3) return;
+      const meta = getForeignTeamCountryMeta(t.name);
+      if (!meta) return;
+      const prev = map.get(meta.code);
+      if (prev) prev.count += 1;
+      else map.set(meta.code, { code: meta.code, flag: meta.flag, country: meta.country, confed: meta.confed, count: 1 });
+    });
+    return Array.from(map.values()).sort((a, b) => a.country.localeCompare(b.country, 'th'));
+  }, [state.teams]);
+
   const scopedTeams = useMemo(() => {
     return state.teams.filter((t) => {
-      if (scope === 'all') return true;
-      if (scope === 'domestic') return t.tier < 3;
-      if (scope === 'my') return t.tier === me.tier;
-      return t.tier === Number(scope);
+      if (scope === 'domestic' && t.tier >= 3) return false;
+      if (scope === 'my' && t.tier !== me.tier) return false;
+      if (scope !== 'all' && scope !== 'domestic' && scope !== 'my' && t.tier !== Number(scope)) return false;
+      if (scope === '3' || scope === 'all') {
+        if (confedFilter !== 'all' || countryFilter !== 'ALL') {
+          if (t.tier < 3) return false;
+          const meta = getForeignTeamCountryMeta(t.name);
+          if (confedFilter !== 'all' && (meta?.confed || 'asia') !== confedFilter) return false;
+          if (countryFilter !== 'ALL' && meta?.code !== countryFilter) return false;
+        }
+      }
+      return true;
     });
-  }, [state.teams, scope, me.tier]);
+  }, [state.teams, scope, me.tier, confedFilter, countryFilter]);
 
   const clubRows = useMemo<ClubRowEntry[]>(() => {
     return scopedTeams.map((team) => {
@@ -352,9 +376,11 @@ export const RankingHubView = React.memo<{
       .map((entry, idx) => ({ entry, rank: idx + 1 }))
       .filter(({ entry }) => {
         if (!q) return true;
+        const meta = entry.team.tier >= 3 ? getForeignTeamCountryMeta(entry.team.name) : null;
         return (
           entry.team.name.toLowerCase().includes(q) ||
-          (TN[entry.team.tier] || '').toLowerCase().includes(q)
+          (TN[entry.team.tier] || '').toLowerCase().includes(q) ||
+          (meta?.country || '').toLowerCase().includes(q)
         );
       });
   }, [clubSortedAll, query]);
@@ -474,10 +500,14 @@ export const RankingHubView = React.memo<{
       .map((entry, idx) => ({ entry, rank: idx + 1 }))
       .filter(({ entry }) => {
         if (!q) return true;
+        const natMeta = getCountryMetaByCode(entry.player.nat);
+        const clubMeta = entry.team.tier >= 3 ? getForeignTeamCountryMeta(entry.team.name) : null;
         return (
           entry.player.n.toLowerCase().includes(q) ||
           entry.team.name.toLowerCase().includes(q) ||
-          (entry.player.ro || '').toLowerCase().includes(q)
+          (entry.player.ro || '').toLowerCase().includes(q) ||
+          (natMeta?.country || '').toLowerCase().includes(q) ||
+          (clubMeta?.country || '').toLowerCase().includes(q)
         );
       });
   }, [entity, playerRows, posFilter, u21Only, myClubOnly, playerSub, query]);
@@ -804,6 +834,10 @@ export const RankingHubView = React.memo<{
                   onClick={() => {
                     SFX.tap();
                     setScope(sk);
+                    if (sk !== '3' && sk !== 'all') {
+                      setConfedFilter('all');
+                      setCountryFilter('ALL');
+                    }
                     setPlayerLimit(60);
                   }}
                   className={`seg-btn ${scope === sk ? 'bg-[var(--ink)] text-[var(--bg)] hover:text-[var(--bg)] shadow-xs' : ''}`}
@@ -821,7 +855,7 @@ export const RankingHubView = React.memo<{
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={entity === 'clubs' ? 'ค้นหาชื่อสโมสร...' : 'ค้นหานักเตะ หรือ สโมสร...'}
+              placeholder={entity === 'clubs' ? 'ค้นหาชื่อสโมสร หรือ ประเทศ...' : 'ค้นหานักเตะ, สโมสร, สัญชาติ...'}
               className="w-full h-7.5 mland:h-6.5 pl-8 pr-7 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] focus:border-[var(--g)] focus:outline-none text-[11px] mland:text-[9.5px] text-[var(--ink)] placeholder:text-[var(--mut)]"
             />
             {query && (
@@ -836,6 +870,59 @@ export const RankingHubView = React.memo<{
             )}
           </div>
         </div>
+
+        {/* World Region & Country Filters when viewing Foreign or All clubs */}
+        {hasAsiaTeams && (scope === '3' || scope === 'all') && (
+          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5 border-t border-[var(--line)]/50">
+            <div className="seg-bar overflow-x-auto max-w-full">
+              {(
+                [
+                  ['all', '🌐 ทุกทวีป'],
+                  ['asia', `${CONFED_META.asia.icon} ${CONFED_META.asia.short}`],
+                  ['europe', `${CONFED_META.europe.icon} ${CONFED_META.europe.short}`],
+                  ['americas', `${CONFED_META.americas.icon} ${CONFED_META.americas.short}`],
+                  ['africa', `${CONFED_META.africa.icon} ${CONFED_META.africa.short}`]
+                ] as const
+              ).map(([cid, clbl]) => (
+                <button
+                  key={cid}
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setConfedFilter(cid);
+                    setCountryFilter('ALL');
+                    setPlayerLimit(60);
+                  }}
+                  className={`seg-btn py-1 mland:py-0.5 px-2 text-[10.5px] mland:text-[8.5px] whitespace-nowrap ${
+                    confedFilter === cid ? 'seg-btn-active' : ''
+                  }`}
+                >
+                  {clbl}
+                </button>
+              ))}
+            </div>
+
+            <select
+              aria-label="กรองตามประเทศ"
+              value={countryFilter}
+              onChange={(e) => {
+                SFX.tap();
+                setCountryFilter(e.target.value);
+                setPlayerLimit(60);
+              }}
+              className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
+            >
+              <option value="ALL">ทุกประเทศต่างแดน ({worldCountries.length})</option>
+              {worldCountries
+                .filter((c) => confedFilter === 'all' || c.confed === confedFilter)
+                .map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.country} ({c.count})
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
 
         {/* Row 2: Category Tabs */}
         <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1.5">
@@ -1037,7 +1124,7 @@ export const RankingHubView = React.memo<{
                   />
                   <div className="min-w-0">
                     <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">
-                      อันดับ #1 หมวดนี้ · {getTierShortLabel(topClubEntry.team.tier)}
+                      อันดับ #1 หมวดนี้ · {getTierShortLabel(topClubEntry.team.tier, topClubEntry.team.name)}
                     </div>
                     <div className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
                       {topClubEntry.team.name}
@@ -1271,7 +1358,7 @@ export const RankingHubView = React.memo<{
                           {isMe && <MyTeamBadge size="2xs" />}
                         </div>
                         <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate mt-0.5 flex items-center gap-1">
-                          <span>{TN[entry.team.tier]}</span>
+                          <span>{getTierShortLabel(entry.team.tier, entry.team.name)}</span>
                           <span aria-hidden="true">·</span>
                           <span className="tabular">{entry.team.sq.length} คน</span>
                           {entry.team.fm && (
@@ -1408,13 +1495,25 @@ export const RankingHubView = React.memo<{
                         </div>
 
                         <div className="min-w-0">
-                          <div className="font-bold text-xs mland:text-[10px] text-[var(--ink)] flex items-center gap-1 min-w-0 leading-tight">
-                            <PositionBadge role={entry.player.ro || entry.player.pos} size="2xs" />
-                            <span className="truncate">{entry.player.n}</span>
-                            {entry.isMePlayer && (
-                              <span className="text-[9.5px] font-extrabold text-[var(--g)] shrink-0">คุณ</span>
-                            )}
-                          </div>
+                          {(() => {
+                            const natMeta =
+                              getCountryMetaByCode(entry.player.nat) ||
+                              (entry.team.tier >= 3 ? getForeignTeamCountryMeta(entry.team.name) : null);
+                            return (
+                              <div className="font-bold text-xs mland:text-[10px] text-[var(--ink)] flex items-center gap-1 min-w-0 leading-tight">
+                                <PositionBadge role={entry.player.ro || entry.player.pos} size="2xs" />
+                                {natMeta && (
+                                  <span title={`สัญชาติ${natMeta.country}`} className="text-[11px] mland:text-[9px] leading-none shrink-0">
+                                    {natMeta.flag}
+                                  </span>
+                                )}
+                                <span className="truncate">{entry.player.n}</span>
+                                {entry.isMePlayer && (
+                                  <span className="text-[9.5px] font-extrabold text-[var(--g)] shrink-0">คุณ</span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 leading-tight">
                             <ClubCrest
                               name={entry.team.name}
@@ -1426,7 +1525,7 @@ export const RankingHubView = React.memo<{
                             <span className="truncate">{entry.team.name}</span>
                             {entry.isMyClub && <MyTeamBadge size="2xs" />}
                             <span aria-hidden="true" className="hidden sm:inline">·</span>
-                            <span className="hidden sm:inline">{getTierShortLabel(entry.team.tier)}</span>
+                            <span className="hidden sm:inline">{getTierShortLabel(entry.team.tier, entry.team.name)}</span>
                           </div>
                         </div>
 

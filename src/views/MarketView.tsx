@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Lock, RefreshCw, Search, SlidersHorizontal, Sta
 import type { SubRole, MainTab, NavIntent, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
 import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS } from '../data/thaiFootballData';
+import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS, COUNTRY_META_BY_CODE, getCountryMetaByCode, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, dtInfo, xi, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { appendPlayerCareerLog } from '../engine/history';
@@ -181,7 +181,8 @@ export const MarketView = React.memo<{
   const [buySortCol, setBuySortCol] = useState<MarketSortCol>('default');
   const [buySortDir, setBuySortDir] = useState<SortDir>('desc');
   const [searchQuery, setSearchQuery] = useState('');
-  const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER'>('MY_TIER');
+  const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER' | 'FOREIGN'>('MY_TIER');
+  const [countryFilter, setCountryFilter] = useState<string>('ALL');
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [shortlistFilter, setShortlistFilter] = useState<'all' | 'ready' | 'free' | 'club'>('all');
   const [shortlistSortCol, setShortlistSortCol] = useState<MarketSortCol>('default');
@@ -281,12 +282,16 @@ export const MarketView = React.memo<{
         const loanOk = !loanOnlyFilter || !q.free;
         const effPrice = q.free ? 0 : q.price || vlu(q);
         const detailOk = matchesBuyDetailFilters(q, effPrice);
+        const natCode = q.nat || 'TH';
+        const countryOk = countryFilter === 'ALL' || natCode === countryFilter;
+        const natMeta = getCountryMetaByCode(q.nat);
         const searchOk =
           !normalizedQuery ||
           q.n.toLowerCase().includes(normalizedQuery) ||
           q.ro.toLowerCase().includes(normalizedQuery) ||
-          (SPN[q.ro] || '').toLowerCase().includes(normalizedQuery);
-        return lineOk && subOk && loanOk && detailOk && searchOk;
+          (SPN[q.ro] || '').toLowerCase().includes(normalizedQuery) ||
+          (natMeta?.country || '').toLowerCase().includes(normalizedQuery);
+        return lineOk && subOk && loanOk && detailOk && countryOk && searchOk;
       });
     if (buySortCol === 'default') return base;
     return [...base].sort((a, b) =>
@@ -299,21 +304,27 @@ export const MarketView = React.memo<{
         b.q.free ? 0 : b.q.price || vlu(b.q)
       )
     );
-  }, [state.mk, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, buySortCol, buySortDir, normalizedQuery]);
+  }, [state.mk, filter, subFilter, loanOnlyFilter, ageRangeFilter, minOvFilter, maxBudgetCap, countryFilter, buySortCol, buySortDir, normalizedQuery]);
 
   const clubBasePool = useMemo(() => {
     if (activeTab !== 'buy' || marketSource !== 'club') return [];
     const items: { q: Player; team: Team; idx: number; price: number }[] = [];
     state.teams.forEach((t) => {
       if (t.id === state.me) return;
-      if (clubTierFilter === 'MY_TIER' && Math.abs(t.tier - me.tier) > 1) return;
+      if (clubTierFilter === 'MY_TIER' && (t.tier >= 3 || Math.abs(t.tier - me.tier) > 1)) return;
+      if (clubTierFilter === 'FOREIGN' && t.tier < 3) return;
+      const clubCode = t.tier >= 3 ? getForeignTeamCountryMeta(t.name)?.code || 'INTL' : 'TH';
       t.sq.forEach((q, idx) => {
         if (q.me || q.loan) return;
+        if (countryFilter !== 'ALL') {
+          const pCode = q.nat || clubCode;
+          if (pCode !== countryFilter && clubCode !== countryFilter) return;
+        }
         items.push({ q, team: t, idx, price: Math.max(8, vlu(q)) });
       });
     });
     return items;
-  }, [activeTab, marketSource, state.teams, state.me, me.tier, clubTierFilter]);
+  }, [activeTab, marketSource, state.teams, state.me, me.tier, clubTierFilter, countryFilter]);
 
   const clubMarketList = useMemo(() => {
     const items = clubBasePool.filter(({ q, team: t, price }) => {
@@ -321,11 +332,15 @@ export const MarketView = React.memo<{
       const subOk = subFilter === 'ALL' || q.ro === subFilter;
       const loanOk = !loanOnlyFilter || (t.sq.length > 16 && (q.age <= 26 || q.ov <= 76));
       const detailOk = matchesBuyDetailFilters(q, price);
+      const clubMeta = t.tier >= 3 ? getForeignTeamCountryMeta(t.name) : null;
+      const natMeta = getCountryMetaByCode(q.nat);
       const searchOk =
         !normalizedQuery ||
         q.n.toLowerCase().includes(normalizedQuery) ||
         t.name.toLowerCase().includes(normalizedQuery) ||
-        q.ro.toLowerCase().includes(normalizedQuery);
+        q.ro.toLowerCase().includes(normalizedQuery) ||
+        (clubMeta?.country || '').toLowerCase().includes(normalizedQuery) ||
+        (natMeta?.country || '').toLowerCase().includes(normalizedQuery);
       return lineOk && subOk && loanOk && detailOk && searchOk;
     });
     const sorted = items.slice().sort((a, b) => {
@@ -521,6 +536,7 @@ export const MarketView = React.memo<{
     ageRangeFilter !== 'ALL' ||
     minOvFilter > 0 ||
     maxBudgetFilter !== 'ALL' ||
+    countryFilter !== 'ALL' ||
     buySortCol !== 'default' ||
     searchQuery.trim() !== '';
 
@@ -531,6 +547,7 @@ export const MarketView = React.memo<{
     setAgeRangeFilter('ALL');
     setMinOvFilter(0);
     setMaxBudgetFilter('ALL');
+    setCountryFilter('ALL');
     setBuySortCol('default');
     setBuySortDir('desc');
     setSearchQuery('');
@@ -541,6 +558,12 @@ export const MarketView = React.memo<{
       ? [{ key: 'pos', label: filter === 'FREE' ? 'ฟรีเอเยนต์' : `ตำแหน่ง: ${filter}`, clear: () => { setFilter('ALL'); setSubFilter('ALL'); } }]
       : []),
     ...(subFilter !== 'ALL' ? [{ key: 'role', label: `บทบาท: ${subFilter}`, clear: () => setSubFilter('ALL') }] : []),
+    ...(countryFilter !== 'ALL'
+      ? (() => {
+          const cm = getCountryMetaByCode(countryFilter);
+          return [{ key: 'nat', label: cm ? `${cm.flag} ${cm.country}` : countryFilter, clear: () => setCountryFilter('ALL') }];
+        })()
+      : []),
     ...(ageRangeFilter !== 'ALL'
       ? [{
           key: 'age',
@@ -2112,19 +2135,47 @@ export const MarketView = React.memo<{
                   </select>
                 </div>
 
+                {marketSource !== 'created' && (
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
+                      สัญชาติ / ประเทศ
+                    </div>
+                    <select
+                      aria-label="กรองตามสัญชาติ"
+                      value={countryFilter}
+                      onChange={(e) => {
+                        SFX.tap();
+                        setCountryFilter(e.target.value);
+                      }}
+                      className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
+                    >
+                      <option value="ALL">ทุกประเทศทั่วโลก</option>
+                      <option value="TH">🇹🇭 ไทย</option>
+                      {Object.values(COUNTRY_META_BY_CODE)
+                        .slice()
+                        .sort((a, b) => a.country.localeCompare(b.country, 'th'))
+                        .map((cm) => (
+                          <option key={cm.code} value={cm.code}>
+                            {cm.flag} {cm.country}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+
                 {marketSource === 'club' && (
                   <div className="space-y-1">
                     <div className="text-[10px] mland:text-[8.5px] font-extrabold uppercase tracking-wide text-[var(--mut)]">
                       ขอบเขตสโมสร
                     </div>
-                    <div className="p-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/70 grid grid-cols-2 gap-0.5">
+                    <div className="p-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/70 grid grid-cols-3 gap-0.5">
                       <button
                         type="button"
                         onClick={() => {
                           SFX.tap();
                           setClubTierFilter('MY_TIER');
                         }}
-                        className={`py-1 mland:py-0.5 rounded-[6px] text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-all ${
+                        className={`py-1 mland:py-0.5 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
                           clubTierFilter === 'MY_TIER'
                             ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
                             : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
@@ -2138,13 +2189,27 @@ export const MarketView = React.memo<{
                           SFX.tap();
                           setClubTierFilter('ALL');
                         }}
-                        className={`py-1 mland:py-0.5 rounded-[6px] text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-all ${
+                        className={`py-1 mland:py-0.5 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
                           clubTierFilter === 'ALL'
                             ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
                             : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
                         }`}
                       >
                         ทุกลีก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setClubTierFilter('FOREIGN');
+                        }}
+                        className={`py-1 mland:py-0.5 rounded-[6px] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-all truncate ${
+                          clubTierFilter === 'FOREIGN'
+                            ? 'bg-[var(--surface)] text-[var(--g)] shadow-2xs border border-[var(--g)]/35'
+                            : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
+                        }`}
+                      >
+                        🌏 ต่างแดน
                       </button>
                     </div>
                   </div>
@@ -2343,6 +2408,14 @@ export const MarketView = React.memo<{
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
                               <PositionBadge role={q.ro} size="2xs" />
+                              {(() => {
+                                const natMeta = getCountryMetaByCode(q.nat);
+                                return natMeta ? (
+                                  <span title={`สัญชาติ${natMeta.country}`} className="text-[11px] mland:text-[9px] leading-none shrink-0">
+                                    {natMeta.flag}
+                                  </span>
+                                ) : null;
+                              })()}
                               <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
                               {q.free ? (
                                 <span className="text-[9px] mland:text-[7.5px] px-1 py-[0.5px] rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">ฟรี</span>
@@ -2478,13 +2551,30 @@ export const MarketView = React.memo<{
                           <div className="flex-1 min-w-0">
                             <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
                               <PositionBadge role={q.ro} size="2xs" />
+                              {(() => {
+                                const natMeta = getCountryMetaByCode(q.nat) || (team.tier >= 3 ? getForeignTeamCountryMeta(team.name) : null);
+                                return natMeta ? (
+                                  <span title={`สัญชาติ${natMeta.country}`} className="text-[11px] mland:text-[9px] leading-none shrink-0">
+                                    {natMeta.flag}
+                                  </span>
+                                ) : null;
+                              })()}
                               <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
                               <span className="hidden sm:inline-flex items-center gap-1 px-1 py-[0.5px] rounded bg-[var(--surface-2)] border border-[var(--line)]/80 text-[9.5px] mland:text-[8px] font-semibold text-[var(--ink)]/85 truncate shrink">
                                 {team.name}
                               </span>
                             </div>
                             <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
-                              <span className="truncate">{TN[team.tier]}<span className="md:hidden mland:hidden"> · {q.age} ปี</span></span>
+                              <span className="truncate">
+                                {(() => {
+                                  if (team.tier >= 3) {
+                                    const cm = getForeignTeamCountryMeta(team.name);
+                                    return cm ? `${cm.flag} ${cm.country}` : '🌍 ต่างแดน';
+                                  }
+                                  return TN[team.tier];
+                                })()}
+                                <span className="md:hidden mland:hidden"> · {q.age} ปี</span>
+                              </span>
                               <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
                               <span
                                 className="hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1.5 py-[0.5px] rounded-md border bg-[var(--surface-2)]/75 border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold tabular leading-tight shrink-0 whitespace-nowrap"
@@ -3941,6 +4031,14 @@ export const MarketView = React.memo<{
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-xs mland:text-[10px] truncate leading-tight flex items-center gap-1">
                             <PositionBadge role={q.ro} size="2xs" />
+                            {(() => {
+                              const natMeta = getCountryMetaByCode(q.nat);
+                              return natMeta ? (
+                                <span title={`สัญชาติ${natMeta.country}`} className="text-[11px] mland:text-[9px] leading-none shrink-0">
+                                  {natMeta.flag}
+                                </span>
+                              ) : null;
+                            })()}
                             <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
                             {q.free && (
                               <span className="text-[9px] mland:text-[7.5px] px-1 py-[0.5px] rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-bold shrink-0">ฟรี</span>

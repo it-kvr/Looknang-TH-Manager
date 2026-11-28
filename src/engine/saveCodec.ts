@@ -12,6 +12,7 @@ export const packSavePlayer = (q: Player): unknown[] => {
   const roVal = ALL_SUB_ROLES.indexOf(q.ro);
   const ex: Record<string, unknown> = {};
   if (q.id !== undefined) ex.id = q.id;
+  if (q.nat) ex.nt = q.nat;
   if (q.no) ex.no = q.no;
   if (q.sp) ex.sp = q.sp;
   if (q.sg) ex.sg = q.sg;
@@ -151,6 +152,7 @@ export const unpackSavePlayer = (raw: unknown): Player => {
     inj: Number(inj || 0)
   };
   if (ex.id !== undefined) p.id = String(ex.id);
+  if (ex.nt !== undefined) p.nat = String(ex.nt);
   if (ex.no !== undefined) p.no = Number(ex.no);
   if (ex.sp !== undefined) p.sp = Number(ex.sp);
   if (ex.sg !== undefined) p.sg = Number(ex.sg);

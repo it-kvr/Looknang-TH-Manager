@@ -11,7 +11,7 @@ import { P, clamp, capMoney, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, saveSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK, localizeForeignTeams } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, ensureAsia, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { resolveStateSponsorBrand } from './data/sponsorBrands';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
@@ -295,6 +295,7 @@ export default function App() {
     flushPendingSave();
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
     const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier, money: capMoney(loaded.money) };
+    ensureAsia(normalized);
     localizeForeignTeams(normalized.teams);
     ensureSeasonExtraCups(normalized);
     setPreMatch(null);
@@ -905,13 +906,17 @@ export default function App() {
         c.ids = nx;
         c.r++;
         d.pa = false;
+        const isWorldCupClub = (d.season ?? 1) % 2 === 0;
+        const cupLabel = isWorldCupClub ? 'ชิงแชมป์สโมสรโลก' : 'บอลถ้วยทวีป';
+        const cupShortTag = isWorldCupClub ? 'สโมสรโลก' : 'ถ้วยทวีป';
+        const cupTrophyTitle = isWorldCupClub ? 'แชมป์สโมสรโลก' : 'แชมป์สโมสรทวีป';
         if (!nx.includes(d.me)) {
           c.alive = false;
-          d.news = `🌏 ตกรอบบอลถ้วยทวีป (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
-          pushFeed(d, 'ถ้วยทวีป', d.news, 'urg');
+          d.news = `${isWorldCupClub ? '🌐' : '🌏'} ตกรอบ${cupLabel} (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          pushFeed(d, cupShortTag, d.news, 'urg');
         } else {
-          d.news = `🌏 เข้ารอบบอลถ้วยทวีป! (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
-          pushFeed(d, 'ถ้วยทวีป', d.news, 'ok');
+          d.news = `${isWorldCupClub ? '🌐' : '🌏'} เข้ารอบ${cupLabel}! (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          pushFeed(d, cupShortTag, d.news, 'ok');
         }
         if (nx.length === 1) {
           c.done = true;
@@ -919,22 +924,22 @@ export default function App() {
           if (winTeam) {
             winTeam.trophies = winTeam.trophies || [];
             if (!winTeam.trophies.some((tr) => tr.season === d.season && tr.type === 'asia')) {
-              winTeam.trophies.push({ season: d.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
+              winTeam.trophies.push({ season: d.season, title: cupTrophyTitle, type: 'asia' });
             }
             adjustTeamFans(winTeam, Math.round(ensureTeamFans(winTeam) * 0.16));
           }
           if (nx[0] === d.me) {
             d.trophies = d.trophies || [];
             if (!d.trophies.some((tr) => tr.season === d.season && tr.type === 'asia')) {
-              d.trophies.push({ season: d.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
+              d.trophies.push({ season: d.season, title: cupTrophyTitle, type: 'asia' });
             }
             if (d.mode === 'm') {
               d.money += ASIA_CUP_PRIZE;
-              logFin(d, 'รางวัลแชมป์ทวีป', ASIA_CUP_PRIZE);
+              logFin(d, `รางวัล${cupTrophyTitle}`, ASIA_CUP_PRIZE);
               d.mgrRep = (d.mgrRep || 50) + 120;
             } else if (d.p) {
               const meSq = me.sq.find((q) => q.me);
-              appendPlayerCareerLog(meSq, `🌏 ซีซั่น ${d.season}: คว้าแชมป์สโมสรทวีปกับ ${me.name}`, d.p);
+              appendPlayerCareerLog(meSq, `${isWorldCupClub ? '🌐' : '🌏'} ซีซั่น ${d.season}: คว้า${cupTrophyTitle}กับ ${me.name}`, d.p);
             }
             shouldConfetti = true;
           }

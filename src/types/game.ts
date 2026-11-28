@@ -99,6 +99,7 @@ export interface PlayerCupStatRecord {
 export interface Player {
   id?: string;
   n: string;
+  nat?: string;
   pos: Position;
   ro: SubRole;
   sp?: number;

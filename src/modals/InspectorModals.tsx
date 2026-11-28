@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Scissors, Star } from 'lucide-react';
 import type { Position, Player, Team, GameState } from '../types/game';
 import { fmtMoney } from '../utils/math';
-import { TN, SPN, AR_T, getForeignTeamCountryMeta } from '../data/thaiFootballData';
+import { TN, SPN, AR_T, CONFED_META, getCountryMetaByCode, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
@@ -102,12 +102,28 @@ export const PlayerInspectorModal: React.FC<{
               </div>
             )}
             <div className="min-w-0">
-              <div className="text-xs sm:text-sm mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
-                <span className="truncate">{livePlayer.n}</span>
-                <span className="text-[var(--mut)] font-semibold text-[11px] mland:text-[10px] shrink-0">
-                  · {liveTeam ? liveTeam.name : isRetired ? 'ตำนานที่แขวนสตั๊ดแล้ว' : livePlayer.free ? 'ฟรีเอเยนต์' : livePlayer.customCreated ? 'นักเตะสร้างเอง' : 'ตลาดซื้อขาย'}
-                </span>
-              </div>
+              {(() => {
+                const natMeta =
+                  getCountryMetaByCode(livePlayer.nat) ||
+                  (liveTeam && liveTeam.tier >= 3 ? getForeignTeamCountryMeta(liveTeam.name) : null);
+                return (
+                  <div className="text-xs sm:text-sm mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
+                    {natMeta && (
+                      <span
+                        title={`สัญชาติ${natMeta.country}`}
+                        className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] shrink-0"
+                      >
+                        <span>{natMeta.flag}</span>
+                        <span className="hidden sm:inline">{natMeta.country}</span>
+                      </span>
+                    )}
+                    <span className="truncate">{livePlayer.n}</span>
+                    <span className="text-[var(--mut)] font-semibold text-[11px] mland:text-[10px] shrink-0">
+                      · {liveTeam ? liveTeam.name : isRetired ? 'ตำนานที่แขวนสตั๊ดแล้ว' : livePlayer.free ? 'ฟรีเอเยนต์' : livePlayer.customCreated ? 'นักเตะสร้างเอง' : 'ตลาดซื้อขาย'}
+                    </span>
+                  </div>
+                );
+              })()}
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1.5">
                 <span title={livePlayer.altRoles?.length ? `ถนัดเพิ่ม: ${livePlayer.altRoles.join(', ')}` : undefined}>
                   {SPN[livePlayer.ro] || livePlayer.pos}
@@ -514,9 +530,11 @@ export const TeamInspectorModal: React.FC<{
                   {team.tier >= 3
                     ? (() => {
                         const meta = getForeignTeamCountryMeta(team.name);
-                        return meta ? `${meta.flag} สโมสร${meta.country}` : 'สโมสรทวีป';
+                        return meta
+                          ? `${CONFED_META[meta.confed].short} · ${meta.flag} สโมสร${meta.country}`
+                          : 'สโมสรนานาชาติ';
                       })()
-                    : TN[team.tier] || 'สโมสรทวีป'}
+                    : TN[team.tier] || 'สโมสรนานาชาติ'}
                 </span>
                 {rank ? <span>· อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
                 <span>·</span>

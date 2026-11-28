@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Coins, Trophy, X } from 'lucide-react';
 import type { ArchivedMatchReport, MainTab, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
-import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
+import { RN, TN, CONFED_META, getForeignTeamCountryMeta, getTeamTrainingPlan, syncTrainingFocusToPlan, type ForeignConfed } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { EffectText } from '../components/DeltaText';
@@ -61,6 +61,8 @@ export const LeagueView = React.memo<{
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'req' | 'feed'>('all');
   const [prizeModalTier, setPrizeModalTier] = useState<number | null>(null);
   const [cupInitialStats, setCupInitialStats] = useState(false);
+  const [worldConfed, setWorldConfed] = useState<'all' | ForeignConfed>('all');
+  const [worldCountry, setWorldCountry] = useState<string>('ALL');
 
   const tb = useMemo(() => sortTable(state.teams.filter((t) => t.tier === vt)), [state.teams, vt]);
   const myLeaguePos = useMemo(() => {
@@ -1135,9 +1137,165 @@ export const LeagueView = React.memo<{
     );
   };
 
+  const worldClubsBundle = useMemo(() => {
+    const rawForeign = state.teams.filter((t) => t.tier >= 3);
+    const enriched = rawForeign.map((t) => {
+      const meta = getForeignTeamCountryMeta(t.name);
+      const st = teamStats(t, state);
+      const totalVal = t.sq.reduce((s, q) => s + Math.max(vlu(q), q.price || 0), 0);
+      return { team: t, meta, st, totalVal };
+    });
+    const countryMap = new Map<string, { code: string; flag: string; country: string; confed: ForeignConfed; count: number }>();
+    enriched.forEach(({ meta }) => {
+      if (!meta) return;
+      const cur = countryMap.get(meta.code);
+      if (cur) cur.count += 1;
+      else countryMap.set(meta.code, { code: meta.code, flag: meta.flag, country: meta.country, confed: meta.confed, count: 1 });
+    });
+    const countries = Array.from(countryMap.values()).sort((a, b) => a.country.localeCompare(b.country, 'th'));
+    const filtered = enriched
+      .filter(({ meta }) => {
+        if (worldConfed !== 'all' && (meta?.confed || 'asia') !== worldConfed) return false;
+        if (worldCountry !== 'ALL' && meta?.code !== worldCountry) return false;
+        return true;
+      })
+      .sort((a, b) => b.st.ovXi - a.st.ovXi || b.totalVal - a.totalVal);
+    return { total: enriched.length, countries, filtered };
+  }, [state, worldConfed, worldCountry]);
+
   const renderStandings = () => (
     <div className="flex-1 min-h-0 grid grid-cols-[1.42fr_0.88fr] gap-2.5 mland:gap-2 overflow-hidden">
       <div className="space-y-1.5 mland:space-y-1 h-full flex flex-col min-h-0">
+        {vt >= 3 ? (
+          <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
+            <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/55 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2 text-[10.5px] sm:text-xs mland:text-[9px]">
+              <div className="font-bold text-[var(--ink)] truncate flex items-center gap-1.5">
+                <span>🌐</span>
+                <span className="truncate">ทำเนียบสโมสรนานาชาติ</span>
+                <span className="text-[var(--mut)] font-semibold shrink-0 tabular">
+                  · {worldClubsBundle.filtered.length}/{worldClubsBundle.total} สโมสร · {worldClubsBundle.countries.length} ประเทศ
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
+                  else onUpdateState((d) => { d.lg = me.tier; });
+                }}
+                className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+              >
+                ↩ กลับลีกฉัน
+              </button>
+            </div>
+
+            {/* Confederation + Country Filter Bar */}
+            <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/30 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-1.5">
+              <div className="seg-bar overflow-x-auto max-w-full">
+                {(
+                  [
+                    ['all', '🌐 ทั้งหมด'],
+                    ['asia', `${CONFED_META.asia.icon} ${CONFED_META.asia.short}`],
+                    ['europe', `${CONFED_META.europe.icon} ${CONFED_META.europe.short}`],
+                    ['americas', `${CONFED_META.americas.icon} ${CONFED_META.americas.short}`],
+                    ['africa', `${CONFED_META.africa.icon} ${CONFED_META.africa.short}`]
+                  ] as const
+                ).map(([cid, clbl]) => (
+                  <button
+                    key={cid}
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setWorldConfed(cid);
+                      setWorldCountry('ALL');
+                    }}
+                    className={`seg-btn py-1 mland:py-0.5 px-2 text-[10.5px] mland:text-[8.5px] whitespace-nowrap ${
+                      worldConfed === cid ? 'seg-btn-active hover:text-white!' : ''
+                    }`}
+                  >
+                    {clbl}
+                  </button>
+                ))}
+              </div>
+
+              <select
+                aria-label="กรองตามประเทศ"
+                value={worldCountry}
+                onChange={(e) => {
+                  SFX.tap();
+                  setWorldCountry(e.target.value);
+                }}
+                className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)]"
+              >
+                <option value="ALL">ทุกประเทศ ({worldClubsBundle.countries.length})</option>
+                {worldClubsBundle.countries
+                  .filter((c) => worldConfed === 'all' || c.confed === worldConfed)
+                  .map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.country} ({c.count})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Table Column Header */}
+            <div className="shrink-0 grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-[9.5px] sm:text-[11px] mland:text-[8px] bg-[var(--surface-2)]/90 text-[var(--mut)] border-b border-[var(--line)] font-bold">
+              <span className="text-center">#</span>
+              <span />
+              <span>สโมสร</span>
+              <span>ประเทศ</span>
+              <span className="text-center">XI</span>
+              <span className="text-center">รุก/รับ</span>
+              <span className="hidden sm:block text-right">มูลค่าทีม</span>
+            </div>
+
+            <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
+              {worldClubsBundle.filtered.map(({ team, meta, st, totalVal }, idx) => (
+                <button
+                  key={team.id}
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onInspectTeam(team.id);
+                  }}
+                  className="w-full grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 text-left text-[11px] sm:text-xs mland:text-[9px] even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75 transition-colors cursor-pointer"
+                >
+                  <span className="text-center tabular font-bold text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                    {idx + 1}
+                  </span>
+                  <div className="flex items-center justify-center [&>svg]:w-[18px] [&>svg]:h-[18px] mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                    <ClubCrest name={team.name} size={19} team={team} club={state.club} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-[var(--ink)] truncate leading-tight">{team.name}</div>
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] truncate">
+                      {meta ? `${CONFED_META[meta.confed].icon} ${CONFED_META[meta.confed].short}` : 'นานาชาติ'} · {team.sq.length} คน
+                    </div>
+                  </div>
+                  <div className="truncate text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)]/90 flex items-center gap-1">
+                    {meta ? (
+                      <>
+                        <span>{meta.flag}</span>
+                        <span className="truncate">{meta.country}</span>
+                      </>
+                    ) : (
+                      <span>🌍 นานาชาติ</span>
+                    )}
+                  </div>
+                  <div className="flex justify-center">
+                    <OvrBadge ov={st.ovXi} size="2xs" />
+                  </div>
+                  <div className="text-center tabular text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--mut)]">
+                    {st.at}/{st.df}
+                  </div>
+                  <div className="hidden sm:block text-right tabular text-[10.5px] font-bold text-[var(--ink)]">
+                    {fmtMoneyNum(totalVal)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
           {/* Active League & Season Banner */}
           <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 bg-[var(--surface-2)]/55 border-b border-[var(--line)]/70 flex items-center justify-between gap-2 text-[10.5px] sm:text-xs mland:text-[9px]">
@@ -1237,7 +1395,7 @@ export const LeagueView = React.memo<{
             })}
           </div>
         </div>
-
+        )}
       </div>
 
       {/* Right Column: Matchday Command Hub (Next Match + Actionable Inbox + Recent Form) */}
@@ -1268,7 +1426,7 @@ export const LeagueView = React.memo<{
                     {rec && onOpenMatchReport ? (
                       <button
                         type="button"
-                        onClick={() => onOpenMatchReport(rec, `${TN[vt]} · นัดที่ ${mdNumVal}`)}
+                        onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${mdNumVal}`)}
                         className="min-w-0 flex-1 text-left truncate hover:underline cursor-pointer"
                         title="ดูสรุปหลังเกม"
                       >
@@ -1286,7 +1444,7 @@ export const LeagueView = React.memo<{
                               rec.h,
                               rec.a,
                               rec.highlightClips!,
-                              `${TN[vt]} · นัดที่ ${mdNumVal}`,
+                              `${TN[me.tier]} · นัดที่ ${mdNumVal}`,
                               `${state.teams[rec.h]?.name || ''} ${rec.gh} - ${rec.ga} ${state.teams[rec.a]?.name || ''}`
                             )
                           }
@@ -1309,7 +1467,7 @@ export const LeagueView = React.memo<{
                       {rec && onOpenMatchReport && (
                         <button
                           type="button"
-                          onClick={() => onOpenMatchReport(rec, `${TN[vt]} · นัดที่ ${mdNumVal}`)}
+                          onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${mdNumVal}`)}
                           className="px-1.5 py-[1px] rounded bg-[var(--surface)]/85 border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] text-[9.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors whitespace-nowrap"
                           title="ดูหน้าจบเกม"
                         >
@@ -1331,13 +1489,15 @@ export const LeagueView = React.memo<{
 
 
   const renderStatsAndAwards = () => {
-    const ts = state.teams.filter((t) => t.tier === vt);
+    const statsTier = vt < 3 ? vt : me.tier;
+    const ts = state.teams.filter((t) => t.tier === statsTier);
+    const tbStats = sortTable(ts);
     const ps = ts.flatMap((t) => t.sq.map((q) => ({ q, t })));
     const totalPlayedInTier = ts.reduce((s, t) => s + t.p, 0);
     const maxPlayedInTier = ts.reduce((m, t) => Math.max(m, t.p), 0);
     const totalRounds = state.fx.length || 30;
     const isSeasonDone = maxPlayedInTier >= totalRounds && totalRounds > 0;
-    const teamRankMap = new Map<number, number>(tb.map((t, idx) => [t.id, idx]));
+    const teamRankMap = new Map<number, number>(tbStats.map((t, idx) => [t.id, idx]));
 
     interface AwardEntry {
       q: Player;
@@ -1588,7 +1748,7 @@ export const LeagueView = React.memo<{
             </span>
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
             <span className="text-xs sm:text-sm mland:text-[10.5px] font-bold text-[var(--g)] truncate">
-              {TN[vt]}
+              {TN[statsTier]}
             </span>
             <span aria-hidden="true" className="hidden sm:inline text-[var(--mut)]">·</span>
             <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
@@ -1831,7 +1991,7 @@ export const LeagueView = React.memo<{
         </div>
 
         {/* Middle Empty Space (Standings): Zone Legend & League Prize Money */}
-        {sub === 0 && (
+        {sub === 0 && vt < 3 && (
           <div className="order-2 flex items-center gap-2 mland:gap-1.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] whitespace-nowrap min-w-0">
             <div className="flex items-center gap-2 mland:gap-1.5">
               {vt < 2 && (
@@ -1870,11 +2030,12 @@ export const LeagueView = React.memo<{
             {[
               [0, 'จังหวัด'],
               [1, 'ดิวิชั่น 2'],
-              [2, 'ดิวิชั่น 1']
+              [2, 'ดิวิชั่น 1'],
+              ...(sub === 0 && worldClubsBundle.total > 0 ? ([[3, '🌏 นานาชาติ']] as const) : [])
             ].map(([idx, lbl]) => {
               const tierIdx = Number(idx);
               const isMyTier = tierIdx === me.tier;
-              const active = vt === tierIdx;
+              const active = (sub === 2 && vt >= 3 ? me.tier : vt) === tierIdx;
               return (
                 <button
                   key={tierIdx}
@@ -1885,7 +2046,7 @@ export const LeagueView = React.memo<{
                     if (onShallowPatch) onShallowPatch(() => ({ lg: tierIdx }));
                     else onUpdateState((d) => { d.lg = tierIdx; });
                   }}
-                  className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2 text-xs mland:text-[10px] min-w-0 ${
+                  className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2 text-xs mland:text-[10px] min-w-0 whitespace-nowrap ${
                     active
                       ? 'seg-btn-active hover:text-white!'
                       : 'hover:bg-[var(--surface-2)]/70'

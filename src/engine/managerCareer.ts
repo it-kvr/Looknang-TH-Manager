@@ -38,7 +38,7 @@ export interface NationalOpponentTemplate {
   baseOvr: number;
   tac: Mentality;
   form: string;
-  region: 'asean' | 'asia';
+  region: 'asean' | 'asia' | 'europe' | 'americas' | 'africa';
   names: string[];
 }
 
@@ -240,6 +240,182 @@ export const NATIONAL_OPPONENTS: NationalOpponentTemplate[] = [
     form: '4-2-3-1',
     region: 'asia',
     names: ['ทาเคฟุสะ คุโบะ', 'คาโอรุ มิโตมะ', 'วาตารุ เอ็นโดะ', 'ทาคุมิ มินามิโนะ', 'ทาเคฮิโระ โทมิยาสุ', 'โค อิทาคุระ', 'ไซออน ซูซูกิ', 'ริตสึ โดอัน', 'อายาเสะ อุเอดะ', 'อาโอะ ทานากะ', 'จุนยะ อิโตะ']
+  },
+  {
+    code: 'GB',
+    name: 'ทีมชาติอังกฤษ',
+    flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+    kc: ['#ffffff', '#1d4ed8'],
+    baseOvr: 87,
+    tac: 'A',
+    form: '4-2-3-1',
+    region: 'europe',
+    names: ['แฮร์รี เคน', 'จู๊ด เบลลิงแฮม', 'บูคาโย ซาก้า', 'ฟิล โฟเดน', 'ดีแคลน ไรซ์', 'โคล พาล์มเมอร์', 'จอร์แดน พิคฟอร์ด', 'จอห์น สโตนส์', 'ไคล์ วอล์คเกอร์', 'เทรนต์ อเล็กซานเดอร์-อาร์โนลด์', 'มาร์ค เกฮี']
+  },
+  {
+    code: 'ES',
+    name: 'ทีมชาติสเปน',
+    flag: '🇪🇸',
+    kc: ['#dc2626', '#facc15'],
+    baseOvr: 88,
+    tac: 'X',
+    form: '4-3-3',
+    region: 'europe',
+    names: ['โรดรี้ เอร์นานเดซ', 'ลามีน ยามาล', 'นิโก้ วิลเลียมส์', 'เปดรี้ กอนซาเลซ', 'ดานี่ โอลโม่', 'ฟาเบียน รุยซ์', 'อูไน ซิมอน', 'ดานี่ การ์บาฆาล', 'โรแบง เลอ นอร์มองด์', 'เอมเมอริค ลาปอร์กต์', 'อัลบาโร โมราตา']
+  },
+  {
+    code: 'DE',
+    name: 'ทีมชาติเยอรมนี',
+    flag: '🇩🇪',
+    kc: ['#ffffff', '#111827'],
+    baseOvr: 87,
+    tac: 'A',
+    form: '4-2-3-1',
+    region: 'europe',
+    names: ['จามาล มูเซียลา', 'ฟลอเรียน เวิร์ตซ์', 'โยชัว คิมมิช', 'ไค ฮาแวร์ตซ์', 'อันโตนิโอ รูดิเกอร์', 'โยนาธาน ทาห์', 'มานูเอล นอยเออร์', 'โรเบิร์ต แอร์ดริช', 'เลรอย ซาเน่', 'อิลคาย กุนโดกัน', 'เดวิด รอม']
+  },
+  {
+    code: 'FR',
+    name: 'ทีมชาติฝรั่งเศส',
+    flag: '🇫🇷',
+    kc: ['#1e3a8a', '#ffffff'],
+    baseOvr: 88,
+    tac: 'X',
+    form: '4-3-3',
+    region: 'europe',
+    names: ['คีเลียน เอ็มบัปเป้', 'อองตวน กรีซมันน์', 'อุสมาน เดมเบเล่', 'ออเรเลียง ชูอาเมนี่', 'เอดูอาร์โด้ กามาวินก้า', 'วิลเลียม ซาลิบา', 'ไมค์ เมญอง', 'เตโอ แอร์กนองเดซ', 'ชูลส์ กุนเด้', 'อิบราฮิมา โกนาเต้', 'มาร์คุส ตูราม']
+  },
+  {
+    code: 'IT',
+    name: 'ทีมชาติอิตาลี',
+    flag: '🇮🇹',
+    kc: ['#1d4ed8', '#ffffff'],
+    baseOvr: 85,
+    tac: 'B',
+    form: '3-5-2',
+    region: 'europe',
+    names: ['นิโคโล บาเรลล่า', 'เฟเดริโก เคียซ่า', 'อเลสซานโดร บาสโตนี่', 'จานลุยจิ ดอนนารุมม่า', 'เฟเดริโก ดิ มาร์โก', 'ซานโดร โตนาลี่', 'ดาวิเด ฟรัตเตซี่', 'ริคคาร์โด คาลาฟิออรี่', 'โจวานนี ดิ โลเรนโซ่', 'มาเตโอ เรเตกี', 'โลเรนโซ เปเยกรินี่']
+  },
+  {
+    code: 'PT',
+    name: 'ทีมชาติโปรตุเกส',
+    flag: '🇵🇹',
+    kc: ['#b91c1c', '#15803d'],
+    baseOvr: 86,
+    tac: 'A',
+    form: '4-3-3',
+    region: 'europe',
+    names: ['บรูโน่ เฟอร์นันเดส', 'แบร์นาร์โด้ ซิลวา', 'ราฟาเอล เลเอา', 'รูเบน ดิอาส', 'วิตินญ่า เนเวส', 'ชูเอา ปาลินญ่า', 'ดิโอโก้ คอสต้า', 'นูโน่ เมนเดส', 'ชูเอา คังเซโล่', 'กอนซาโล รามอส', 'ดิโอโก้ โชต้า']
+  },
+  {
+    code: 'NL',
+    name: 'ทีมชาติเนเธอร์แลนด์',
+    flag: '🇳🇱',
+    kc: ['#f97316', '#111827'],
+    baseOvr: 85,
+    tac: 'A',
+    form: '4-3-3',
+    region: 'europe',
+    names: ['เฟอร์จิล ฟาน ไดจ์ค', 'แฟรงกี้ เดอ ยอง', 'โคดี้ กัคโป', 'ซาวี ซิมอนส์', 'ทิจจานี่ ไรน์เดอร์ส', 'เยเรมี่ ฟริมปง', 'บาร์ต แฟร์บรึคเคิน', 'เดนเซล ดุมฟรีส์', 'นาธาน อาเก้', 'มิกกี้ ฟาน เดอ เฟน', 'เมมฟิส เดปาย']
+  },
+  {
+    code: 'BR',
+    name: 'ทีมชาติบราซิล',
+    flag: '🇧🇷',
+    kc: ['#facc15', '#16a34a'],
+    baseOvr: 88,
+    tac: 'X',
+    form: '4-2-3-1',
+    region: 'americas',
+    names: ['วินิซิอุส จูเนียร์', 'โรดรีโก้ โกเอส', 'ราฟินญ่า ดิอาส', 'บรูโน่ กิมาไรส์', 'ลูคัส ปาเกต้า', 'มาร์ควินญอส คอร์เรอา', 'อลิสซอน เบ็คเกอร์', 'กาเบรียล มากัลเญส', 'กาเบรียล มาร์ติเนลลี่', 'เอแดร์ซอน โมราเอส', 'เอ็นดริค เฟลิเป้']
+  },
+  {
+    code: 'AR',
+    name: 'ทีมชาติอาร์เจนตินา',
+    flag: '🇦🇷',
+    kc: ['#38bdf8', '#ffffff'],
+    baseOvr: 89,
+    tac: 'X',
+    form: '4-3-3',
+    region: 'americas',
+    names: ['ลิโอเนล เมสซี่', 'เลาตาโร มาร์ติเนซ', 'ฮูเลียน อัลวาเรซ', 'อเล็กซิส แม็ค อัลลิสเตอร์', 'เอ็นโซ เฟอร์นันเดซ', 'โรดริโก้ เด ปอล', 'เอมิเลียโน มาร์ติเนซ', 'คริสเตียน โรเมโร่', 'ลิซานโดร มาร์ติเนซ', 'นาอูเอล โมลินา', 'นิโคลัส ตาเกลียฟิโก้']
+  },
+  {
+    code: 'CO',
+    name: 'ทีมชาติโคลอมเบีย',
+    flag: '🇨🇴',
+    kc: ['#facc15', '#1d4ed8'],
+    baseOvr: 82,
+    tac: 'A',
+    form: '4-2-3-1',
+    region: 'americas',
+    names: ['ลุยส์ ดิอาซ', 'ฮาเมส โรดริเกซ', 'ริชาร์ด ริออส', 'เจฟเฟอร์สัน เลอร์มา', 'ดาร์วินซอน ซานเชซ', 'คามิโล วาร์กัส', 'ดาเนียล มูนญอซ', 'โฮอัน โมฮิก้า', 'จอน ดูราน', 'จอน อาริอาส', 'ราฟาเอล บอร์เร่']
+  },
+  {
+    code: 'MX',
+    name: 'ทีมชาติเม็กซิโก',
+    flag: '🇲🇽',
+    kc: ['#15803d', '#ffffff'],
+    baseOvr: 79,
+    tac: 'B',
+    form: '4-3-3',
+    region: 'americas',
+    names: ['ซานติอาโก ฮิเมเนซ', 'เอ็ดสัน อัลวาเรซ', 'เออร์วิง โลซาโน', 'ราอูล ฮิเมเนซ', 'ลุยส์ ชาเวซ', 'กิเยร์โม โอชัว', 'เซซาร์ มอนเตส', 'โยฮัน วาสเกซ', 'อเล็กซิส เวก้า', 'ออร์เบลิน ปิเนดา', 'เฮซุส กายาร์โด']
+  },
+  {
+    code: 'US',
+    name: 'ทีมชาติสหรัฐอเมริกา',
+    flag: '🇺🇸',
+    kc: ['#ffffff', '#1d4ed8'],
+    baseOvr: 80,
+    tac: 'B',
+    form: '4-3-3',
+    region: 'americas',
+    names: ['คริสเตียน พูลิซิช', 'เวสตัน แม็คเคนนี', 'ไทเลอร์ อดัมส์', 'จิโอวานนี เรย์นา', 'ทิโมธี เวอาห์', 'โฟลาริน บาโลกุน', 'แมตต์ เทอร์เนอร์', 'แอนโทนี โรบินสัน', 'คริส ริชาร์ดส์', 'แซร์จินโญ เดสต์', 'ยูนุส มูซาห์']
+  },
+  {
+    code: 'EG',
+    name: 'ทีมชาติอียิปต์',
+    flag: '🇪🇬',
+    kc: ['#dc2626', '#111827'],
+    baseOvr: 81,
+    tac: 'A',
+    form: '4-3-3',
+    region: 'africa',
+    names: ['โมฮาเหม็ด ซาลาห์', 'โอมาร์ มาร์มูช', 'เทรเซเกต์ ฮัสซัน', 'โมฮาเหม็ด เอลเนนี', 'เอมาม อาชูร์', 'มุสตาฟา โมฮาเหม็ด', 'โมฮาเหม็ด เอล-เชนาวี', 'อาเหม็ด เฮกาซี', 'โมฮาเหม็ด ฮานี', 'ฮัมดี ฟาธี', 'ซีโซ ซาเอ็ด']
+  },
+  {
+    code: 'MA',
+    name: 'ทีมชาติโมร็อกโก',
+    flag: '🇲🇦',
+    kc: ['#b91c1c', '#15803d'],
+    baseOvr: 84,
+    tac: 'B',
+    form: '4-2-3-1',
+    region: 'africa',
+    names: ['อัชราฟ ฮาคิมี', 'บราฮิม ดิอาซ', 'โซฟียาน อัมราบัต', 'ฮาคิม ซิเย็ค', 'อัซเซดีน อูนาฮี', 'ยุสเซฟ เอ็น-เนซีรี', 'ยาสซีน บูนู', 'นายเอฟ อาเกิร์ด', 'นุสแซร์ มาซราอุย', 'โซฟียาน ราฮิมี', 'เอเลียส เบน เซกีร์']
+  },
+  {
+    code: 'NG',
+    name: 'ทีมชาติไนจีเรีย',
+    flag: '🇳🇬',
+    kc: ['#16a34a', '#ffffff'],
+    baseOvr: 82,
+    tac: 'A',
+    form: '3-4-3',
+    region: 'africa',
+    names: ['วิคเตอร์ โอซิมเฮน', 'อเดโมล่า ลุคแมน', 'วิลเฟรด เอ็นดิดี้', 'อเล็กซ์ อิโวบี', 'ซามูเอล ชุควูเอเซ', 'วิคเตอร์ โบนีเฟซ', 'สแตนลีย์ เอ็นวาบาลี', 'คาลวิน บาซีย์', 'วิลเลียม ทรูสต์-เอกอง', 'โอลา ไอนา', 'โมเสส ไซมอน']
+  },
+  {
+    code: 'SN',
+    name: 'ทีมชาติเซเนกัล',
+    flag: '🇸🇳',
+    kc: ['#ffffff', '#16a34a'],
+    baseOvr: 83,
+    tac: 'B',
+    form: '4-3-3',
+    region: 'africa',
+    names: ['ซาดิโอ มาเน่', 'นิโคลัส แจ็คสัน', 'อิสไมลา ซาร์', 'คาลิดู คูลิบาลี', 'ปาเป้ มาตาร์ ซาร์', 'อิดริสซา เกย์', 'เอดูอาร์ เมนดี้', 'มุสซา เนียคาเต้', 'อิลิมาน เอ็นดิอาย', 'ฮาบิบ ดิยาร์รา', 'อิสไมล์ จาคอบส์']
   }
 ];
 
@@ -764,6 +940,7 @@ export function hydrateThailandTeam(s: GameState, nt: NationalTeamState): Team {
 }
 
 export function generateNationalFixturesForSeason(season: number): NationalTeamMatchRecord[] {
+  const isWorldCupYear = season % 4 === 0;
   const isAsiaYear = season % 2 === 0;
   const pickByCode = (code: string) =>
     NATIONAL_OPPONENTS.find((o) => o.code === code) || NATIONAL_OPPONENTS[0];
@@ -778,6 +955,96 @@ export function generateNationalFixturesForSeason(season: number): NationalTeamM
     return chosen;
   };
 
+  if (isWorldCupYear) {
+    const used = new Set<string>();
+    const gAfr = pickUniqueCodes(['MA', 'NG', 'SN', 'EG'], 1, used)[0] || 'MA';
+    const gAmer = pickUniqueCodes(['CO', 'MX', 'US'], 1, used)[0] || 'US';
+    const gEur = pickUniqueCodes(['IT', 'NL', 'PT', 'GB', 'DE'], 1, used)[0] || 'NL';
+    const koTop = pickUniqueCodes(['BR', 'AR', 'FR', 'ES', 'GB', 'DE', 'PT'], 2, used);
+    const f1 = pickByCode(gAfr);
+    const f2 = pickByCode(gAmer);
+    const f3 = pickByCode(gEur);
+    const sf = pickByCode(koTop[0] || 'BR');
+    const fn = pickByCode(koTop[1] || 'AR');
+    return [
+      {
+        id: `nt-${season}-1`,
+        season,
+        md: 6,
+        compName: 'ศึกฟุตบอลโลก (รอบสุดท้าย)',
+        roundLabel: 'รอบแบ่งกลุ่ม นัด 1',
+        isKnockout: false,
+        opponentName: f1.name,
+        opponentFlag: f1.flag,
+        opponentTier: 3,
+        opponentKc: f1.kc,
+        opponentOvr: f1.baseOvr,
+        home: true,
+        played: false
+      },
+      {
+        id: `nt-${season}-2`,
+        season,
+        md: 11,
+        compName: 'ศึกฟุตบอลโลก (รอบสุดท้าย)',
+        roundLabel: 'รอบแบ่งกลุ่ม นัด 2',
+        isKnockout: false,
+        opponentName: f2.name,
+        opponentFlag: f2.flag,
+        opponentTier: 3,
+        opponentKc: f2.kc,
+        opponentOvr: f2.baseOvr,
+        home: false,
+        played: false
+      },
+      {
+        id: `nt-${season}-3`,
+        season,
+        md: 16,
+        compName: 'ศึกฟุตบอลโลก (รอบสุดท้าย)',
+        roundLabel: 'รอบแบ่งกลุ่ม นัด 3',
+        isKnockout: false,
+        opponentName: f3.name,
+        opponentFlag: f3.flag,
+        opponentTier: 3,
+        opponentKc: f3.kc,
+        opponentOvr: f3.baseOvr,
+        home: true,
+        played: false
+      },
+      {
+        id: `nt-${season}-4`,
+        season,
+        md: 22,
+        compName: 'ศึกฟุตบอลโลก (น็อกเอาต์)',
+        roundLabel: 'รอบรองชนะเลิศโลก',
+        isKnockout: true,
+        opponentName: sf.name,
+        opponentFlag: sf.flag,
+        opponentTier: 3,
+        opponentKc: sf.kc,
+        opponentOvr: sf.baseOvr,
+        home: false,
+        played: false
+      },
+      {
+        id: `nt-${season}-5`,
+        season,
+        md: 28,
+        compName: 'ศึกฟุตบอลโลก (นัดชิง)',
+        roundLabel: 'รอบชิงชนะเลิศฟุตบอลโลก',
+        isKnockout: true,
+        opponentName: fn.name,
+        opponentFlag: fn.flag,
+        opponentTier: 3,
+        opponentKc: fn.kc,
+        opponentOvr: fn.baseOvr,
+        home: true,
+        played: false
+      }
+    ];
+  }
+
   if (!isAsiaYear) {
     const used = new Set<string>();
     const groupCodes = pickUniqueCodes(['SG', 'MY', 'PH', 'MM', 'KH', 'ID', 'VN'], 3, used);
@@ -785,9 +1052,11 @@ export function generateNationalFixturesForSeason(season: number): NationalTeamM
     while (koCodes.length < 2) {
       koCodes.push(P(['VN', 'ID', 'MY']));
     }
+    const fifaCode = pickUniqueCodes(['GB', 'ES', 'DE', 'FR', 'IT', 'PT', 'NL', 'BR', 'AR', 'CO', 'MX', 'US', 'EG', 'MA', 'NG', 'SN'], 1, used)[0] || 'US';
     const g1 = pickByCode(groupCodes[0] || 'SG');
     const g2 = pickByCode(groupCodes[1] || 'MY');
     const g3 = pickByCode(groupCodes[2] || 'PH');
+    const fifa = pickByCode(fifaCode);
     const sf = pickByCode(koCodes[0]);
     const fn = pickByCode(koCodes[1]);
     return [
@@ -824,7 +1093,7 @@ export function generateNationalFixturesForSeason(season: number): NationalTeamM
       {
         id: `nt-${season}-3`,
         season,
-        md: 16,
+        md: 14,
         compName: 'ชิงแชมป์อาเซียน (AFF)',
         roundLabel: 'รอบแบ่งกลุ่ม นัด 3',
         isKnockout: false,
@@ -833,6 +1102,21 @@ export function generateNationalFixturesForSeason(season: number): NationalTeamM
         opponentTier: 2,
         opponentKc: g3.kc,
         opponentOvr: g3.baseOvr,
+        home: true,
+        played: false
+      },
+      {
+        id: `nt-${season}-fifa`,
+        season,
+        md: 18,
+        compName: 'ฟีฟ่าเดย์ นานาชาติ',
+        roundLabel: 'อุ่นเครื่องข้ามทวีป',
+        isKnockout: false,
+        opponentName: fifa.name,
+        opponentFlag: fifa.flag,
+        opponentTier: 3,
+        opponentKc: fifa.kc,
+        opponentOvr: fifa.baseOvr,
         home: true,
         played: false
       },
@@ -1017,12 +1301,33 @@ const NATIONAL_CODE_TO_REGION: Record<string, ForeignNameRegion> = {
   MY: 'my_sg',
   SG: 'my_sg',
   PH: 'ph',
+  IN: 'in',
   CN: 'cn',
   IQ: 'me',
+  AE: 'me',
+  QA: 'me',
   SA: 'me',
+  IR: 'ir',
+  UZ: 'uz',
   AU: 'au',
   KR: 'kr',
-  JP: 'jp'
+  JP: 'jp',
+  GB: 'en',
+  ES: 'es',
+  DE: 'de',
+  IT: 'it',
+  FR: 'fr',
+  PT: 'pt_br',
+  NL: 'nl',
+  BR: 'pt_br',
+  AR: 'ar_lat',
+  CO: 'ar_lat',
+  MX: 'es',
+  US: 'en',
+  EG: 'me',
+  MA: 'me',
+  NG: 'af',
+  SN: 'af'
 };
 
 export function buildThailandMatchOpponentTeam(fixture: NationalTeamMatchRecord, teamId: number): Team {
@@ -1033,6 +1338,7 @@ export function buildThailandMatchOpponentTeam(fixture: NationalTeamMatchRecord,
   const baseTeam = mkTeam(`${tpl.flag} ${tpl.name}`, Math.min(2, fixture.opponentTier), teamId, 0, {
     foreign: true,
     nameRegion,
+    natCode: tpl.code,
     allowImport: false
   });
   baseTeam.tier = 3;
@@ -1199,14 +1505,18 @@ export function applyNationalMatchOutcomeToDraft(
   let trophyWon: string | undefined;
   const isFinal = fx.roundLabel.includes('ชิงชนะเลิศ');
   if (isFinal && wonMatch) {
-    const title = fx.compName.includes('อาเซียน') ? 'แชมป์อาเซียน (ทีมชาติไทย)' : 'แชมป์เอเชียน คัพ (ทีมชาติไทย)';
+    const title = fx.compName.includes('ฟุตบอลโลก')
+      ? 'แชมป์ฟุตบอลโลก (ทีมชาติไทย)'
+      : fx.compName.includes('อาเซียน')
+        ? 'แชมป์อาเซียน (ทีมชาติไทย)'
+        : 'แชมป์เอเชียน คัพ (ทีมชาติไทย)';
     nt.trophies = nt.trophies || [];
     nt.trophies.push({ season: d.season, title });
     d.trophies = d.trophies || [];
     if (!d.trophies.some((t) => t.season === d.season && t.type === 'nt' && t.title === title)) {
       d.trophies.push({ season: d.season, title, type: 'nt' });
     }
-    const bonusRep = fx.compName.includes('อาเซียน') ? 40 : 75;
+    const bonusRep = fx.compName.includes('ฟุตบอลโลก') ? 150 : fx.compName.includes('อาเซียน') ? 40 : 75;
     d.mgrRep = (d.mgrRep ?? 50) + bonusRep;
     trophyWon = title;
     pushFeed(d, 'ทีมชาติไทย', `🏆🇹🇭 ช้างศึกผงาดคว้า "${title}"! เครดิตโค้ช +${bonusRep}`, 'ok');

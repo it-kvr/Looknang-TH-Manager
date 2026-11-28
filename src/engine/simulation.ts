@@ -1,6 +1,6 @@
 import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, TransferLogEntry, TransferLogKind, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrainingIntensity, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
-import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, inferForeignTeamRegion, getForeignTeamCountryMeta } from '../data/thaiFootballData';
+import { RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, inferForeignTeamRegion, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { getDefaultSponsorSeed, pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles, localizeForeignTeams } from './playerCore';
@@ -2936,10 +2936,19 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
 
 export function mkMarket(s: GameState) {
   const b0 = BASE[s.teams[s.me].tier];
+  const worldCountries = Object.values(COUNTRY_META_BY_CODE);
   const rolePool: Player[] = ALL_SUB_ROLES.map((role, i) => {
     const pos = LINE[role] || 'MF';
     const yo = role !== 'GK' && i % 5 === 3;
-    const p = mkPlayer(pos, b0 + R(-1, 12), yo, role);
+    const isForeign = Math.random() < 0.32;
+    const nat = isForeign ? P(worldCountries) : null;
+    const p = mkPlayer(
+      pos,
+      b0 + R(-1, 12),
+      yo,
+      role,
+      nat ? { foreignRegion: nat.region, natCode: nat.code } : undefined
+    );
     p.price = Math.round((p.ov * p.ov) / 40);
     if (i === 0 || (i % 6 === 2 && Math.random() < 0.45)) {
       p.free = 1;
@@ -2952,8 +2961,16 @@ export function mkMarket(s: GameState) {
   });
 
   // Guarantee free agents across all 4 core lines so every position is signable even when transfer window closes
-  const extraFreeAgents: Player[] = POS.map((pos) => {
-    const p = mkPlayer(pos, b0 + R(-2, 9), false, SPW(pos));
+  const extraFreeAgents: Player[] = POS.map((pos, idx) => {
+    const isForeign = idx === 1 || idx === 3 || Math.random() < 0.35;
+    const nat = isForeign ? P(worldCountries) : null;
+    const p = mkPlayer(
+      pos,
+      b0 + R(-2, 9),
+      false,
+      SPW(pos),
+      nat ? { foreignRegion: nat.region, natCode: nat.code } : undefined
+    );
     p.free = 1;
     p.price = 0;
     p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
@@ -3037,17 +3054,23 @@ export function ensureAsia(s: GameState) {
   const existingNames = new Set(
     s.asia.map((id) => s.teams[id]?.name).filter((n): n is string => Boolean(n))
   );
-  if (s.asia.length < AN.length) {
-    AN.forEach((n) => {
-      if (s.asia!.length >= AN.length || existingNames.has(n)) return;
-      const t = mkTeam(n, 2, s.teams.length, R(0, 8), { foreign: true, allowImport: true, keepName: true });
-      t.tier = 3;
-      t.foreign = 1;
-      s.teams.push(t);
-      s.asia!.push(t.id);
-      existingNames.add(n);
+  FOREIGN_CLUB_CATALOG.forEach((entry) => {
+    if (existingNames.has(entry.name)) return;
+    const diff = clamp(entry.baseOvr - BASE[2] + R(-2, 2), -4, 18);
+    const t = mkTeam(entry.name, 2, s.teams.length, diff, {
+      foreign: true,
+      nameRegion: entry.region,
+      natCode: entry.code,
+      kcOverride: entry.kc,
+      allowImport: true,
+      keepName: true
     });
-  }
+    t.tier = 3;
+    t.foreign = 1;
+    s.teams.push(t);
+    s.asia!.push(t.id);
+    existingNames.add(entry.name);
+  });
   localizeForeignTeams(s.teams);
 }
 
@@ -3064,22 +3087,60 @@ export function initAsia(s: GameState) {
       .sort((a, b) => b[1] - a[1]);
     while (th.length < 3 && rs.length) th.push(rs.shift()![0]);
   }
-  const shuffledAsia = (s.asia || []).filter((id) => s.teams[id]).sort(() => Math.random() - 0.5);
+  const allForeign = (s.asia || []).filter((id) => s.teams[id]).sort(() => Math.random() - 0.5);
+  const isWorldEdition = (s.season ?? 1) % 2 === 0;
   const fo: number[] = [];
   const usedCountries = new Set<string>();
-  const overflow: number[] = [];
-  shuffledAsia.forEach((id) => {
-    const country = getForeignTeamCountryMeta(s.teams[id]?.name)?.country || s.teams[id]?.name || String(id);
-    if (!usedCountries.has(country) && fo.length < 13) {
-      usedCountries.add(country);
-      fo.push(id);
-    } else {
-      overflow.push(id);
+  const pickedSet = new Set<number>();
+
+  const pickByConfed = (confed: ForeignConfed, quota: number) => {
+    const candidates = allForeign.filter((id) => {
+      if (pickedSet.has(id)) return false;
+      const meta = getForeignTeamCountryMeta(s.teams[id]?.name);
+      return (meta?.confed || 'asia') === confed;
+    });
+    for (const id of candidates) {
+      if (fo.length >= 13) break;
+      const countInThisBatch = fo.filter((x) => (getForeignTeamCountryMeta(s.teams[x]?.name)?.confed || 'asia') === confed).length;
+      if (countInThisBatch >= quota) break;
+      const country = getForeignTeamCountryMeta(s.teams[id]?.name)?.country || s.teams[id]?.name || String(id);
+      if (!usedCountries.has(country)) {
+        usedCountries.add(country);
+        pickedSet.add(id);
+        fo.push(id);
+      }
     }
-  });
-  while (fo.length < 13 && overflow.length) {
-    fo.push(overflow.shift()!);
+  };
+
+  if (isWorldEdition) {
+    // Even seasons: World Club Cup featuring clubs across Europe, Americas, Africa, and Asia
+    pickByConfed('europe', 5);
+    pickByConfed('americas', 3);
+    pickByConfed('africa', 2);
+    pickByConfed('asia', 3);
+  } else {
+    // Odd seasons: Continental Championship focused on Asia & Oceania clubs
+    pickByConfed('asia', 13);
   }
+
+  for (const id of allForeign) {
+    if (fo.length >= 13) break;
+    if (pickedSet.has(id)) continue;
+    const country = getForeignTeamCountryMeta(s.teams[id]?.name)?.country || s.teams[id]?.name || String(id);
+    if (!usedCountries.has(country)) {
+      usedCountries.add(country);
+      pickedSet.add(id);
+      fo.push(id);
+    }
+  }
+  for (const id of allForeign) {
+    if (fo.length >= 13) break;
+    if (!pickedSet.has(id)) {
+      pickedSet.add(id);
+      fo.push(id);
+    }
+  }
+
   const ids = [...th, ...fo].sort(() => Math.random() - 0.5);
   s.ac = { r: 0, p: ids.slice(), ids, alive: ids.includes(s.me), done: false, log: [] };
   s.pa = false;
@@ -4406,6 +4467,9 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
   const analyticsLv = clamp(s.analyticsLv ?? 1, 0, MAX_FACILITY_LV);
   const yaLv = clamp(s.ya ?? 1, 0, MAX_FACILITY_LV);
   const b0 = BASE[s.teams[s.me].tier] + Math.round(yaLv * 1.2) + Math.round(scoutStaff * 1.4) + Math.floor(Math.max(0, analyticsLv - 1) / 3);
+  const worldCountries = Object.values(COUNTRY_META_BY_CODE);
+  const foreignChance = m.focus === 'wonderkid' || m.focus === 'free' ? 0.45 : 0.35;
+
   return Array.from({ length: 3 }, (_, idx) => {
     let pos: Position = P(POS);
     let forceRo: SubRole | undefined;
@@ -4434,7 +4498,14 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
       forceRo = SPW('DF');
     }
 
-    const p = mkPlayer(pos, b0 + boost, yo, forceRo);
+    const nat = Math.random() < foreignChance ? P(worldCountries) : null;
+    const p = mkPlayer(
+      pos,
+      b0 + boost,
+      yo,
+      forceRo,
+      nat ? { foreignRegion: nat.region, natCode: nat.code } : undefined
+    );
     if (m.focus === 'wonderkid') {
       p.pot = clamp(Math.max(p.pot, p.ov + R(12, 24)), p.ov, 96);
       p.talent = clamp(R(72, 95) + scoutStaff, 68, 98);

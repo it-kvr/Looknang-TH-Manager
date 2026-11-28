@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSea
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp, capMoney } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, COUNTRY_META_BY_CODE, getForeignTeamCountryMeta, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
 import { ensureTeamWellbeing, getActiveFavBoost, getWellbeingOvrAdjustment, initPlayerWellbeing } from './wellbeing';
 
 export const NMU = new Set<string>();
@@ -53,6 +53,15 @@ export function genForeignPlayerName(
   return n;
 }
 
+const COUNTRY_META_LIST = Object.values(COUNTRY_META_BY_CODE);
+
+function pickImportCountryMeta(excludeCode?: string) {
+  const pool = excludeCode
+    ? COUNTRY_META_LIST.filter((c) => c.code !== excludeCode)
+    : COUNTRY_META_LIST;
+  return P(pool.length ? pool : COUNTRY_META_LIST);
+}
+
 export function localizeForeignTeams(teams?: Team[] | null): boolean {
   if (!Array.isArray(teams)) return false;
   let changed = false;
@@ -61,21 +70,31 @@ export function localizeForeignTeams(teams?: Team[] | null): boolean {
 
   teams.forEach((tm) => {
     if (!(tm.foreign === 1 || tm.tier >= 3) || !Array.isArray(tm.sq)) return;
-    const region = inferForeignTeamRegion(tm.name) || 'intl';
+    const meta = getForeignTeamCountryMeta(tm.name);
+    const region = meta?.region || inferForeignTeamRegion(tm.name) || 'intl';
     const renameMap = new Map<string, string>();
 
     tm.sq.forEach((q) => {
       if (q.me || q.signedSeason || q.loan) return;
-      if (!isLikelyGeneratedThaiName(q.n)) return;
-      const oldName = q.n;
-      const newName = genForeignPlayerName(region, {
-        allowImport: true,
-        excludeNames: existingNames
-      });
-      existingNames.add(newName);
-      renameMap.set(oldName, newName);
-      q.n = newName;
-      changed = true;
+      if (isLikelyGeneratedThaiName(q.n)) {
+        const oldName = q.n;
+        const useImport = Math.random() < 0.16;
+        const imp = useImport ? pickImportCountryMeta(meta?.code) : null;
+        const newName = genForeignPlayerName(imp ? imp.region : region, {
+          allowImport: false,
+          excludeNames: existingNames
+        });
+        existingNames.add(newName);
+        renameMap.set(oldName, newName);
+        q.n = newName;
+        if (imp?.code || meta?.code) {
+          q.nat = imp?.code || meta?.code;
+        }
+        changed = true;
+      } else if (!q.nat && meta?.code) {
+        q.nat = meta.code;
+        changed = true;
+      }
     });
 
     if (renameMap.size > 0) {
@@ -1023,7 +1042,7 @@ export function mkPlayer(
   baseOv: number,
   yo?: boolean,
   forceRo?: SubRole,
-  nameOpts?: { foreignRegion?: ForeignNameRegion; allowImport?: boolean; excludeNames?: Set<string> }
+  nameOpts?: { foreignRegion?: ForeignNameRegion; natCode?: string; allowImport?: boolean; excludeNames?: Set<string> }
 ): Player {
   const age = yo ? R(16, 18) : R(17, 34);
   const ov = yo ? clamp(baseOv + R(-6, 4), 20, 82) : clamp(baseOv + R(-9, 9), 25, 92);
@@ -1033,14 +1052,27 @@ export function mkPlayer(
   const potBoost = talent >= 80 ? R(4, 10) : 0;
   const ro = forceRo || SPW(pos);
   const bio = rollPlayerBio(pos, ro);
-  const playerName = nameOpts?.foreignRegion
-    ? genForeignPlayerName(nameOpts.foreignRegion, {
-        allowImport: nameOpts.allowImport,
-        excludeNames: nameOpts.excludeNames
+
+  let resolvedRegion = nameOpts?.foreignRegion;
+  let resolvedNat = nameOpts?.natCode;
+  if (!resolvedRegion && resolvedNat && COUNTRY_META_BY_CODE[resolvedNat]) {
+    resolvedRegion = COUNTRY_META_BY_CODE[resolvedNat].region;
+  }
+  if (resolvedRegion && nameOpts?.allowImport && Math.random() < 0.16) {
+    const imp = pickImportCountryMeta(resolvedNat);
+    resolvedRegion = imp.region;
+    resolvedNat = imp.code;
+  }
+
+  const playerName = resolvedRegion
+    ? genForeignPlayerName(resolvedRegion, {
+        allowImport: false,
+        excludeNames: nameOpts?.excludeNames
       })
     : genPlayerName();
   const pl: Player = {
     n: playerName,
+    ...(resolvedNat ? { nat: resolvedNat } : {}),
     pos,
     ro,
     sp: 0,
@@ -1228,7 +1260,7 @@ export function mkTeam(
   tier: number,
   id: number,
   diff = R(-7, 7),
-  opts?: { foreign?: boolean; nameRegion?: ForeignNameRegion; allowImport?: boolean; keepName?: boolean }
+  opts?: { foreign?: boolean; nameRegion?: ForeignNameRegion; natCode?: string; kcOverride?: [string, string]; allowImport?: boolean; keepName?: boolean }
 ): Team {
   const kp = KIT_P[(id + tier * 5) % KIT_P.length];
   const hasSpace = name.includes(' ');
@@ -1252,7 +1284,9 @@ export function mkTeam(
     slotRolesByPos[pos].push(naturalRo);
   });
 
-  const foreignRegion = opts?.nameRegion || (opts?.foreign ? inferForeignTeamRegion(name) || 'intl' : undefined);
+  const meta = opts?.foreign ? getForeignTeamCountryMeta(name) : null;
+  const foreignRegion = opts?.nameRegion || (opts?.foreign ? meta?.region || inferForeignTeamRegion(name) || 'intl' : undefined);
+  const natCode = opts?.natCode || (opts?.foreign ? meta?.code : undefined);
   const allowImport = opts?.allowImport ?? Boolean(opts?.foreign);
 
   const baseOv = BASE[tier] + diff;
@@ -1272,7 +1306,7 @@ export function mkTeam(
         baseOv + R(-4, 4),
         false,
         forceRo,
-        foreignRegion ? { foreignRegion, allowImport } : undefined
+        foreignRegion ? { foreignRegion, natCode, allowImport } : undefined
       );
     });
   });
@@ -1281,7 +1315,7 @@ export function mkTeam(
     id,
     name: name + (sx ? ' ' + sx : ''),
     tier,
-    kc: [kp[0], kp[1]],
+    kc: opts?.kcOverride ? [opts.kcOverride[0], opts.kcOverride[1]] : [kp[0], kp[1]],
     sq,
     form: ph.form,
     tac: ph.tac,

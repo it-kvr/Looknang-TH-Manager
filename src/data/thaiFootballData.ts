@@ -18,7 +18,73 @@ export const SN = [
   'ปัญญาดี', 'แก้วมณี', 'ไชยวงศ์', 'เรืองศรี', 'สายทอง', 'บัวผัน', 'ดวงดี', 'มีสุข', 'นาคสุข', 'ธนะสาร', 'ศรีจันทร์', 'หอมหวล'
 ];
 
-export type ForeignNameRegion = 'jp' | 'kr' | 'cn' | 'me' | 'ir' | 'uz' | 'in' | 'vn' | 'id' | 'my_sg' | 'ph' | 'au' | 'intl';
+export type ForeignNameRegion =
+  | 'jp' | 'kr' | 'cn' | 'me' | 'ir' | 'uz' | 'in' | 'vn' | 'id' | 'my_sg' | 'ph' | 'au'
+  | 'en' | 'es' | 'de' | 'it' | 'fr' | 'pt_br' | 'ar_lat' | 'nl' | 'af' | 'intl';
+
+export type ForeignConfed = 'asia' | 'europe' | 'americas' | 'africa';
+
+export const CONFED_META: Record<ForeignConfed, { id: ForeignConfed; icon: string; label: string; short: string }> = {
+  asia: { id: 'asia', icon: '🌏', label: 'เอเชีย & โอเชียเนีย', short: 'เอเชีย' },
+  europe: { id: 'europe', icon: '🇪🇺', label: 'ยุโรป', short: 'ยุโรป' },
+  americas: { id: 'americas', icon: '🌎', label: 'อเมริกา', short: 'อเมริกา' },
+  africa: { id: 'africa', icon: '🌍', label: 'แอฟริกา', short: 'แอฟริกา' }
+};
+
+export interface CountryCatalogMeta {
+  code: string;
+  flag: string;
+  country: string;
+  region: ForeignNameRegion;
+  confed: ForeignConfed;
+}
+
+export const COUNTRY_META_BY_CODE: Record<string, CountryCatalogMeta> = {
+  JP: { code: 'JP', flag: '🇯🇵', country: 'ญี่ปุ่น', region: 'jp', confed: 'asia' },
+  KR: { code: 'KR', flag: '🇰🇷', country: 'เกาหลีใต้', region: 'kr', confed: 'asia' },
+  CN: { code: 'CN', flag: '🇨🇳', country: 'จีน', region: 'cn', confed: 'asia' },
+  SA: { code: 'SA', flag: '🇸🇦', country: 'ซาอุดีอาระเบีย', region: 'me', confed: 'asia' },
+  AE: { code: 'AE', flag: '🇦🇪', country: 'ยูเออี', region: 'me', confed: 'asia' },
+  QA: { code: 'QA', flag: '🇶🇦', country: 'กาตาร์', region: 'me', confed: 'asia' },
+  IR: { code: 'IR', flag: '🇮🇷', country: 'อิหร่าน', region: 'ir', confed: 'asia' },
+  IQ: { code: 'IQ', flag: '🇮🇶', country: 'อิรัก', region: 'me', confed: 'asia' },
+  UZ: { code: 'UZ', flag: '🇺🇿', country: 'อุซเบกิสถาน', region: 'uz', confed: 'asia' },
+  AU: { code: 'AU', flag: '🇦🇺', country: 'ออสเตรเลีย', region: 'au', confed: 'asia' },
+  IN: { code: 'IN', flag: '🇮🇳', country: 'อินเดีย', region: 'in', confed: 'asia' },
+  VN: { code: 'VN', flag: '🇻🇳', country: 'เวียดนาม', region: 'vn', confed: 'asia' },
+  ID: { code: 'ID', flag: '🇮🇩', country: 'อินโดนีเซีย', region: 'id', confed: 'asia' },
+  MY: { code: 'MY', flag: '🇲🇾', country: 'มาเลเซีย', region: 'my_sg', confed: 'asia' },
+  SG: { code: 'SG', flag: '🇸🇬', country: 'สิงคโปร์', region: 'my_sg', confed: 'asia' },
+  PH: { code: 'PH', flag: '🇵🇭', country: 'ฟิลิปปินส์', region: 'ph', confed: 'asia' },
+  MM: { code: 'MM', flag: '🇲🇲', country: 'เมียนมา', region: 'intl', confed: 'asia' },
+  KH: { code: 'KH', flag: '🇰🇭', country: 'กัมพูชา', region: 'intl', confed: 'asia' },
+  GB: { code: 'GB', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', country: 'อังกฤษ', region: 'en', confed: 'europe' },
+  ES: { code: 'ES', flag: '🇪🇸', country: 'สเปน', region: 'es', confed: 'europe' },
+  DE: { code: 'DE', flag: '🇩🇪', country: 'เยอรมนี', region: 'de', confed: 'europe' },
+  IT: { code: 'IT', flag: '🇮🇹', country: 'อิตาลี', region: 'it', confed: 'europe' },
+  FR: { code: 'FR', flag: '🇫🇷', country: 'ฝรั่งเศส', region: 'fr', confed: 'europe' },
+  PT: { code: 'PT', flag: '🇵🇹', country: 'โปรตุเกส', region: 'pt_br', confed: 'europe' },
+  NL: { code: 'NL', flag: '🇳🇱', country: 'เนเธอร์แลนด์', region: 'nl', confed: 'europe' },
+  BR: { code: 'BR', flag: '🇧🇷', country: 'บราซิล', region: 'pt_br', confed: 'americas' },
+  AR: { code: 'AR', flag: '🇦🇷', country: 'อาร์เจนตินา', region: 'ar_lat', confed: 'americas' },
+  CO: { code: 'CO', flag: '🇨🇴', country: 'โคลอมเบีย', region: 'ar_lat', confed: 'americas' },
+  MX: { code: 'MX', flag: '🇲🇽', country: 'เม็กซิโก', region: 'es', confed: 'americas' },
+  US: { code: 'US', flag: '🇺🇸', country: 'สหรัฐอเมริกา', region: 'en', confed: 'americas' },
+  EG: { code: 'EG', flag: '🇪🇬', country: 'อียิปต์', region: 'me', confed: 'africa' },
+  MA: { code: 'MA', flag: '🇲🇦', country: 'โมร็อกโก', region: 'me', confed: 'africa' },
+  NG: { code: 'NG', flag: '🇳🇬', country: 'ไนจีเรีย', region: 'af', confed: 'africa' },
+  SN: { code: 'SN', flag: '🇸🇳', country: 'เซเนกัล', region: 'af', confed: 'africa' },
+  ZA: { code: 'ZA', flag: '🇿🇦', country: 'แอฟริกาใต้', region: 'af', confed: 'africa' }
+};
+
+export function getCountryMetaByCode(code?: string | null): CountryCatalogMeta | null {
+  if (!code) return null;
+  const upper = code.trim().toUpperCase();
+  if (upper === 'TH') {
+    return { code: 'TH', flag: '🇹🇭', country: 'ไทย', region: 'intl', confed: 'asia' };
+  }
+  return COUNTRY_META_BY_CODE[upper] || null;
+}
 
 export const FOREIGN_NAME_POOLS: Record<ForeignNameRegion, { first: string[]; last: string[] }> = {
   jp: {
@@ -161,6 +227,114 @@ export const FOREIGN_NAME_POOLS: Record<ForeignNameRegion, { first: string[]; la
       'ดุก', 'เบฮิช', 'เบอร์เจสส์', 'เม็ตคาล์ฟ', 'แอตกินสัน', 'โอคอนเนอร์', 'รอว์ลส์', 'คูโอล'
     ]
   },
+  en: {
+    first: [
+      'แฮร์รี', 'จู๊ด', 'บูคาโย', 'ฟิล', 'โคล', 'ดีแคลน', 'มาร์คัส', 'เทรนต์',
+      'จอร์แดน', 'แจ็ค', 'ค็อบบี้', 'แอนโธนี', 'โอลลี', 'จอห์น', 'ลุค', 'เจมส์',
+      'เคอร์ติส', 'คอนเนอร์', 'รีซ', 'เจดอน'
+    ],
+    last: [
+      'เคน', 'เบลลิงแฮม', 'ซาก้า', 'โฟเดน', 'พาล์มเมอร์', 'ไรซ์', 'แรชฟอร์ด', 'พิคฟอร์ด',
+      'สโตนส์', 'วอล์คเกอร์', 'การ์ดเนอร์', 'กอร์ดอน', 'วัตกินส์', 'โบเวน', 'ฮาร์วีย์', 'วอร์ด',
+      'โรเจอร์ส', 'เมดดิสัน', 'กัลลาเกอร์', 'เทย์เลอร์'
+    ]
+  },
+  es: {
+    first: [
+      'เปดรี้', 'กาบี้', 'โรดรี้', 'ลามีน', 'อัลบาโร', 'ดานี่', 'เฟร์ราน', 'นิโก้',
+      'มิเกล', 'มาร์ก', 'ปาอู', 'อูไน', 'อาเล็กซ์', 'ฟาเบียน', 'มาร์ติน', 'เยเรมี่',
+      'การ์ลอส', 'ฆาบี', 'ราอูล', 'ดีเอโก้'
+    ],
+    last: [
+      'การ์เซีย', 'ตอร์เรส', 'โมราตา', 'การ์บาฆาล', 'โอลโม่', 'ซูบิเมนดี้', 'เมริโน่', 'รุยซ์',
+      'วิลเลียมส์', 'ยามาล', 'คูบาร์ซี่', 'เปเรซ', 'ซานเชซ', 'โลเปซ', 'กอนซาเลซ', 'มาร์ติเนซ',
+      'โกเมซ', 'โมเรโน่', 'นาบาส', 'โอซาร์ซาบาล'
+    ]
+  },
+  de: {
+    first: [
+      'จามาล', 'ฟลอเรียน', 'โยชัว', 'เลรอย', 'ไค', 'นิคลาส', 'อิลคาย', 'โทนี',
+      'อันโตนิโอ', 'มานูเอล', 'เลออน', 'คาริม', 'ยูเลียน', 'โรเบิร์ต', 'คริส', 'เดวิด',
+      'มัตส์', 'ลูคัส', 'เบนจามิน', 'มัคซิมิเลียน'
+    ],
+    last: [
+      'มูเซียลา', 'เวิร์ตซ์', 'คิมมิช', 'ซาเน่', 'ฮาแวร์ตซ์', 'ฟึลล์ครูก', 'กุนโดกัน', 'รูดิเกอร์',
+      'นอยเออร์', 'แทร์ ชเตเก้น', 'ทาห์', 'ชล็อทเทอร์เบ็ค', 'บรันด์ท', 'แอร์ดริช', 'โกเร็ตซ์ก้า', 'กนาบรี',
+      'โกรสส์', 'บาวมันน์', 'มุลเลอร์', 'เบเออร์'
+    ]
+  },
+  it: {
+    first: [
+      'นิโคโล', 'เฟเดริโก', 'อเลสซานโดร', 'จานลุยจิ', 'มัตเตโอ', 'ซานโดร', 'จาโคโม', 'ดาวิเด',
+      'โลเรนโซ', 'ริคคาร์โด', 'อันเดรีย', 'มาร์โก', 'จอร์โจ', 'ชิโร', 'ลูก้า', 'กูกลิเอลโม',
+      'ซามูเอเล', 'เดสตินี่', 'ปิเอโตร', 'โมอิเซ่'
+    ],
+    last: [
+      'บาเรลล่า', 'เคียซ่า', 'บาสโตนี่', 'ดอนนารุมม่า', 'ดิ มาร์โก', 'โตนาลี่', 'ฟรัตเตซี่', 'เปเยกรินี่',
+      'คาลาฟิออรี่', 'ดิ โลเรนโซ่', 'บอนจอร์โน่', 'กัตติ', 'วิคาริโอ้', 'เรเตกี', 'สคามัคค่า', 'ราสปาโดรี่',
+      'คัมเบียโซ่', 'ริชชี่', 'อูโดกี้', 'รอสซี่'
+    ]
+  },
+  fr: {
+    first: [
+      'คีเลียน', 'อองตวน', 'อุสมาน', 'ออเรเลียง', 'เอดูอาร์โด้', 'วิลเลียม', 'อิบราฮิมา', 'เตโอ',
+      'ชูลส์', 'แรนดัล', 'แบรดลีย์', 'วาร์เรน', 'มิคาเอล', 'ไมค์', 'อาเดรียง', 'มาร์คุส',
+      'โยอันน์', 'อูโก้', 'ลูคัส', 'ดาโยต์'
+    ],
+    last: [
+      'เอ็มบัปเป้', 'กรีซมันน์', 'เดมเบเล่', 'ชูอาเมนี่', 'กามาวินก้า', 'ซาลิบา', 'โกนาเต้', 'แอร์กนองเดซ',
+      'กุนเด้', 'โกโล มูอานี่', 'บาร์โกล่า', 'ซาอีร์-เอเมรี', 'โอลิเซ่', 'เมญอง', 'ราบิโอต์', 'ตูราม',
+      'อูปาเมกาโน่', 'โฟฟาน่า', 'กงเต้', 'ดิอาบี้'
+    ]
+  },
+  pt_br: {
+    first: [
+      'วินิซิอุส', 'โรดรีโก้', 'ราฟินญ่า', 'กาเบรียล', 'บรูโน่', 'ลูคัส', 'มาร์ควินญอส', 'อลิสซอน',
+      'เอแดร์ซอน', 'บรูโน่', 'ราฟาเอล', 'แบร์นาร์โด้', 'ชูเอา', 'กอนซาโล', 'รูเบน', 'วิตินญ่า',
+      'ดิโอโก้', 'เปโดร', 'มาเตอุส', 'เอ็นดริค'
+    ],
+    last: [
+      'จูเนียร์', 'ซิลวา', 'เฟอร์นันเดส', 'ดิอาส', 'คังเซโล่', 'เนเวส', 'เลเอา', 'รามอส',
+      'โจต้า', 'ปาลินญ่า', 'กิมาไรส์', 'ปาเกต้า', 'มาร์ติเนลลี่', 'มากัลเญส', 'เฆซุส', 'ริชาร์ลิซอน',
+      'ซาวินโญ่', 'โรดริเกส', 'คอสต้า', 'เมนเดส'
+    ]
+  },
+  ar_lat: {
+    first: [
+      'ลิโอเนล', 'เลาตาโร', 'ฮูเลียน', 'อเล็กซิส', 'เอ็นโซ', 'โรดริโก้', 'นิโคลัส', 'คริสเตียน',
+      'ลิซานโดร', 'เอมิเลียโน', 'ฟรานโก้', 'การ์ลอส', 'เฟเดริโก้', 'ดาร์วิน', 'ลุยส์', 'ฮาเมส',
+      'อเล็กซิส', 'อังเคล', 'เปาโล', 'ติอาโก้'
+    ],
+    last: [
+      'มาร์ติเนซ', 'อัลวาเรซ', 'แม็ค อัลลิสเตอร์', 'เฟอร์นันเดซ', 'เด ปอล', 'โรเมโร่', 'โอตาเมนดี้', 'โมลินา',
+      'ทาเกลียฟิโก้', 'การ์นาโช่', 'กอนซาเลซ', 'อัลมาด้า', 'บัลเบร์เด', 'นูนเญซ', 'ดิอาซ', 'โรดริเกซ',
+      'ดีบาลา', 'ปาเรเดส', 'อคูญา', 'ริออส'
+    ]
+  },
+  nl: {
+    first: [
+      'เฟอร์จิล', 'แฟรงกี้', 'เมมฟิส', 'โคดี้', 'ซาวี', 'ทิจจานี่', 'เยเรมี่', 'เดนเซล',
+      'มัทไธส์', 'สเตฟาน', 'นาธาน', 'มิกกี้', 'บาร์ต', 'เยอร์ดี้', 'โจอี', 'ไบรอัน',
+      'ยูร์เรียน', 'ดอนเยลล์', 'โยนัส', 'จัสติน'
+    ],
+    last: [
+      'ฟาน ไดจ์ค', 'เดอ ยอง', 'เดปาย', 'กัคโป', 'ซิมอนส์', 'ไรน์เดอร์ส', 'ฟริมปง', 'ดุมฟรีส์',
+      'เดอ ลิกต์', 'เดอ ไฟรจ์', 'อาเก้', 'ฟาน เดอ เฟน', 'แฟร์บรึคเคิน', 'ชูเทน', 'เวียร์มัน', 'บร็อบบีย์',
+      'ทิมเบอร์', 'มาเลน', 'ไคลเวิร์ต', 'คุปไมเนอร์ส'
+    ]
+  },
+  af: {
+    first: [
+      'วิคเตอร์', 'อเดโมล่า', 'อเล็กซ์', 'วิลเฟรด', 'ซาดิโอ', 'คาลิดู', 'เอดูอาร์', 'ปาเป้',
+      'นิโคลัส', 'อิสไมลา', 'อิบราฮิมา', 'มุสซา', 'ชุควูเอเซ', 'โมเสส', 'เพอร์ซี่', 'ธีมบา',
+      'อองเดร', 'โมฮาเหม็ด', 'อัชราฟ', 'โซฟียาน'
+    ],
+    last: [
+      'โอซิมเฮน', 'ลุคแมน', 'อิโวบี', 'เอ็นดิดี้', 'มาเน่', 'คูลิบาลี', 'เมนดี้', 'ซาร์',
+      'แจ็คสัน', 'เกย์', 'เนียง', 'โบนีเฟซ', 'ไซมอน', 'บาซีย์', 'เอกอง', 'เอ็นวาบาลี',
+      'ซวาเน่', 'ตาอู', 'วิลเลียมส์', 'โชนู'
+    ]
+  },
   intl: {
     first: [
       'ลูคัส', 'มาเตอุส', 'กาเบรียล', 'ดิเอโก้', 'โรดริโก้', 'ราฟาเอล', 'บรูโน่', 'วิคเตอร์',
@@ -175,27 +349,152 @@ export const FOREIGN_NAME_POOLS: Record<ForeignNameRegion, { first: string[]; la
   }
 };
 
-export function getForeignTeamCountryMeta(teamName?: string): { flag: string; country: string; region: ForeignNameRegion } | null {
+export interface ForeignClubCatalogEntry {
+  name: string;
+  code: string;
+  country: string;
+  flag: string;
+  region: ForeignNameRegion;
+  confed: ForeignConfed;
+  baseOvr: number;
+  kc: [string, string];
+}
+
+export const FOREIGN_CLUB_CATALOG: ForeignClubCatalogEntry[] = [
+  // Asia & Oceania (32 original + diverse AFC/AFF/OFC clubs)
+  { name: 'โตเกียว ฮาคุโร', code: 'JP', country: 'ญี่ปุ่น', flag: '🇯🇵', region: 'jp', confed: 'asia', baseOvr: 77, kc: ['#1d4ed8', '#ffffff'] },
+  { name: 'โอซาก้า ซากุระ', code: 'JP', country: 'ญี่ปุ่น', flag: '🇯🇵', region: 'jp', confed: 'asia', baseOvr: 75, kc: ['#ec4899', '#1e293b'] },
+  { name: 'โซล ชินโดก', code: 'KR', country: 'เกาหลีใต้', flag: '🇰🇷', region: 'kr', confed: 'asia', baseOvr: 76, kc: ['#dc2626', '#111827'] },
+  { name: 'ปูซาน ไทเกอร์ส', code: 'KR', country: 'เกาหลีใต้', flag: '🇰🇷', region: 'kr', confed: 'asia', baseOvr: 74, kc: ['#0284c7', '#ffffff'] },
+  { name: 'เซี่ยงไฮ้ ดราก้อน', code: 'CN', country: 'จีน', flag: '🇨🇳', region: 'cn', confed: 'asia', baseOvr: 73, kc: ['#b91c1c', '#facc15'] },
+  { name: 'ปักกิ่ง เทียนหลง', code: 'CN', country: 'จีน', flag: '🇨🇳', region: 'cn', confed: 'asia', baseOvr: 72, kc: ['#15803d', '#fde047'] },
+  { name: 'ริยาด อัลซาฮิล', code: 'SA', country: 'ซาอุดีอาระเบีย', flag: '🇸🇦', region: 'me', confed: 'asia', baseOvr: 78, kc: ['#1d4ed8', '#facc15'] },
+  { name: 'เจดดาห์ ฟอลคอนส์', code: 'SA', country: 'ซาอุดีอาระเบีย', flag: '🇸🇦', region: 'me', confed: 'asia', baseOvr: 76, kc: ['#166534', '#ffffff'] },
+  { name: 'ดูไบ อัลมาส', code: 'AE', country: 'ยูเออี', flag: '🇦🇪', region: 'me', confed: 'asia', baseOvr: 74, kc: ['#7c3aed', '#ffffff'] },
+  { name: 'อาบูดาบี ซิตี้', code: 'AE', country: 'ยูเออี', flag: '🇦🇪', region: 'me', confed: 'asia', baseOvr: 75, kc: ['#0ea5e9', '#0f172a'] },
+  { name: 'โดฮา สตาร์', code: 'QA', country: 'กาตาร์', flag: '🇶🇦', region: 'me', confed: 'asia', baseOvr: 75, kc: ['#7f1d1d', '#ffffff'] },
+  { name: 'ลูซาอิล เอสซี', code: 'QA', country: 'กาตาร์', flag: '🇶🇦', region: 'me', confed: 'asia', baseOvr: 74, kc: ['#be123c', '#fde047'] },
+  { name: 'เตหะราน ไลออนส์', code: 'IR', country: 'อิหร่าน', flag: '🇮🇷', region: 'ir', confed: 'asia', baseOvr: 75, kc: ['#dc2626', '#ffffff'] },
+  { name: 'อิสฟาฮาน เอฟซี', code: 'IR', country: 'อิหร่าน', flag: '🇮🇷', region: 'ir', confed: 'asia', baseOvr: 74, kc: ['#eab308', '#111827'] },
+  { name: 'แบกแดด ยูไนเต็ด', code: 'IQ', country: 'อิรัก', flag: '🇮🇶', region: 'me', confed: 'asia', baseOvr: 72, kc: ['#16a34a', '#ffffff'] },
+  { name: 'บาสรา สปอร์ต', code: 'IQ', country: 'อิรัก', flag: '🇮🇶', region: 'me', confed: 'asia', baseOvr: 71, kc: ['#0f766e', '#ffffff'] },
+  { name: 'ทาชเคนต์ เอฟซี', code: 'UZ', country: 'อุซเบกิสถาน', flag: '🇺🇿', region: 'uz', confed: 'asia', baseOvr: 74, kc: ['#0284c7', '#facc15'] },
+  { name: 'ซามาร์คันด์ คลับ', code: 'UZ', country: 'อุซเบกิสถาน', flag: '🇺🇿', region: 'uz', confed: 'asia', baseOvr: 72, kc: ['#0369a1', '#ffffff'] },
+  { name: 'ซิดนีย์ ซิตี้', code: 'AU', country: 'ออสเตรเลีย', flag: '🇦🇺', region: 'au', confed: 'asia', baseOvr: 74, kc: ['#38bdf8', '#0f172a'] },
+  { name: 'เมลเบิร์น วิคตอรี่', code: 'AU', country: 'ออสเตรเลีย', flag: '🇦🇺', region: 'au', confed: 'asia', baseOvr: 74, kc: ['#1e3a8a', '#ffffff'] },
+  { name: 'มุมไบ ราชปุระ', code: 'IN', country: 'อินเดีย', flag: '🇮🇳', region: 'in', confed: 'asia', baseOvr: 70, kc: ['#0284c7', '#f97316'] },
+  { name: 'เดลี ซันดาร์', code: 'IN', country: 'อินเดีย', flag: '🇮🇳', region: 'in', confed: 'asia', baseOvr: 69, kc: ['#ea580c', '#1e293b'] },
+  { name: 'ฮานอย ลองซา', code: 'VN', country: 'เวียดนาม', flag: '🇻🇳', region: 'vn', confed: 'asia', baseOvr: 71, kc: ['#7c3aed', '#facc15'] },
+  { name: 'ไซ่ง่อน เอฟซี', code: 'VN', country: 'เวียดนาม', flag: '🇻🇳', region: 'vn', confed: 'asia', baseOvr: 70, kc: ['#dc2626', '#ffffff'] },
+  { name: 'จาการ์ตา การูด้า', code: 'ID', country: 'อินโดนีเซีย', flag: '🇮🇩', region: 'id', confed: 'asia', baseOvr: 71, kc: ['#ea580c', '#ffffff'] },
+  { name: 'บาหลี ยูไนเต็ด', code: 'ID', country: 'อินโดนีเซีย', flag: '🇮🇩', region: 'id', confed: 'asia', baseOvr: 70, kc: ['#b91c1c', '#111827'] },
+  { name: 'กัวลาลัมเปอร์ ไทเกอร์ส', code: 'MY', country: 'มาเลเซีย', flag: '🇲🇾', region: 'my_sg', confed: 'asia', baseOvr: 70, kc: ['#dc2626', '#1e293b'] },
+  { name: 'ยะโฮร์ ซิตี้', code: 'MY', country: 'มาเลเซีย', flag: '🇲🇾', region: 'my_sg', confed: 'asia', baseOvr: 74, kc: ['#1d4ed8', '#dc2626'] },
+  { name: 'สิงคโปร์ เมอร์ลิน', code: 'SG', country: 'สิงคโปร์', flag: '🇸🇬', region: 'my_sg', confed: 'asia', baseOvr: 69, kc: ['#0284c7', '#ffffff'] },
+  { name: 'มารีน่า เบย์ เอฟซี', code: 'SG', country: 'สิงคโปร์', flag: '🇸🇬', region: 'my_sg', confed: 'asia', baseOvr: 68, kc: ['#be123c', '#ffffff'] },
+  { name: 'มะนิลา สตาร์', code: 'PH', country: 'ฟิลิปปินส์', flag: '🇵🇭', region: 'ph', confed: 'asia', baseOvr: 68, kc: ['#facc15', '#1d4ed8'] },
+  { name: 'เซบู ยูไนเต็ด', code: 'PH', country: 'ฟิลิปปินส์', flag: '🇵🇭', region: 'ph', confed: 'asia', baseOvr: 67, kc: ['#0f766e', '#facc15'] },
+
+  // Europe (20 clubs across 7 countries)
+  { name: 'ลอนดอน รอยัล เอฟซี', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 82, kc: ['#1d4ed8', '#ffffff'] },
+  { name: 'แมนเชสเตอร์ เรดส์', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 82, kc: ['#dc2626', '#111827'] },
+  { name: 'ลิเวอร์พูล เมอร์ซีย์', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 83, kc: ['#b91c1c', '#facc15'] },
+  { name: 'เบอร์มิงแฮม ซิตี้', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 78, kc: ['#7c2d12', '#38bdf8'] },
+  { name: 'มาดริด รอยัล เอฟซี', code: 'ES', country: 'สเปน', flag: '🇪🇸', region: 'es', confed: 'europe', baseOvr: 85, kc: ['#ffffff', '#facc15'] },
+  { name: 'บาร์เซโลนา คาตาลัน', code: 'ES', country: 'สเปน', flag: '🇪🇸', region: 'es', confed: 'europe', baseOvr: 84, kc: ['#1e3a8a', '#b91c1c'] },
+  { name: 'เซบีญา แอธเลติก', code: 'ES', country: 'สเปน', flag: '🇪🇸', region: 'es', confed: 'europe', baseOvr: 78, kc: ['#dc2626', '#ffffff'] },
+  { name: 'มิวนิก บาวาเรีย', code: 'DE', country: 'เยอรมนี', flag: '🇩🇪', region: 'de', confed: 'europe', baseOvr: 84, kc: ['#dc2626', '#ffffff'] },
+  { name: 'ดอร์ทมุนด์ ซิกนัล', code: 'DE', country: 'เยอรมนี', flag: '🇩🇪', region: 'de', confed: 'europe', baseOvr: 81, kc: ['#facc15', '#111827'] },
+  { name: 'แฟรงก์เฟิร์ต อีเกิลส์', code: 'DE', country: 'เยอรมนี', flag: '🇩🇪', region: 'de', confed: 'europe', baseOvr: 77, kc: ['#111827', '#dc2626'] },
+  { name: 'มิลาน เนรัซซูรี', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 82, kc: ['#1d4ed8', '#111827'] },
+  { name: 'ตูริน เบียงโคเนรี', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 80, kc: ['#111827', '#ffffff'] },
+  { name: 'โรม่า อิมพีเรียล', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 78, kc: ['#991b1b', '#f59e0b'] },
+  { name: 'ปารีส แซงต์-ลูมิแอร์', code: 'FR', country: 'ฝรั่งเศส', flag: '🇫🇷', region: 'fr', confed: 'europe', baseOvr: 83, kc: ['#1e3a8a', '#dc2626'] },
+  { name: 'ลียง โอลิมปิก', code: 'FR', country: 'ฝรั่งเศส', flag: '🇫🇷', region: 'fr', confed: 'europe', baseOvr: 77, kc: ['#ffffff', '#1d4ed8'] },
+  { name: 'มาร์กเซย อาซูร์', code: 'FR', country: 'ฝรั่งเศส', flag: '🇫🇷', region: 'fr', confed: 'europe', baseOvr: 78, kc: ['#38bdf8', '#ffffff'] },
+  { name: 'ลิสบอน ดราก้อนส์', code: 'PT', country: 'โปรตุเกส', flag: '🇵🇹', region: 'pt_br', confed: 'europe', baseOvr: 79, kc: ['#15803d', '#ffffff'] },
+  { name: 'ปอร์โต้ แอตแลนติก', code: 'PT', country: 'โปรตุเกส', flag: '🇵🇹', region: 'pt_br', confed: 'europe', baseOvr: 78, kc: ['#1d4ed8', '#ffffff'] },
+  { name: 'อัมสเตอร์ดัม โกลด์', code: 'NL', country: 'เนเธอร์แลนด์', flag: '🇳🇱', region: 'nl', confed: 'europe', baseOvr: 79, kc: ['#ffffff', '#dc2626'] },
+  { name: 'รอตเตอร์ดัม ฮาร์เบอร์', code: 'NL', country: 'เนเธอร์แลนด์', flag: '🇳🇱', region: 'nl', confed: 'europe', baseOvr: 77, kc: ['#dc2626', '#111827'] },
+
+  // Americas (12 clubs across 5 countries)
+  { name: 'เซาเปาโล คาริโอกา', code: 'BR', country: 'บราซิล', flag: '🇧🇷', region: 'pt_br', confed: 'americas', baseOvr: 80, kc: ['#16a34a', '#facc15'] },
+  { name: 'รีโอ เด จาเนโร เอฟซี', code: 'BR', country: 'บราซิล', flag: '🇧🇷', region: 'pt_br', confed: 'americas', baseOvr: 81, kc: ['#dc2626', '#111827'] },
+  { name: 'ปอร์ตู อาเลเกร เอสซี', code: 'BR', country: 'บราซิล', flag: '🇧🇷', region: 'pt_br', confed: 'americas', baseOvr: 78, kc: ['#0284c7', '#111827'] },
+  { name: 'บัวโนสไอเรส ลา โบกา', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 80, kc: ['#1d4ed8', '#facc15'] },
+  { name: 'ริเวอร์ ซิลเวอร์ เอฟซี', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 80, kc: ['#ffffff', '#dc2626'] },
+  { name: 'โรซาริโอ เซนทรัล', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 76, kc: ['#eab308', '#1e3a8a'] },
+  { name: 'โบโกตา คอนดอร์', code: 'CO', country: 'โคลอมเบีย', flag: '🇨🇴', region: 'ar_lat', confed: 'americas', baseOvr: 75, kc: ['#facc15', '#1d4ed8'] },
+  { name: 'เมเดยิน แอธเลติก', code: 'CO', country: 'โคลอมเบีย', flag: '🇨🇴', region: 'ar_lat', confed: 'americas', baseOvr: 75, kc: ['#16a34a', '#ffffff'] },
+  { name: 'เม็กซิโก ซิตี้ อาซเท็ก', code: 'MX', country: 'เม็กซิโก', flag: '🇲🇽', region: 'es', confed: 'americas', baseOvr: 76, kc: ['#facc15', '#1e3a8a'] },
+  { name: 'มอนเตร์เรย์ ฟีนิกซ์', code: 'MX', country: 'เม็กซิโก', flag: '🇲🇽', region: 'es', confed: 'americas', baseOvr: 76, kc: ['#1e3a8a', '#ffffff'] },
+  { name: 'ลอสแอนเจลิส กาแล็กติก', code: 'US', country: 'สหรัฐอเมริกา', flag: '🇺🇸', region: 'en', confed: 'americas', baseOvr: 76, kc: ['#111827', '#f59e0b'] },
+  { name: 'นิวยอร์ก เมโทร เอสซี', code: 'US', country: 'สหรัฐอเมริกา', flag: '🇺🇸', region: 'en', confed: 'americas', baseOvr: 75, kc: ['#38bdf8', '#1e3a8a'] },
+
+  // Africa (8 clubs across 5 countries)
+  { name: 'ไคโร ฟาโรห์ เอสซี', code: 'EG', country: 'อียิปต์', flag: '🇪🇬', region: 'me', confed: 'africa', baseOvr: 76, kc: ['#dc2626', '#ffffff'] },
+  { name: 'อเล็กซานเดรีย ซี', code: 'EG', country: 'อียิปต์', flag: '🇪🇬', region: 'me', confed: 'africa', baseOvr: 73, kc: ['#15803d', '#ffffff'] },
+  { name: 'กาซาบล็องกา แอตลาส', code: 'MA', country: 'โมร็อกโก', flag: '🇲🇦', region: 'me', confed: 'africa', baseOvr: 76, kc: ['#b91c1c', '#16a34a'] },
+  { name: 'ราบัต รอยัล', code: 'MA', country: 'โมร็อกโก', flag: '🇲🇦', region: 'me', confed: 'africa', baseOvr: 74, kc: ['#111827', '#dc2626'] },
+  { name: 'ลากอส อีเกิลส์', code: 'NG', country: 'ไนจีเรีย', flag: '🇳🇬', region: 'af', confed: 'africa', baseOvr: 74, kc: ['#16a34a', '#ffffff'] },
+  { name: 'อาบูจา สตาร์ส', code: 'NG', country: 'ไนจีเรีย', flag: '🇳🇬', region: 'af', confed: 'africa', baseOvr: 72, kc: ['#15803d', '#facc15'] },
+  { name: 'ดาการ์ ไลออนส์ เอฟซี', code: 'SN', country: 'เซเนกัล', flag: '🇸🇳', region: 'af', confed: 'africa', baseOvr: 75, kc: ['#16a34a', '#facc15'] },
+  { name: 'โจฮันเนสเบิร์ก โกลด์', code: 'ZA', country: 'แอฟริกาใต้', flag: '🇿🇦', region: 'af', confed: 'africa', baseOvr: 74, kc: ['#eab308', '#111827'] }
+];
+
+export const FOREIGN_CLUB_BY_NAME: Record<string, ForeignClubCatalogEntry> = Object.fromEntries(
+  FOREIGN_CLUB_CATALOG.map((c) => [c.name, c])
+);
+
+export function getForeignClubEntry(teamName?: string): ForeignClubCatalogEntry | null {
+  if (!teamName) return null;
+  return FOREIGN_CLUB_BY_NAME[teamName.trim()] || null;
+}
+
+export function getForeignTeamCountryMeta(
+  teamName?: string
+): { flag: string; country: string; region: ForeignNameRegion; confed: ForeignConfed; code: string } | null {
   if (!teamName) return null;
   const n = teamName.trim();
-  if (/โตเกียว|โอซาก้า|ฮาคุโร|คิตะซึกิ|อาซูร่า|ซากุระ|ญี่ปุ่น/.test(n)) return { flag: '🇯🇵', country: 'ญี่ปุ่น', region: 'jp' };
-  if (/โซล|ปูซาน|อินชอน|ชินโดก|มูจิน|แทกุก|เกาหลี/.test(n)) return { flag: '🇰🇷', country: 'เกาหลีใต้', region: 'kr' };
-  if (/เซี่ยงไฮ้|ปักกิ่ง|เหลียงซาน|เทียนหลง|จินหลิง|จีน/.test(n)) return { flag: '🇨🇳', country: 'จีน', region: 'cn' };
-  if (/ริยาด|เจดดาห์|อัลซาฮิล|ซาอุดี/.test(n)) return { flag: '🇸🇦', country: 'ซาอุดีอาระเบีย', region: 'me' };
-  if (/ดูไบ|อาบูดาบี|อัลมาส|ยูเออี/.test(n)) return { flag: '🇦🇪', country: 'ยูเออี', region: 'me' };
-  if (/โดฮา|ลูซาอิล|กาตาร์/.test(n)) return { flag: '🇶🇦', country: 'กาตาร์', region: 'me' };
-  if (/เตหะราน|อิสฟาฮาน|คาวีร์|อิหร่าน/.test(n)) return { flag: '🇮🇷', country: 'อิหร่าน', region: 'ir' };
-  if (/แบกแดด|บาสรา|อิรัก/.test(n)) return { flag: '🇮🇶', country: 'อิรัก', region: 'me' };
-  if (/ทาชเคนต์|ซามาร์คันด์|อุซเบกิสถาน/.test(n)) return { flag: '🇺🇿', country: 'อุซเบกิสถาน', region: 'uz' };
-  if (/ซิดนีย์|เมลเบิร์น|บริสเบน|ออสเตรเลีย/.test(n)) return { flag: '🇦🇺', country: 'ออสเตรเลีย', region: 'au' };
-  if (/มุมไบ|เดลี|ซันดาร์|ราชปุระ|อินเดีย/.test(n)) return { flag: '🇮🇳', country: 'อินเดีย', region: 'in' };
-  if (/ฮานอย|ไซ่ง่อน|ลองซา|เวียดนาม/.test(n)) return { flag: '🇻🇳', country: 'เวียดนาม', region: 'vn' };
-  if (/จาการ์ตา|บาหลี|นุสันตรา|การูด้า|อินโดนีเซีย/.test(n)) return { flag: '🇮🇩', country: 'อินโดนีเซีย', region: 'id' };
-  if (/กัวลาลัมเปอร์|ยะโฮร์|มาเลเซีย/.test(n)) return { flag: '🇲🇾', country: 'มาเลเซีย', region: 'my_sg' };
-  if (/สิงคโปร์|มารีน่า เบย์|เมอร์ลิน/.test(n)) return { flag: '🇸🇬', country: 'สิงคโปร์', region: 'my_sg' };
-  if (/มะนิลา|เซบู|ฟิลิปปินส์/.test(n)) return { flag: '🇵🇭', country: 'ฟิลิปปินส์', region: 'ph' };
-  if (/เมียนมา/.test(n)) return { flag: '🇲🇲', country: 'เมียนมา', region: 'intl' };
-  if (/กัมพูชา/.test(n)) return { flag: '🇰🇭', country: 'กัมพูชา', region: 'intl' };
+  const exact = FOREIGN_CLUB_BY_NAME[n];
+  if (exact) {
+    return { flag: exact.flag, country: exact.country, region: exact.region, confed: exact.confed, code: exact.code };
+  }
+  if (/โตเกียว|โอซาก้า|ฮาคุโร|คิตะซึกิ|อาซูร่า|ซากุระ|ญี่ปุ่น/.test(n)) return { flag: '🇯🇵', country: 'ญี่ปุ่น', region: 'jp', confed: 'asia', code: 'JP' };
+  if (/โซล|ปูซาน|อินชอน|ชินโดก|มูจิน|แทกุก|เกาหลี/.test(n)) return { flag: '🇰🇷', country: 'เกาหลีใต้', region: 'kr', confed: 'asia', code: 'KR' };
+  if (/เซี่ยงไฮ้|ปักกิ่ง|เหลียงซาน|เทียนหลง|จินหลิง|จีน/.test(n)) return { flag: '🇨🇳', country: 'จีน', region: 'cn', confed: 'asia', code: 'CN' };
+  if (/ริยาด|เจดดาห์|อัลซาฮิล|ซาอุดี/.test(n)) return { flag: '🇸🇦', country: 'ซาอุดีอาระเบีย', region: 'me', confed: 'asia', code: 'SA' };
+  if (/ดูไบ|อาบูดาบี|อัลมาส|ยูเออี/.test(n)) return { flag: '🇦🇪', country: 'ยูเออี', region: 'me', confed: 'asia', code: 'AE' };
+  if (/โดฮา|ลูซาอิล|กาตาร์/.test(n)) return { flag: '🇶🇦', country: 'กาตาร์', region: 'me', confed: 'asia', code: 'QA' };
+  if (/เตหะราน|อิสฟาฮาน|คาวีร์|อิหร่าน/.test(n)) return { flag: '🇮🇷', country: 'อิหร่าน', region: 'ir', confed: 'asia', code: 'IR' };
+  if (/แบกแดด|บาสรา|อิรัก/.test(n)) return { flag: '🇮🇶', country: 'อิรัก', region: 'me', confed: 'asia', code: 'IQ' };
+  if (/ทาชเคนต์|ซามาร์คันด์|อุซเบกิสถาน/.test(n)) return { flag: '🇺🇿', country: 'อุซเบกิสถาน', region: 'uz', confed: 'asia', code: 'UZ' };
+  if (/ซิดนีย์|เมลเบิร์น|บริสเบน|ออสเตรเลีย/.test(n)) return { flag: '🇦🇺', country: 'ออสเตรเลีย', region: 'au', confed: 'asia', code: 'AU' };
+  if (/มุมไบ|เดลี|ซันดาร์|ราชปุระ|อินเดีย/.test(n)) return { flag: '🇮🇳', country: 'อินเดีย', region: 'in', confed: 'asia', code: 'IN' };
+  if (/ฮานอย|ไซ่ง่อน|ลองซา|เวียดนาม/.test(n)) return { flag: '🇻🇳', country: 'เวียดนาม', region: 'vn', confed: 'asia', code: 'VN' };
+  if (/จาการ์ตา|บาหลี|นุสันตรา|การูด้า|อินโดนีเซีย/.test(n)) return { flag: '🇮🇩', country: 'อินโดนีเซีย', region: 'id', confed: 'asia', code: 'ID' };
+  if (/กัวลาลัมเปอร์|ยะโฮร์|มาเลเซีย/.test(n)) return { flag: '🇲🇾', country: 'มาเลเซีย', region: 'my_sg', confed: 'asia', code: 'MY' };
+  if (/สิงคโปร์|มารีน่า เบย์|เมอร์ลิน/.test(n)) return { flag: '🇸🇬', country: 'สิงคโปร์', region: 'my_sg', confed: 'asia', code: 'SG' };
+  if (/มะนิลา|เซบู|ฟิลิปปินส์/.test(n)) return { flag: '🇵🇭', country: 'ฟิลิปปินส์', region: 'ph', confed: 'asia', code: 'PH' };
+  if (/เมียนมา/.test(n)) return { flag: '🇲🇲', country: 'เมียนมา', region: 'intl', confed: 'asia', code: 'MM' };
+  if (/กัมพูชา/.test(n)) return { flag: '🇰🇭', country: 'กัมพูชา', region: 'intl', confed: 'asia', code: 'KH' };
+  if (/ลอนดอน|แมนเชสเตอร์|ลิเวอร์พูล|เบอร์มิงแฮม|อังกฤษ/.test(n)) return { flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', country: 'อังกฤษ', region: 'en', confed: 'europe', code: 'GB' };
+  if (/มาดริด|บาร์เซโลนา|เซบีญา|สเปน/.test(n)) return { flag: '🇪🇸', country: 'สเปน', region: 'es', confed: 'europe', code: 'ES' };
+  if (/มิวนิก|ดอร์ทมุนด์|แฟรงก์เฟิร์ต|เยอรมนี/.test(n)) return { flag: '🇩🇪', country: 'เยอรมนี', region: 'de', confed: 'europe', code: 'DE' };
+  if (/มิลาน|ตูริน|โรม่า|อิตาลี/.test(n)) return { flag: '🇮🇹', country: 'อิตาลี', region: 'it', confed: 'europe', code: 'IT' };
+  if (/ปารีส|ลียง|มาร์กเซย|ฝรั่งเศส/.test(n)) return { flag: '🇫🇷', country: 'ฝรั่งเศส', region: 'fr', confed: 'europe', code: 'FR' };
+  if (/ลิสบอน|ปอร์โต้|โปรตุเกส/.test(n)) return { flag: '🇵🇹', country: 'โปรตุเกส', region: 'pt_br', confed: 'europe', code: 'PT' };
+  if (/อัมสเตอร์ดัม|รอตเตอร์ดัม|เนเธอร์แลนด์/.test(n)) return { flag: '🇳🇱', country: 'เนเธอร์แลนด์', region: 'nl', confed: 'europe', code: 'NL' };
+  if (/เซาเปาโล|รีโอ|ปอร์ตู อาเลเกร|บราซิล/.test(n)) return { flag: '🇧🇷', country: 'บราซิล', region: 'pt_br', confed: 'americas', code: 'BR' };
+  if (/บัวโนสไอเรส|ริเวอร์|โรซาริโอ|อาร์เจนตินา/.test(n)) return { flag: '🇦🇷', country: 'อาร์เจนตินา', region: 'ar_lat', confed: 'americas', code: 'AR' };
+  if (/โบโกตา|เมเดยิน|โคลอมเบีย/.test(n)) return { flag: '🇨🇴', country: 'โคลอมเบีย', region: 'ar_lat', confed: 'americas', code: 'CO' };
+  if (/เม็กซิโก|มอนเตร์เรย์/.test(n)) return { flag: '🇲🇽', country: 'เม็กซิโก', region: 'es', confed: 'americas', code: 'MX' };
+  if (/ลอสแอนเจลิส|นิวยอร์ก|สหรัฐ/.test(n)) return { flag: '🇺🇸', country: 'สหรัฐอเมริกา', region: 'en', confed: 'americas', code: 'US' };
+  if (/ไคโร|อเล็กซานเดรีย|อียิปต์/.test(n)) return { flag: '🇪🇬', country: 'อียิปต์', region: 'me', confed: 'africa', code: 'EG' };
+  if (/กาซาบล็องกา|ราบัต|โมร็อกโก/.test(n)) return { flag: '🇲🇦', country: 'โมร็อกโก', region: 'me', confed: 'africa', code: 'MA' };
+  if (/ลากอส|อาบูจา|ไนจีเรีย/.test(n)) return { flag: '🇳🇬', country: 'ไนจีเรีย', region: 'af', confed: 'africa', code: 'NG' };
+  if (/ดาการ์|เซเนกัล/.test(n)) return { flag: '🇸🇳', country: 'เซเนกัล', region: 'af', confed: 'africa', code: 'SN' };
+  if (/โจฮันเนสเบิร์ก|แอฟริกาใต้/.test(n)) return { flag: '🇿🇦', country: 'แอฟริกาใต้', region: 'af', confed: 'africa', code: 'ZA' };
   return null;
 }
 
@@ -244,27 +543,10 @@ export const TIER_STANDALONE_CLUBS = [
   ]
 ];
 
-export const AN = [
-  'โตเกียว ฮาคุโร', 'โอซาก้า ซากุระ',
-  'โซล ชินโดก', 'ปูซาน ไทเกอร์ส',
-  'เซี่ยงไฮ้ ดราก้อน', 'ปักกิ่ง เทียนหลง',
-  'ริยาด อัลซาฮิล', 'เจดดาห์ ฟอลคอนส์',
-  'ดูไบ อัลมาส', 'อาบูดาบี ซิตี้',
-  'โดฮา สตาร์', 'ลูซาอิล เอสซี',
-  'เตหะราน ไลออนส์', 'อิสฟาฮาน เอฟซี',
-  'แบกแดด ยูไนเต็ด', 'บาสรา สปอร์ต',
-  'ทาชเคนต์ เอฟซี', 'ซามาร์คันด์ คลับ',
-  'ซิดนีย์ ซิตี้', 'เมลเบิร์น วิคตอรี่',
-  'มุมไบ ราชปุระ', 'เดลี ซันดาร์',
-  'ฮานอย ลองซา', 'ไซ่ง่อน เอฟซี',
-  'จาการ์ตา การูด้า', 'บาหลี ยูไนเต็ด',
-  'กัวลาลัมเปอร์ ไทเกอร์ส', 'ยะโฮร์ ซิตี้',
-  'สิงคโปร์ เมอร์ลิน', 'มารีน่า เบย์ เอฟซี',
-  'มะนิลา สตาร์', 'เซบู ยูไนเต็ด'
-];
+export const AN = FOREIGN_CLUB_CATALOG.map((c) => c.name);
 
 export const RN = ['รอบ 16 ทีม', 'รอบ 8 ทีม', 'รอบรองชนะเลิศ', 'รอบชิงชนะเลิศ'];
-export const TN = ['ลีกระดับจังหวัด', 'ลีกในประเทศ ดิวิชั่น 2', 'ลีกในประเทศ ดิวิชั่น 1', 'ทีมต่างแดน'];
+export const TN = ['ลีกระดับจังหวัด', 'ลีกในประเทศ ดิวิชั่น 2', 'ลีกในประเทศ ดิวิชั่น 1', 'สโมสรนานาชาติ'];
 export const BASE = [40, 54, 68, 72];
 export const POS: Position[] = ['GK', 'DF', 'MF', 'FW'];
 export const ATT: [StatKey, string][] = [['sh', 'ยิง'], ['ps', 'จ่าย'], ['dr', 'เลี้ยง'], ['tk', 'แย่ง'], ['ph', 'กาย']];
