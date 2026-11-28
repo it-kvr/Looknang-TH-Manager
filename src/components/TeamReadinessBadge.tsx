@@ -54,8 +54,9 @@ export const TeamReadinessBadge = React.memo<{
   state: GameState;
   onNavigateToTab: (tab: MainTab, sub?: string, focus?: string, hint?: string) => void;
   onUpdateState?: (updater: (draft: GameState) => void) => void;
+  onOpenDilemma?: () => void;
   onToast?: (msg: string) => void;
-}>(({ state, onNavigateToTab, onUpdateState, onToast }) => {
+}>(({ state, onNavigateToTab, onUpdateState, onOpenDilemma, onToast }) => {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -87,6 +88,11 @@ export const TeamReadinessBadge = React.memo<{
   const executeTask = (task: TeamReadinessTask) => {
     SFX.tap();
     setOpen(false);
+
+    if (task.quickAction?.type === 'open_dilemma') {
+      onOpenDilemma?.();
+      return;
+    }
 
     if (task.quickAction && onUpdateState) {
       const qa = task.quickAction;

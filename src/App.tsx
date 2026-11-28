@@ -4,6 +4,8 @@ import {
   bindAutoLandscapeFullscreen,
   enterAutoMobileFullscreen,
   enterLandscapeFullscreen,
+  isMobileDevice,
+  isPortraitViewport,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
 import type { GameMode, MainTab, NavIntent, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
@@ -56,6 +58,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [showGodBlessing, setShowGodBlessing] = useState(false);
+  const [showDilemmaModal, setShowDilemmaModal] = useState(false);
   const [vipAuthorized, setVipAuthorized] = useState(false);
   const [managerCareerModal, setManagerCareerModal] = useState<'career' | 'nt' | null>(null);
   const [ntPreMatchFixture, setNtPreMatchFixture] = useState<NationalTeamMatchRecord | null>(null);
@@ -261,6 +264,7 @@ export default function App() {
     fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
+    setShowDilemmaModal(false);
     setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
@@ -287,6 +291,7 @@ export default function App() {
     fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
+    setShowDilemmaModal(false);
     setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
@@ -309,6 +314,7 @@ export default function App() {
     }
     setPreMatch(null);
     setActiveMatch(null);
+    setShowDilemmaModal(false);
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
     setSaveEpoch((n) => n + 1);
@@ -388,10 +394,11 @@ export default function App() {
     d: GameState,
     matchInfo: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean },
     payload: FinishedMatchPayload
-  ): { shouldConfetti: boolean; missionToast: string | null } => {
+  ): { shouldConfetti: boolean; missionToast: string | null; talentToast: string | null } => {
     const { kind, homeId, awayId, isDerby } = matchInfo;
     let shouldConfetti = false;
     let missionToast: string | null = null;
+    let talentToast: string | null = null;
 
     const me = d.teams[d.me];
     if (d.mode === 'm') {
@@ -747,10 +754,13 @@ export default function App() {
             peakViewers: payload.streamPeakViewers
           });
         }
-        if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        if (d.mode === 'p' && payload.pf) {
+          const perfOut = creditPlayerPerf(d, payload.pf);
+          if (perfOut?.talentToast) talentToast = perfOut.talentToast;
+        }
         syncCupParticipantWellbeing(cupWellbeing);
         recordMatchMissions();
-        return { shouldConfetti, missionToast };
+        return { shouldConfetti, missionToast, talentToast };
       }
 
       if (kind === 'lc' || kind === 'sc' || kind === 'dc') {
@@ -868,10 +878,13 @@ export default function App() {
             peakViewers: payload.streamPeakViewers
           });
         }
-        if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        if (d.mode === 'p' && payload.pf) {
+          const perfOut = creditPlayerPerf(d, payload.pf);
+          if (perfOut?.talentToast) talentToast = perfOut.talentToast;
+        }
         syncCupParticipantWellbeing(extraWellbeing);
         recordMatchMissions();
-        return { shouldConfetti, missionToast };
+        return { shouldConfetti, missionToast, talentToast };
       }
 
       if (kind === 'asia' && d.ac) {
@@ -982,10 +995,13 @@ export default function App() {
             peakViewers: payload.streamPeakViewers
           });
         }
-        if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        if (d.mode === 'p' && payload.pf) {
+          const perfOut = creditPlayerPerf(d, payload.pf);
+          if (perfOut?.talentToast) talentToast = perfOut.talentToast;
+        }
         syncCupParticipantWellbeing(asiaWellbeing);
         recordMatchMissions();
-        return { shouldConfetti, missionToast };
+        return { shouldConfetti, missionToast, talentToast };
       }
 
       // League Matchday
@@ -1133,7 +1149,8 @@ export default function App() {
       d.schedRes[d.md] = buildArchivedReport('league', `นัดที่ ${d.md + 1}`);
       d.md++;
       if (d.mode !== 'm' && payload.pf) {
-        creditPlayerPerf(d, payload.pf);
+        const perfOut = creditPlayerPerf(d, payload.pf);
+        if (perfOut?.talentToast) talentToast = perfOut.talentToast;
       }
 
       applyLiveInjuries();
@@ -1142,7 +1159,7 @@ export default function App() {
       recordMatchMissions();
       d.money = capMoney(d.money);
       recordFinanceSnapshot(d);
-      return { shouldConfetti, missionToast };
+      return { shouldConfetti, missionToast, talentToast };
   };
 
   const navigateDraftToLeague = (d: GameState) => {
@@ -1172,6 +1189,7 @@ export default function App() {
     const finished = activeMatchRef.current;
     if (!curState || !finished) return;
     const wasOnLeagueHome = curState.v === 't' && (curState.tv ?? 0) === 0;
+    const hadDilemmaBefore = Boolean(curState.dilemma);
     const clone = cloneGameState(curState);
     const outcome = applyFinishedMatchToDraft(clone, finished, payload);
     syncManagerMatchStintStats(clone, finished.homeId, payload);
@@ -1183,13 +1201,20 @@ export default function App() {
     skipNextSaveRef.current = false;
     setState(clone);
     if (outcome.shouldConfetti) triggerConfetti();
-    if (outcome.missionToast) showToast(outcome.missionToast);
+    const newDilemmaNote = !hadDilemmaBefore && clone.dilemma
+      ? `📌 มีเหตุการณ์ใหม่: ${clone.dilemma.title} (กดดูได้ที่รายการสิ่งที่ต้องทำ)`
+      : null;
+    const parts = [outcome.talentToast, outcome.missionToast, newDilemmaNote].filter(Boolean);
+    if (parts.length > 0) {
+      showToast(parts.join(' · '));
+    }
   }, [showToast]);
 
   const runInstantNextMatch = useCallback((fixture: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean }) => {
     const curState = stateRef.current;
     if (!curState) return;
     const wasOnLeagueHome = curState.v === 't' && (curState.tv ?? 0) === 0;
+    const hadDilemmaBefore = Boolean(curState.dilemma);
     const clone = cloneGameState(curState);
     if (fixture.isDerby) clone.derby = 1;
     const payload = simulateInstantMatchPayload(clone, fixture.kind, fixture.homeId, fixture.awayId);
@@ -1209,7 +1234,11 @@ export default function App() {
     if (myGf > myGa) SFX.win();
     else SFX.confirm();
     const scoreMsg = `⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`;
-    showToast(outcome.missionToast ? `${scoreMsg} · ${outcome.missionToast}` : scoreMsg);
+    const newDilemmaNote = !hadDilemmaBefore && clone.dilemma
+      ? `📌 เหตุการณ์ใหม่: ${clone.dilemma.title}`
+      : null;
+    const parts = [scoreMsg, outcome.talentToast, outcome.missionToast, newDilemmaNote].filter(Boolean);
+    showToast(parts.join(' · '));
   }, [showToast]);
 
   const launchNationalPreMatch = useCallback((fixture: NationalTeamMatchRecord) => {
@@ -1354,13 +1383,19 @@ export default function App() {
   }, [flushPendingSave, showToast, updateState]);
 
   const handleEnterGame = useCallback(() => {
+    const cur = getSettings();
+    const shouldLandscape = cur.preferFullscreen !== false || (isMobileDevice() && isPortraitViewport());
+    const portraitMobile = isMobileDevice() && isPortraitViewport();
+    if (shouldLandscape) {
+      enterLandscapeFullscreen(true, { allowVirtualFallback: true }).catch(() => undefined);
+    }
     unlockAudio();
     SFX.tap();
-    const cur = getSettings();
-    if (cur.preferFullscreen !== false) {
-      enterLandscapeFullscreen(true).catch(() => undefined);
+    if (portraitMobile && shouldLandscape) {
+      window.requestAnimationFrame(() => setEnteredGame(true));
+    } else {
+      setEnteredGame(true);
     }
-    setEnteredGame(true);
   }, []);
 
   const handleSelectDockTab = useCallback((key: MainTab) => {
@@ -1378,6 +1413,7 @@ export default function App() {
 
   const handleOpenNtModal = useCallback(() => setManagerCareerModal('nt'), []);
   const handleOpenSettings = useCallback(() => setShowSettings(true), []);
+  const handleOpenDilemma = useCallback(() => setShowDilemmaModal(true), []);
   const handleInspectTeam = useCallback((tid: number) => setInspectTeamId(tid), []);
   const handleInspectPlayer = useCallback(
     (p: Player, t: Team | null, initialTab?: 'info' | 'history' | 'missions') =>
@@ -1504,6 +1540,7 @@ export default function App() {
         autoSkipMatch={effectiveAutoSkip}
         onNavigateToTab={navigateToTab}
         onUpdateState={updateState}
+        onOpenDilemma={handleOpenDilemma}
         onTriggerNextStep={handleTriggerNextStep}
         onOpenNtModal={handleOpenNtModal}
         onOpenSettings={handleOpenSettings}
@@ -1528,6 +1565,7 @@ export default function App() {
               onOpenVarReplay={handleOpenVarReplay}
               onOpenHighlights={handleOpenHighlights}
               onOpenMatchReport={handleOpenMatchReport}
+              onOpenDilemma={handleOpenDilemma}
               onToast={showToast}
             />
           )}
@@ -1732,14 +1770,16 @@ export default function App() {
         );
       })()}
 
-      {state.dilemma && !preMatch && !activeMatch && !seasonSummary && (
+      {showDilemmaModal && state.dilemma && !preMatch && !activeMatch && !seasonSummary && (
         <DilemmaModal
           dilemma={state.dilemma}
+          onClose={() => setShowDilemmaModal(false)}
           onChoose={(idx) => {
             let msg = '';
             updateState((d) => {
               msg = applyDilemmaChoice(d, idx);
             });
+            setShowDilemmaModal(false);
             if (msg) showToast(msg);
           }}
         />
@@ -1755,6 +1795,7 @@ export default function App() {
             flushPendingSave();
             setPreMatch(null);
             setActiveMatch(null);
+            setShowDilemmaModal(false);
             setHistoryVarModal(null);
             setHistoryHighlightModal(null);
             setMatchReportModal(null);

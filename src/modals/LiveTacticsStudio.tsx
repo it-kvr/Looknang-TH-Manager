@@ -13,6 +13,7 @@ import type {
 import { clamp } from '../utils/math';
 import { AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
+import { getLocalViewportSize, isVirtualLandscapeActive, liftScreenPoint, toVirtualLocalPoint } from '../utils/fullscreen';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
 import { fmtFansShort } from '../engine/simulation';
@@ -264,9 +265,11 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
   const dragRef = useRef<DragRuntime | null>(null);
 
   const updateDragGhostPos = (rawX: number, rawY: number, isTouch = false) => {
-    const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 230) : rawX - 95;
+    const pt = toVirtualLocalPoint(rawX, rawY);
+    const vp = getLocalViewportSize();
+    const gx = typeof window !== 'undefined' ? clamp(pt.x - 95, 8, vp.width - 230) : pt.x - 95;
     const yOffset = isTouch ? 84 : 48;
-    const gy = typeof window !== 'undefined' ? clamp(rawY - yOffset, 8, window.innerHeight - 66) : rawY - yOffset;
+    const gy = typeof window !== 'undefined' ? clamp(pt.y - yOffset, 8, vp.height - 66) : pt.y - yOffset;
     dragGhostPosRef.current = { x: gx, y: gy };
     if (dragGhostRef.current) {
       dragGhostRef.current.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0)`;
@@ -406,19 +409,22 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     const host = pitchRef.current;
     if (!host && !cachedRect) return null;
     const rect = cachedRect || host!.getBoundingClientRect();
-    const ty = clientY - liftPx;
-    if (clientX < rect.left - 14 || clientX > rect.right + 14 || ty < rect.top - 14 || ty > rect.bottom + 14) {
+    const lifted = liftScreenPoint(clientX, clientY, liftPx);
+    const tx = lifted.x;
+    const ty = lifted.y;
+    if (tx < rect.left - 14 || tx > rect.right + 14 || ty < rect.top - 14 || ty > rect.bottom + 14) {
       return null;
     }
     const nodes = cachedNodes && cachedNodes.length > 0 ? cachedNodes : collectPitchDropNodes().nodes;
-    const enterRadius = clamp(rect.width * 0.14, 24, 42);
+    const pitchW = isVirtualLandscapeActive() ? rect.height : rect.width;
+    const enterRadius = clamp(pitchW * 0.14, 24, 42);
     const keepRadius = enterRadius * 1.22;
     let best: { state: DropTargetState; dist: number } | null = null;
     let lockedMatch: { state: DropTargetState; dist: number } | null = null;
 
     for (const node of nodes) {
       if (node.name === excludeName) continue;
-      const d = Math.hypot(clientX - node.cx, ty - node.cy);
+      const d = Math.hypot(tx - node.cx, ty - node.cy);
       const st: DropTargetState = {
         kind: 'pitch',
         name: node.name,
@@ -476,9 +482,9 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     );
     if (nearestPitch) return nearestPitch;
 
-    // 3. Fallback DOM check at lifted Y for pitch nodes
-    const ty = clientY - liftPx;
-    const els = document.elementsFromPoint(clientX, ty);
+    // 3. Fallback DOM check at lifted point for pitch nodes
+    const lifted = liftScreenPoint(clientX, clientY, liftPx);
+    const els = document.elementsFromPoint(lifted.x, lifted.y);
     for (const el of els) {
       const pitchEl = (el as Element).closest?.('[data-tactics-drop-player]');
       if (pitchEl && pitchEl.getAttribute('data-tactics-disabled') !== '1') {
@@ -539,7 +545,8 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
 
     const computePitchLift = (d: DragRuntime, dist: number) => {
       if (!d.isTouch) return 0;
-      const pitchH = d.cachedPitchRect?.height || pitchRef.current?.getBoundingClientRect().height || 260;
+      const rectRef = d.cachedPitchRect || pitchRef.current?.getBoundingClientRect();
+      const pitchH = (isVirtualLandscapeActive() ? rectRef?.width : rectRef?.height) || 260;
       const targetLift = clamp(pitchH * 0.19, 44, 54);
       const t = clamp(dist / 18, 0, 1);
       const liftRamp = 1 - (1 - t) * (1 - t);
@@ -549,8 +556,10 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
     const processPointerFrame = (clientX: number, clientY: number, pointerId: number) => {
       const d = dragRef.current;
       if (!d || pointerId !== d.pointerId) return;
-      const dx = clientX - d.startX;
-      const dy = clientY - d.startY;
+      const curLocal = toVirtualLocalPoint(clientX, clientY);
+      const startLocal = toVirtualLocalPoint(d.startX, d.startY);
+      const dx = curLocal.x - startLocal.x;
+      const dy = curLocal.y - startLocal.y;
       const dist = Math.hypot(dx, dy);
 
       if (!d.active) {

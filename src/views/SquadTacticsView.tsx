@@ -4,6 +4,7 @@ import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFoc
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
+import { getLocalViewportSize, isVirtualLandscapeActive, liftScreenPoint, toVirtualLocalPoint } from '../utils/fullscreen';
 import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio, teamKits, pickGK } from '../engine/playerCore';
 import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
 import { PlayerFace, ClubCrest, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
@@ -314,9 +315,11 @@ export const SquadTacticsView = React.memo<{
   }, [pitchDragPreview, touchAnchorPt]);
 
   const updateDragGhostPos = (rawX: number, rawY: number, isTouch = false) => {
-    const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 216) : rawX - 95;
+    const pt = toVirtualLocalPoint(rawX, rawY);
+    const vp = getLocalViewportSize();
+    const gx = typeof window !== 'undefined' ? clamp(pt.x - 95, 8, vp.width - 216) : pt.x - 95;
     const yOffset = isTouch ? 86 : 52;
-    const gy = typeof window !== 'undefined' ? clamp(rawY - yOffset, 8, window.innerHeight - 68) : rawY - yOffset;
+    const gy = typeof window !== 'undefined' ? clamp(pt.y - yOffset, 8, vp.height - 68) : pt.y - yOffset;
     dragGhostPosRef.current = { x: gx, y: gy };
     if (dragGhostRef.current) {
       dragGhostRef.current.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0)`;
@@ -444,22 +447,29 @@ export const SquadTacticsView = React.memo<{
     const geom = getSvgGeometry(cachedRect, cachedInvCtm);
     if (!geom) return null;
     const { svg, rect, invCtm } = geom;
+    const vLand = isVirtualLandscapeActive();
     const maxLiftPad = Math.max(20, liftPx + 18);
-    const rawInside =
-      clientX >= rect.left - 12 &&
-      clientX <= rect.right + 12 &&
-      clientY >= rect.top - 12 &&
-      clientY <= rect.bottom + maxLiftPad;
-    const effectiveY = liftPx > 0 ? clamp(clientY - liftPx, rect.top, rect.bottom) : clientY;
+    const lifted = liftScreenPoint(clientX, clientY, liftPx);
+    const effectiveX = vLand ? clamp(lifted.x, rect.left, rect.right) : clientX;
+    const effectiveY = vLand ? clientY : liftPx > 0 ? clamp(lifted.y, rect.top, rect.bottom) : clientY;
+    const rawInside = vLand
+      ? clientX >= rect.left - maxLiftPad &&
+        clientX <= rect.right + 12 &&
+        clientY >= rect.top - 12 &&
+        clientY <= rect.bottom + 12
+      : clientX >= rect.left - 12 &&
+        clientX <= rect.right + 12 &&
+        clientY >= rect.top - 12 &&
+        clientY <= rect.bottom + maxLiftPad;
     const inside =
       rawInside &&
-      clientX >= rect.left - 6 &&
-      clientX <= rect.right + 6 &&
+      effectiveX >= rect.left - 6 &&
+      effectiveX <= rect.right + 6 &&
       effectiveY >= rect.top - 6 &&
       effectiveY <= rect.bottom + 6;
     if (invCtm) {
       const pt = svg.createSVGPoint();
-      pt.x = clientX;
+      pt.x = effectiveX;
       pt.y = effectiveY;
       const inv = pt.matrixTransform(invCtm);
       const rawPt = svg.createSVGPoint();
@@ -529,7 +539,8 @@ export const SquadTacticsView = React.memo<{
 
     // 3. Fallback DOM pitch node hit if near boundary
     if (pitchLiftPx > 0) {
-      const liftedEls = document.elementsFromPoint(x, y - pitchLiftPx);
+      const lifted = liftScreenPoint(x, y, pitchLiftPx);
+      const liftedEls = document.elementsFromPoint(lifted.x, lifted.y);
       for (const el of liftedEls) {
         const hit = (el as Element).closest?.('[data-drop-player]');
         if (hit && pitchSvgRef.current?.contains(hit)) {
@@ -591,7 +602,9 @@ export const SquadTacticsView = React.memo<{
         vibrate(14);
         updateDragGhostPos(cur.x, cur.y, cur.isTouch);
         setDragUiIfChanged({ player: cur.player, fromSlot: cur.fromSlot });
-        const targetLift = cur.isTouch && cur.cachedRect ? clamp(cur.cachedRect.height * 0.21, 46, 58) : 0;
+        const rectRef = cur.cachedRect;
+        const pitchH = (isVirtualLandscapeActive() ? rectRef?.width : rectRef?.height) || 0;
+        const targetLift = cur.isTouch && pitchH ? clamp(pitchH * 0.21, 46, 58) : 0;
         const hit = findDropAt(cur.x, cur.y, cur.player.n, targetLift, cur.cachedRect, cur.cachedInvCtm);
         setDropTargetIfChanged(hit);
       }, 155);
@@ -670,7 +683,8 @@ export const SquadTacticsView = React.memo<{
 
     const computePitchLift = (d: NonNullable<typeof dragRef.current>, dist: number) => {
       if (!d.isTouch) return 0;
-      const pitchH = d.cachedRect?.height || pitchSvgRef.current?.getBoundingClientRect().height || 260;
+      const rectRef = d.cachedRect || pitchSvgRef.current?.getBoundingClientRect();
+      const pitchH = (isVirtualLandscapeActive() ? rectRef?.width : rectRef?.height) || 260;
       const targetLift = clamp(pitchH * 0.21, 46, 58);
       return targetLift * computePitchLiftRamp(dist);
     };
@@ -679,8 +693,10 @@ export const SquadTacticsView = React.memo<{
       const d = dragRef.current;
       if (!d || pointerId !== d.pointerId) return;
       if (!dragActionsRef.current.isMgr) return;
-      const dx = clientX - d.startX;
-      const dy = clientY - d.startY;
+      const curLocal = toVirtualLocalPoint(clientX, clientY);
+      const startLocal = toVirtualLocalPoint(d.startX, d.startY);
+      const dx = curLocal.x - startLocal.x;
+      const dy = curLocal.y - startLocal.y;
       const dist = Math.hypot(dx, dy);
 
       if (!d.active) {

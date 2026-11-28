@@ -18,29 +18,31 @@ export const StatBarRow: React.FC<{
   label: string;
   value: number;
   boost?: number;
+  boostApplied?: boolean;
   compact?: boolean;
-}> = ({ label, value, boost = 0, compact }) => {
-  const activeBoost = Math.max(0, Math.round(boost || 0));
+}> = ({ label, value, boost = 0, boostApplied = true, compact }) => {
+  const reserveBoostSpace = Math.max(0, Math.round(boost || 0)) > 0;
+  const activeBoost = boostApplied ? Math.max(0, Math.round(boost || 0)) : 0;
   const baseVal = Math.max(1, Math.round(value) - activeBoost);
   const tier = statTierMeta(value);
   const scaleMax = Math.max(100, value);
-  const basePct = clamp(Math.round((baseVal / scaleMax) * 100), 6, 100);
+  const basePct = clamp(Math.round((baseVal / scaleMax) * 100), 6, activeBoost > 0 ? 96 : 100);
   const totalPct = clamp(Math.round((value / scaleMax) * 100), basePct, 100);
   const boostPct = activeBoost > 0 ? Math.max(3, totalPct - basePct) : 0;
-  const adjustedBasePct = boostPct > 0 ? Math.max(4, totalPct - boostPct) : basePct;
+  const adjustedBasePct = boostPct > 0 ? Math.min(basePct, 100 - boostPct) : basePct;
 
   return (
     <div
-      title={activeBoost > 0 ? `${label}: พื้นฐาน ${baseVal} + ลูกรัก ${activeBoost} = ${value}` : `${label}: ${value}`}
+      title={activeBoost > 0 ? `${label}: ${value} (พื้นฐาน ${baseVal} + ลูกรัก ${activeBoost})` : `${label}: ${value}`}
       className={`flex items-center gap-1.5 sm:gap-2 ${compact ? 'py-[2px] mland:py-[1px]' : 'py-0.5'}`}
     >
       <span className="w-[78px] sm:w-[88px] mland:w-[64px] shrink-0 flex items-center gap-1 truncate text-[11px] mland:text-[9px] text-[var(--ink)]/90 font-medium">
         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: tier.hex }} aria-hidden="true" />
         <span className="truncate">{label}</span>
       </span>
-      <div className="flex-1 min-w-[38px] h-3 sm:h-3.5 mland:h-2.5 rounded-full bg-[var(--surface-2)] border border-[var(--line)]/75 overflow-hidden flex items-stretch">
+      <div className="flex-1 min-w-[38px] h-3 sm:h-3.5 mland:h-2.5 rounded-full bg-[var(--surface-2)] border border-[var(--line)]/75 overflow-hidden flex items-stretch p-[1px]">
         <div
-          className="h-full transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
+          className="h-full transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]"
           style={{
             width: `${adjustedBasePct}%`,
             background: statBarColor(baseVal),
@@ -49,21 +51,26 @@ export const StatBarRow: React.FC<{
         />
         {boostPct > 0 && (
           <div
-            className="h-full rounded-r-full transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]"
+            className="h-full rounded-r-full border-l border-white/65 transition-all duration-300"
             style={{
               width: `${boostPct}%`,
-              background: 'linear-gradient(90deg, #f43f5e, #fb7185)'
+              background: 'linear-gradient(90deg, #f43f5e 0%, #fb7185 55%, #fda4af 100%)',
+              boxShadow: '0 0 8px rgba(244,63,94,0.42), inset 0 1px 0 rgba(255,255,255,0.45)'
             }}
           />
         )}
       </div>
-      <span className="min-w-[26px] mland:min-w-[22px] text-right shrink-0 inline-flex items-baseline justify-end gap-0.5 tabular leading-tight">
+      <span
+        className={`text-right shrink-0 inline-flex items-baseline justify-end gap-0.5 tabular leading-tight ${
+          reserveBoostSpace ? 'min-w-[44px] sm:min-w-[48px] mland:min-w-[36px]' : 'min-w-[26px] mland:min-w-[22px]'
+        }`}
+      >
         <b className={`text-[11px] mland:text-[9px] font-extrabold ${tier.textClass}`}>
           {value}
         </b>
         {activeBoost > 0 && (
-          <span className="text-[9px] mland:text-[7.5px] font-extrabold text-rose-600 dark:text-rose-400">
-            +{activeBoost}
+          <span className="text-[8.5px] mland:text-[7px] font-bold text-rose-600 dark:text-rose-400">
+            (+{activeBoost})
           </span>
         )}
       </span>

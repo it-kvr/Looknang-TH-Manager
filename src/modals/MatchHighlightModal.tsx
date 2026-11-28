@@ -23,6 +23,7 @@ import {
   type HighlightCameraMode
 } from './MatchPitchCanvas';
 import { isCrowdAudioActive, setCrowdAudio, SFX, unlockAudio } from '../utils/audioTheme';
+import { isVirtualLandscapeActive } from '../utils/fullscreen';
 
 interface MatchHighlightModalProps {
   clips: MatchHighlightClip[];
@@ -654,12 +655,18 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                     scrubbingRef.current = true;
                     e.currentTarget.setPointerCapture(e.pointerId);
                     const rect = e.currentTarget.getBoundingClientRect();
-                    seekToRatio((e.clientX - rect.left) / Math.max(1, rect.width));
+                    const ratio = isVirtualLandscapeActive()
+                      ? (e.clientY - rect.top) / Math.max(1, rect.height)
+                      : (e.clientX - rect.left) / Math.max(1, rect.width);
+                    seekToRatio(ratio);
                   }}
                   onPointerMove={(e) => {
                     if (!scrubbingRef.current) return;
                     const rect = e.currentTarget.getBoundingClientRect();
-                    seekToRatio((e.clientX - rect.left) / Math.max(1, rect.width));
+                    const ratio = isVirtualLandscapeActive()
+                      ? (e.clientY - rect.top) / Math.max(1, rect.height)
+                      : (e.clientX - rect.left) / Math.max(1, rect.width);
+                    seekToRatio(ratio);
                   }}
                   onPointerUp={() => {
                     scrubbingRef.current = false;

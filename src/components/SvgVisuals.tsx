@@ -1629,19 +1629,6 @@ export const FormationPitch: React.FC<{
             </text>
 
             {/* Bottom-Right: OVR or Match Rating */}
-            {!useRating && favBoost > 0 && (
-              <rect
-                x={cx + 2.1}
-                y={cy + 4.6}
-                width={dispOv >= 100 ? '23.3' : '20.8'}
-                height="14.3"
-                rx="5.2"
-                fill="none"
-                stroke="#fb7185"
-                strokeOpacity="0.55"
-                strokeWidth="1.2"
-              />
-            )}
             <rect
               x={cx + 3}
               y={cy + 5.5}
@@ -1649,12 +1636,22 @@ export const FormationPitch: React.FC<{
               height="12.5"
               rx="4.5"
               fill={rtBg}
-              stroke={!useRating && favBoost > 0 ? '#fb7185' : rtStroke}
-              strokeWidth={!useRating && favBoost > 0 ? '1.35' : '1.1'}
+              stroke={rtStroke}
+              strokeWidth="1.1"
             />
             <text x={cx + (useRating || dispOv >= 100 ? 13.8 : 12.5)} y={cy + 14.8} textAnchor="middle" fontSize="9" fontWeight="800" fontFamily="Sarabun" fill={rtFg}>
               {useRating ? ratingVal.toFixed(1) : dispOv}
             </text>
+            {!useRating && favBoost > 0 && (
+              <path
+                transform={`translate(${cx + (dispOv >= 100 ? 24.1 : 21.6)},${cy + 5.7}) scale(0.82)`}
+                d="M0 2.6 C-0.3 2.3 -3.2 0.3 -3.2 -1.3 A1.7 1.7 0 0 1 0 -2.1 A1.7 1.7 0 0 1 3.2 -1.3 C3.2 0.3 0.3 2.3 0 2.6 Z"
+                fill="#f43f5e"
+                stroke="#ffffff"
+                strokeWidth="1.15"
+                strokeLinejoin="round"
+              />
+            )}
 
             {/* Top-Left: MOTM Crown and/or Captain Badge */}
             {meta?.isMotm && (

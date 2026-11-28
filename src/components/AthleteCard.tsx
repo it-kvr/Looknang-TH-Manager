@@ -340,17 +340,15 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           const baseVal = Math.max(1, val - activeBoost);
           const tier = statTierMeta(val);
           const scaleMax = Math.max(100, val);
-          const basePct = clamp(Math.round((baseVal / scaleMax) * 100), 8, 100);
+          const basePct = clamp(Math.round((baseVal / scaleMax) * 100), 8, activeBoost > 0 ? 94 : 100);
           const totalPct = clamp(Math.round((val / scaleMax) * 100), basePct, 100);
           const boostPct = activeBoost > 0 ? Math.max(5, totalPct - basePct) : 0;
-          const adjustedBasePct = boostPct > 0 ? Math.max(5, totalPct - boostPct) : basePct;
+          const adjustedBasePct = boostPct > 0 ? Math.min(basePct, 100 - boostPct) : basePct;
           return (
             <div
               key={cat.key}
-              title={activeBoost > 0 ? `${cat.fullLabel}: พื้นฐาน ${baseVal} + ลูกรัก ${activeBoost} = ${val}` : `${cat.fullLabel}: ${val}`}
-              className={`rounded-lg py-0.5 px-[2px] space-y-0.5 min-w-0 transition-colors ${
-                activeBoost > 0 ? cardPalette.statCellBoosted : cardPalette.statCell
-              }`}
+              title={activeBoost > 0 ? `${cat.fullLabel}: ${val} (พื้นฐาน ${baseVal} + ลูกรัก ${activeBoost})` : `${cat.fullLabel}: ${val}`}
+              className={`rounded-lg py-0.5 px-[2px] space-y-0.5 min-w-0 transition-colors ${cardPalette.statCell}`}
             >
               <div
                 className={`text-[7.5px] sm:text-[8px] mland:text-[6px] font-bold tracking-tight leading-tight truncate ${cardPalette.statLabel}`}
@@ -366,8 +364,8 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
               >
                 <span>{val}</span>
                 {activeBoost > 0 && (
-                  <span className={`text-[7.5px] mland:text-[5.5px] font-black ${isLight ? 'text-rose-600' : 'text-rose-400'}`}>
-                    +{activeBoost}
+                  <span className={`text-[6.5px] mland:text-[5px] font-bold ${isLight ? 'text-rose-600' : 'text-rose-400'}`}>
+                    (+{activeBoost})
                   </span>
                 )}
               </div>
@@ -384,10 +382,11 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
                 />
                 {boostPct > 0 && (
                   <div
-                    className="h-full rounded-r-full transition-all"
+                    className="h-full rounded-r-full border-l border-white/65 transition-all"
                     style={{
                       width: `${boostPct}%`,
-                      background: 'linear-gradient(90deg, #f43f5e, #fb7185)'
+                      background: 'linear-gradient(90deg, #f43f5e 0%, #fb7185 55%, #fda4af 100%)',
+                      boxShadow: '0 0 6px rgba(244,63,94,0.45)'
                     }}
                   />
                 )}

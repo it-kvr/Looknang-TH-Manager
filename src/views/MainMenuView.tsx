@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, ChevronRight, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ChevronRight, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
@@ -765,13 +765,17 @@ export const MainMenu = React.memo<{
           ? 'ความท้าทายสมดุลตามมาตรฐานลีก'
           : 'คู่แข่งแข็งแกร่งขึ้น ท้าทายฝีมือคุมทีม';
 
+    const selectedKit1 = selectedTeam.kc?.[0] || '#158049';
+    const selectedKit2 = selectedTeam.kc?.[1] || '#f5c242';
+    const isDenseGrid = filteredClubs.length > 8;
+
     return (
       <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] stage-viewport">
-        <div className="w-full max-w-7xl h-full max-h-[96%] sm:max-h-[min(94%,780px)] mland:max-h-[96%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
-          {/* Top Navigation Bar: 3 clean zones */}
+        <div className="w-full max-w-7xl h-full max-h-[97%] sm:max-h-[min(95%,780px)] mland:max-h-[98%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/75 shadow-xl">
+          {/* Top Navigation Bar */}
           <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]">
             <div className="w-full mx-auto px-3 sm:px-4 mland:px-3 py-2 mland:py-1 flex items-center justify-between gap-2 sm:gap-4">
-              <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+              <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <button
                   type="button"
                   onClick={() => { SFX.tap(); goStep('menu'); }}
@@ -781,27 +785,35 @@ export const MainMenu = React.memo<{
                   <span>กลับ</span>
                 </button>
                 <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display text-[var(--ink)] truncate leading-tight">
-                    เลือกสโมสรเริ่มต้น
-                  </h2>
-                  <p className="hidden sm:block mland:hidden text-[10.5px] text-[var(--mut)] truncate">
-                    ลีกระดับจังหวัด · แสดงครบทั้ง 16 สโมสร · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display text-[var(--ink)] truncate leading-tight">
+                      เลือกสโมสรเริ่มต้น
+                    </h2>
+                    <span className="hidden md:inline-flex mland:inline-flex items-center px-1.5 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)]/80 text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular shrink-0">
+                      ช่อง #{targetSlot}
+                    </span>
+                  </div>
+                  <p className="hidden sm:block mland:hidden text-[10.5px] text-[var(--mut)] truncate mt-0.5">
+                    ลีกระดับจังหวัด · แสดงครบ {clubMetaList.length} สโมสร · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
-                <div className="seg-bar" role="group" aria-label="ระดับความยาก">
-                  {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
-                    <button
-                      key={lbl}
-                      type="button"
-                      onClick={() => { SFX.tap(); setDiff(idx); }}
-                      className={`seg-btn ${diff === idx ? 'seg-btn-active' : ''}`}
-                    >
-                      {lbl}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1.5 mland:gap-1">
+                  <span className="hidden md:inline text-[10.5px] font-semibold text-[var(--mut)]">ความยาก</span>
+                  <div className="seg-bar" role="group" aria-label="ระดับความยาก">
+                    {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
+                      <button
+                        key={lbl}
+                        type="button"
+                        onClick={() => { SFX.tap(); setDiff(idx); }}
+                        className={`seg-btn ${diff === idx ? 'seg-btn-active' : ''}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -809,7 +821,7 @@ export const MainMenu = React.memo<{
                   title="สุ่มชุดสโมสรใหม่"
                   className="btn btn-sm btn-secondary shrink-0"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                  <RefreshCw className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
                   <span className="hidden sm:inline mland:inline">สุ่มใหม่</span>
                 </button>
               </div>
@@ -817,312 +829,358 @@ export const MainMenu = React.memo<{
           </header>
 
           {/* Main 2-Column Club Selection & Dossier Workspace */}
-          <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.58fr_0.92fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.58fr_0.92fr] mland:grid-rows-[minmax(0,1fr)] gap-2 sm:gap-3 mland:gap-2">
-          {/* Left Column: Filter Bar + Full 16-Club Single-Screen Grid */}
-          <section className="flex-1 min-h-0 flex flex-col gap-1.5 sm:gap-2 mland:gap-1">
-            <div className="shrink-0 flex items-center justify-between gap-1.5">
-              <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
-                {(
-                  [
-                    ['all', `ทั้งหมด (${clubMetaList.length})`],
-                    ['top', 'เต็งลีก'],
-                    ['mid', 'กลางตาราง'],
-                    ['underdog', 'ท้าทาย']
-                  ] as const
-                ).map(([fk, fl]) => (
-                  <button
-                    key={fk}
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      setClubFilter(fk);
-                      const firstMatch = clubMetaList.find((c) => fk === 'all' || c.tierBucket === fk);
-                      if (firstMatch && fk !== 'all' && selectedMeta.tierBucket !== fk) {
-                        setSelectedClubIdx(firstMatch.idx);
-                      }
-                    }}
-                    className={`seg-btn ${clubFilter === fk ? 'seg-btn-active' : ''}`}
-                  >
-                    {fl}
-                  </button>
-                ))}
-              </div>
-              <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-[var(--mut)] tabular shrink-0 whitespace-nowrap">
-                <span>เซฟช่อง #{targetSlot}</span>
-                <span aria-hidden="true">·</span>
-                <span>คลิกทีมเพื่อดูรายละเอียด</span>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col">
-              {filteredClubs.length === 0 ? (
-                <div className="h-full min-h-[140px] rounded-2xl border border-[var(--line)] bg-[var(--surface)] flex flex-col items-center justify-center gap-2 p-6 text-center">
-                  <p className="text-xs sm:text-sm font-semibold text-[var(--mut)]">
-                    ไม่มีสโมสรในกลุ่มนี้จากการสุ่มรอบนี้
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); setClubFilter('all'); }}
-                    className="btn btn-sm btn-secondary"
-                  >
-                    แสดงทั้งหมด
-                  </button>
+          <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-3 mland:py-1.5 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.52fr_0.98fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.52fr_0.98fr] mland:grid-rows-[minmax(0,1fr)] gap-2.5 sm:gap-3.5 mland:gap-2">
+            {/* Left Column: Filter Bar + 16-Club Roster Grid */}
+            <section className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5">
+              <div className="shrink-0 flex items-center justify-between gap-2">
+                <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
+                  {(
+                    [
+                      ['all', `ทั้งหมด (${clubMetaList.length})`],
+                      ['top', 'เต็งลีก'],
+                      ['mid', 'กลางตาราง'],
+                      ['underdog', 'ท้าทาย']
+                    ] as const
+                  ).map(([fk, fl]) => (
+                    <button
+                      key={fk}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setClubFilter(fk);
+                        const firstMatch = clubMetaList.find((c) => fk === 'all' || c.tierBucket === fk);
+                        if (firstMatch && fk !== 'all' && selectedMeta.tierBucket !== fk) {
+                          setSelectedClubIdx(firstMatch.idx);
+                        }
+                      }}
+                      className={`seg-btn ${clubFilter === fk ? 'seg-btn-active' : ''}`}
+                    >
+                      {fl}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mland:grid-cols-4 gap-1.5 sm:gap-2 mland:gap-1.5 lg:h-full auto-rows-[96px] sm:auto-rows-[106px] lg:auto-rows-auto lg:grid-rows-4 mland:auto-rows-[74px] content-start">
-                  {filteredClubs.map(({ team: t, idx, squadAvg, tierBucket, tierTag }) => {
-                    const isSelected = idx === activeIdx;
-                    const primaryKit = t.kc?.[0] || '#158049';
-                    const secondaryKit = t.kc?.[1] || '#f5c242';
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => { SFX.tap(); setSelectedClubIdx(idx); }}
-                        aria-pressed={isSelected}
-                        className={`group rounded-xl mland:rounded-lg border text-left transition-all cursor-pointer overflow-hidden flex flex-col justify-between min-w-0 ${
-                          isSelected
-                            ? 'border-[var(--g)] bg-[var(--surface)] shadow-md ring-1 ring-[var(--g)]/35'
-                            : 'border-[var(--line)] bg-[var(--surface)] hover:border-[var(--g)]/55 hover:bg-[var(--surface-2)]/45'
-                        }`}
+                <span className="hidden lg:inline-block mland:inline-block text-[10.5px] mland:text-[8.5px] font-medium text-[var(--mut)] tabular shrink-0 whitespace-nowrap">
+                  แสดง {filteredClubs.length} ทีม · แตะเพื่อดูข้อมูล
+                </span>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden mland:overflow-y-auto flex flex-col pr-0.5">
+                {filteredClubs.length === 0 ? (
+                  <div className="h-full min-h-[140px] rounded-2xl border border-[var(--line)] bg-[var(--surface)] flex flex-col items-center justify-center gap-2 p-6 text-center">
+                    <p className="text-xs sm:text-sm font-semibold text-[var(--mut)]">
+                      ไม่มีสโมสรในกลุ่มนี้จากการสุ่มรอบนี้
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { SFX.tap(); setClubFilter('all'); }}
+                      className="btn btn-sm btn-secondary"
+                    >
+                      แสดงทั้งหมด
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mland:grid-cols-4 gap-2 mland:gap-1.5 content-start ${
+                      isDenseGrid
+                        ? 'auto-rows-[96px] sm:auto-rows-[104px] lg:h-full lg:auto-rows-fr lg:grid-rows-4 mland:h-full mland:auto-rows-fr mland:grid-rows-4'
+                        : 'auto-rows-[104px] sm:auto-rows-[114px] mland:auto-rows-[74px]'
+                    }`}
+                  >
+                    {filteredClubs.map(({ team: t, idx, squadAvg, tierBucket, tierTag }) => {
+                      const isSelected = idx === activeIdx;
+                      const primaryKit = t.kc?.[0] || '#158049';
+                      const secondaryKit = t.kc?.[1] || '#f5c242';
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { SFX.tap(); setSelectedClubIdx(idx); }}
+                          aria-pressed={isSelected}
+                          className={`group relative rounded-xl mland:rounded-lg border text-left transition-all cursor-pointer overflow-hidden flex flex-col justify-between min-w-0 min-h-0 ${
+                            isSelected
+                              ? 'border-[var(--g)] bg-[var(--surface)] shadow-md ring-2 ring-[var(--g)]/25'
+                              : 'border-[var(--line)] bg-[var(--surface)] hover:border-[var(--g)]/55 hover:bg-[var(--surface-2)]/40'
+                          }`}
+                        >
+                          <div
+                            aria-hidden="true"
+                            className={`h-[3px] mland:h-[2px] w-full shrink-0 transition-opacity ${
+                              isSelected ? 'opacity-100' : 'opacity-65 group-hover:opacity-100'
+                            }`}
+                            style={{ background: `linear-gradient(90deg, ${primaryKit}, ${secondaryKit})` }}
+                          />
+                          {isSelected && (
+                            <div
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-0 opacity-[0.06] dark:opacity-[0.1]"
+                              style={{ background: `linear-gradient(135deg, ${primaryKit}, transparent 65%)` }}
+                            />
+                          )}
+                          <div className="relative flex-1 min-h-0 px-2.5 py-1.5 sm:px-3 sm:py-2 mland:px-2 mland:py-1 flex flex-col justify-between gap-1 mland:gap-0.5 min-w-0">
+                            {/* Top Row: Club Crest + OVR & Selected Check */}
+                            <div className="flex items-start justify-between gap-1.5 min-w-0">
+                              <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-7 mland:[&>svg]:h-7 drop-shadow-xs transition-transform group-hover:scale-[1.04]">
+                                <ClubCrest name={t.name} size={44} team={t} />
+                              </div>
+                              <div className="flex items-start gap-1 shrink-0">
+                                {isSelected && (
+                                  <span
+                                    aria-hidden="true"
+                                    className="w-4 h-4 mland:w-3.5 mland:h-3.5 rounded-full bg-[var(--g)] text-white flex items-center justify-center shadow-2xs mt-0.5"
+                                  >
+                                    <Check className="w-2.5 h-2.5 mland:w-2 mland:h-2 stroke-[3]" />
+                                  </span>
+                                )}
+                                <div className="text-right leading-none">
+                                  <div
+                                    className="text-base sm:text-lg mland:text-xs font-extrabold font-display tabular leading-none"
+                                    style={{ color: ovColor(squadAvg) }}
+                                  >
+                                    {squadAvg}
+                                  </div>
+                                  <div className="text-[8.5px] mland:text-[6.5px] font-bold text-[var(--mut)] mt-0.5 leading-none">
+                                    OVR
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Bottom Row: Club Name + Kit Dots + Tier & Formation */}
+                            <div className="min-w-0">
+                              <div className="font-display font-bold text-xs sm:text-[13px] mland:text-[9.5px] truncate leading-tight text-[var(--ink)]">
+                                {t.name}
+                              </div>
+                              <div className="flex items-center justify-between gap-1 mt-0.5 mland:mt-0 text-[10px] mland:text-[7.5px] text-[var(--mut)] leading-tight">
+                                <div className="flex items-center gap-1 min-w-0 truncate">
+                                  <span
+                                    className={`font-semibold shrink-0 ${
+                                      tierBucket === 'top'
+                                        ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                                        : tierBucket === 'mid'
+                                          ? 'text-[var(--g)]'
+                                          : 'text-[var(--mut)]'
+                                    }`}
+                                  >
+                                    {tierTag}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <span className="shrink-0 font-medium text-[var(--ink)]/75 tabular">{t.form}</span>
+                                </div>
+                                <span className="inline-flex items-center gap-0.5 shrink-0" aria-hidden="true">
+                                  <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full border border-black/15 dark:border-white/20" style={{ backgroundColor: primaryKit }} />
+                                  <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full border border-black/15 dark:border-white/20" style={{ backgroundColor: secondaryKit }} />
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Right Column: Selected Club Dossier & Start Confirmation */}
+            <aside className="shrink-0 sm:min-h-0 flex flex-col rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-sm overflow-hidden">
+              <div
+                aria-hidden="true"
+                className="h-1.5 mland:h-1 w-full shrink-0"
+                style={{ background: `linear-gradient(90deg, ${selectedKit1}, ${selectedKit2})` }}
+              />
+
+              {/* Band 1: Club Identity Header */}
+              <div
+                className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/75 flex items-center justify-between gap-2.5"
+                style={{
+                  background: `linear-gradient(135deg, ${selectedKit1}14 0%, ${selectedKit2}0a 48%, transparent 100%)`
+                }}
+              >
+                <div className="flex items-center gap-2.5 mland:gap-2 min-w-0 flex-1">
+                  <div className="shrink-0 [&>svg]:w-12 [&>svg]:h-12 sm:[&>svg]:w-14 sm:[&>svg]:h-14 mland:[&>svg]:w-10 mland:[&>svg]:h-10 drop-shadow-sm">
+                    <ClubCrest name={selectedTeam.name} size={56} team={selectedTeam} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate leading-tight">
+                      {selectedTeam.name}
+                    </h3>
+                    <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] mland:text-[8px] font-semibold">
+                      <span
+                        className={
+                          selectedMeta.tierBucket === 'top'
+                            ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                            : selectedMeta.tierBucket === 'mid'
+                              ? 'text-[var(--g)]'
+                              : 'text-[var(--mut)]'
+                        }
                       >
-                        <div
-                          aria-hidden="true"
-                          className={`h-[3px] mland:h-[2px] w-full shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-65 group-hover:opacity-100'}`}
-                          style={{ background: `linear-gradient(90deg, ${primaryKit}, ${secondaryKit})` }}
-                        />
-                        <div className="flex-1 px-2.5 py-1.5 sm:px-3 sm:py-2 mland:px-2 mland:py-1 flex flex-col justify-between gap-1 mland:gap-0.5 min-w-0">
-                          {/* Top Row: Large Club Crest + Team OVR */}
-                          <div className="flex items-center justify-between gap-2 min-w-0">
-                            <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 lg:[&>svg]:w-12 lg:[&>svg]:h-12 mland:[&>svg]:w-8 mland:[&>svg]:h-8 drop-shadow-xs transition-transform group-hover:scale-[1.04]">
-                              <ClubCrest name={t.name} size={48} team={t} />
-                            </div>
-                            <div className="text-right shrink-0">
-                              <div
-                                className="text-base sm:text-lg mland:text-xs font-extrabold font-display tabular leading-none"
-                                style={{ color: ovColor(squadAvg) }}
-                              >
-                                {squadAvg}
-                              </div>
-                              <div className="text-[9px] mland:text-[7px] font-bold text-[var(--mut)] mt-0.5 leading-none">
-                                OVR
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Bottom Row: Full-width Club Name & Tier/Formation */}
-                          <div className="min-w-0">
-                            <div className="font-display font-bold text-xs sm:text-[13px] mland:text-[10px] truncate leading-tight text-[var(--ink)]">
-                              {t.name}
-                            </div>
-                            <div className="flex items-center gap-1 mt-0.5 mland:mt-0 text-[10px] mland:text-[8px] text-[var(--mut)] truncate leading-tight">
-                              <span
-                                className={`font-semibold shrink-0 ${
-                                  tierBucket === 'top'
-                                    ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
-                                    : tierBucket === 'mid'
-                                      ? 'text-[var(--g)]'
-                                      : 'text-[var(--mut)]'
-                                }`}
-                              >
-                                {tierTag}
-                              </span>
-                              <span aria-hidden="true">·</span>
-                              <span className="shrink-0 font-medium text-[var(--ink)]/75">{t.form}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
+                        {selectedMeta.tierBucket === 'top'
+                          ? 'เต็งแชมป์ลีก'
+                          : selectedMeta.tierBucket === 'mid'
+                            ? 'กลางตารางสมดุล'
+                            : 'พลังสู้ท้าทาย'}
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 shrink-0" aria-hidden="true">
+                        <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full border border-black/15 dark:border-white/20" style={{ backgroundColor: selectedKit1 }} />
+                        <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full border border-black/15 dark:border-white/20" style={{ backgroundColor: selectedKit2 }} />
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] mland:text-[8px] text-[var(--mut)] truncate mt-0.5 tabular">
+                      <span>แฟน ~{fmtFansShort(selectedTeam.fans || 9500)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>นักเตะ {selectedTeam.sq.length} คน</span>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
-          </section>
 
-          {/* Right Column: Selected Club Dossier & Start Confirmation */}
-          <aside className="shrink-0 sm:min-h-0 flex flex-col rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-sm overflow-hidden">
-            <div
-              aria-hidden="true"
-              className="h-1.5 mland:h-1 w-full shrink-0"
-              style={{ background: `linear-gradient(90deg, ${selectedTeam.kc?.[0] || '#158049'}, ${selectedTeam.kc?.[1] || '#f5c242'})` }}
-            />
-
-            {/* Dossier Identity Header — Top Row: Large Crest + Team OVR, Second Row: Club Name & Info */}
-            <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/75 space-y-2 mland:space-y-1">
-              <div className="flex items-center justify-between gap-3">
-                <div className="shrink-0 [&>svg]:w-14 [&>svg]:h-14 sm:[&>svg]:w-16 sm:[&>svg]:h-16 mland:[&>svg]:w-11 mland:[&>svg]:h-11 drop-shadow-sm">
-                  <ClubCrest name={selectedTeam.name} size={64} team={selectedTeam} />
-                </div>
-                <div className="flex items-center gap-3 mland:gap-2 shrink-0">
-                  <div className="text-right">
+                <div className="shrink-0 flex items-center gap-2.5 mland:gap-2 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/90 border border-[var(--line)]/80 shadow-2xs">
+                  <div className="text-center leading-none">
                     <div
-                      className="text-xl sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none"
+                      className="text-lg sm:text-xl mland:text-sm font-extrabold font-display tabular leading-none"
                       style={{ color: ovColor(selectedMeta.squadAvg) }}
                     >
                       {selectedMeta.squadAvg}
                     </div>
-                    <div className="text-[9.5px] mland:text-[7.5px] font-semibold text-[var(--mut)] mt-0.5 whitespace-nowrap">
+                    <div className="text-[9px] mland:text-[7px] font-semibold text-[var(--mut)] mt-0.5 whitespace-nowrap">
                       พลังทีม
                     </div>
                   </div>
-                  <div className="text-right pl-3 mland:pl-2 border-l border-[var(--line)]/75">
+                  <div className="text-center pl-2.5 mland:pl-2 border-l border-[var(--line)]/75 leading-none">
                     <div
-                      className="text-xl sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none"
+                      className="text-lg sm:text-xl mland:text-sm font-extrabold font-display tabular leading-none"
                       style={{ color: ovColor(xiAvg) }}
                     >
                       {xiAvg}
                     </div>
-                    <div className="text-[9.5px] mland:text-[7.5px] font-semibold text-[var(--mut)] mt-0.5 whitespace-nowrap">
+                    <div className="text-[9px] mland:text-[7px] font-semibold text-[var(--mut)] mt-0.5 whitespace-nowrap">
                       11 ตัวจริง
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate leading-tight">
-                    {selectedTeam.name}
-                  </h3>
-                  <span className="text-[10px] mland:text-[8px] font-bold text-[var(--g)] shrink-0">
-                    {selectedMeta.tierBucket === 'top'
-                      ? 'เต็งแชมป์ลีก'
-                      : selectedMeta.tierBucket === 'mid'
-                        ? 'กลางตารางสมดุล'
-                        : 'พลังสู้ท้าทาย'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5 tabular">
-                  <span>ฐานแฟน ~{fmtFansShort(selectedTeam.fans || 9500)}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>นักเตะ {selectedTeam.sq.length} คน</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Detailed Dossier Body (Desktop / Tablet / Mobile Landscape) */}
-            <div className="hidden sm:flex mland:flex flex-1 min-h-0 flex-col overflow-y-auto px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 space-y-2.5 mland:space-y-1.5">
-              {/* Line Strength Breakdown */}
-              <div className="space-y-1.5 mland:space-y-1">
-                <div className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)]">
-                  สมดุลขุมกำลัง
-                </div>
-                <div className="space-y-1">
-                  {(
-                    [
-                      ['เกมรุก', attOv],
-                      ['แดนกลาง', midOv],
-                      ['เกมรับ & ประตู', defOv]
-                    ] as const
-                  ).map(([lbl, val]) => (
-                    <div key={lbl} className="grid grid-cols-[88px_1fr_28px] mland:grid-cols-[72px_1fr_24px] items-center gap-2 text-xs mland:text-[9px]">
-                      <span className="font-medium text-[var(--ink)]/85 truncate">{lbl}</span>
-                      <div className="h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{ width: `${clamp(val * 1.45, 18, 100)}%`, background: statBarColor(val) }}
-                        />
-                      </div>
-                      <span className="font-display font-bold tabular text-right text-[var(--ink)]">{val}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tactical Profile Rows */}
-              <div className="border-t border-[var(--line)]/70 pt-2 mland:pt-1 space-y-1 text-xs mland:text-[9px]">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--mut)]">ระบบการเล่น</span>
-                  <span className="font-bold text-[var(--ink)] tabular">
-                    {selectedTeam.form} · {AR_T[selectedTeam.tac]}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--mut)] shrink-0">ปรัชญาสโมสร</span>
-                  <span className="font-semibold text-[var(--ink)] truncate text-right">
-                    {selectedTeam.philosophy || 'สมดุล'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--mut)] shrink-0">งบบอร์ดแรกเข้า</span>
-                  <span className="font-bold text-[var(--g)] tabular text-right whitespace-nowrap">
-                    {fmtMoneyNum(selectedMeta.baseBudget)} + สุ่ม {fmtMoneyNum(selectedMeta.minBonus)}–{fmtMoneyNum(selectedMeta.maxBonus)} ฿
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--mut)] shrink-0">ความกดดันบอร์ด</span>
-                  <span
-                    className={`font-semibold text-right truncate ${
-                      selectedMeta.tierBucket === 'top'
-                        ? 'text-[var(--red)]'
-                        : selectedMeta.tierBucket === 'mid'
-                          ? 'text-[var(--ink)]'
-                          : 'text-[var(--g)]'
-                    }`}
-                  >
-                    {selectedMeta.pressureLabel}
-                  </span>
-                </div>
-              </div>
-
-              {/* Key Players List */}
-              <div className="border-t border-[var(--line)]/70 pt-2 mland:pt-1 space-y-1">
-                <div className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)]">
-                  3 แข้งแกนหลักประจำทีม
-                </div>
-                <div className="divide-y divide-[var(--line)]/55">
-                  {topStars.map((pl) => (
-                    <div key={pl.n} className="py-1 mland:py-0.5 flex items-center gap-2 mland:gap-1.5 min-w-0">
-                      <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
-                        <PlayerFace player={pl} team={selectedTeam} size={24} bare />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs mland:text-[9.5px] font-bold text-[var(--ink)] flex items-center gap-1 min-w-0 leading-tight">
-                          <PositionBadge role={pl.ro} size="2xs" />
-                          <span className="truncate">{pl.n}</span>
-                          {selectedTeam.cap === pl.n && <CaptainBadge team={selectedTeam} size="xs" className="shrink-0" />}
+              {/* Detailed Dossier Body (Desktop / Tablet / Mobile Landscape) */}
+              <div className="hidden sm:flex mland:flex flex-1 min-h-0 flex-col overflow-y-auto px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 space-y-2.5 mland:space-y-1.5">
+                {/* Band 2: Line Strength Breakdown */}
+                <div className="space-y-1.5 mland:space-y-1">
+                  <div className="text-[10.5px] mland:text-[8px] font-bold text-[var(--mut)]">
+                    สมดุลขุมกำลัง
+                  </div>
+                  <div className="space-y-1 mland:space-y-0.5">
+                    {(
+                      [
+                        ['เกมรุก', attOv],
+                        ['แดนกลาง', midOv],
+                        ['เกมรับ & ประตู', defOv]
+                      ] as const
+                    ).map(([lbl, val]) => (
+                      <div key={lbl} className="grid grid-cols-[86px_1fr_26px] mland:grid-cols-[70px_1fr_22px] items-center gap-2 text-xs mland:text-[8.5px]">
+                        <span className="font-medium text-[var(--ink)]/85 truncate">{lbl}</span>
+                        <div className="h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{ width: `${clamp(val * 1.45, 18, 100)}%`, background: statBarColor(val) }}
+                          />
                         </div>
-                        <div className="text-[10px] mland:text-[8px] text-[var(--mut)] tabular leading-tight mt-0.5">
-                          {SPN[pl.ro] || pl.ro} · อายุ {pl.age} ปี
-                        </div>
+                        <span className="font-display font-bold tabular text-right text-[var(--ink)]">{val}</span>
                       </div>
-                      <OvrBadge ov={pl.ov} size="xs" />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Band 3: 2x2 Tactical & Board Profile Grid */}
+                <div className="grid grid-cols-2 gap-1.5 mland:gap-1 pt-0.5">
+                  <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-lg bg-[var(--surface-2)]/50 border border-[var(--line)]/65 min-w-0">
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ระบบการเล่น</div>
+                    <div className="text-[11px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate mt-1 mland:mt-0.5 tabular">
+                      {selectedTeam.form} · {AR_T[selectedTeam.tac]}
                     </div>
-                  ))}
+                  </div>
+                  <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-lg bg-[var(--surface-2)]/50 border border-[var(--line)]/65 min-w-0">
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ปรัชญาสโมสร</div>
+                    <div className="text-[11px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate mt-1 mland:mt-0.5">
+                      {selectedTeam.philosophy || 'สมดุล'}
+                    </div>
+                  </div>
+                  <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-lg bg-[var(--surface-2)]/50 border border-[var(--line)]/65 min-w-0">
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">งบบอร์ดแรกเข้า</div>
+                    <div className="text-[11px] mland:text-[8.5px] font-bold text-[var(--g)] truncate mt-1 mland:mt-0.5 tabular">
+                      {fmtMoneyNum(selectedMeta.baseBudget)} + {fmtMoneyNum(selectedMeta.minBonus)}–{fmtMoneyNum(selectedMeta.maxBonus)} ฿
+                    </div>
+                  </div>
+                  <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-lg bg-[var(--surface-2)]/50 border border-[var(--line)]/65 min-w-0">
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ความกดดันบอร์ด</div>
+                    <div
+                      className={`text-[11px] mland:text-[8.5px] font-bold truncate mt-1 mland:mt-0.5 ${
+                        selectedMeta.tierBucket === 'top'
+                          ? 'text-[var(--red)]'
+                          : selectedMeta.tierBucket === 'mid'
+                            ? 'text-[var(--ink)]'
+                            : 'text-[var(--g)]'
+                      }`}
+                    >
+                      {selectedMeta.pressureLabel}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Band 4: Key Players List */}
+                <div className="border-t border-[var(--line)]/70 pt-2 mland:pt-1 space-y-1 mland:space-y-0.5">
+                  <div className="text-[10.5px] mland:text-[8px] font-bold text-[var(--mut)]">
+                    3 แข้งแกนหลักประจำทีม
+                  </div>
+                  <div className="divide-y divide-[var(--line)]/55">
+                    {topStars.map((pl) => (
+                      <div key={pl.n} className="py-1 mland:py-0.5 flex items-center gap-2 mland:gap-1.5 min-w-0">
+                        <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+                          <PlayerFace player={pl} team={selectedTeam} size={24} bare />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs mland:text-[9px] font-bold text-[var(--ink)] flex items-center gap-1 min-w-0 leading-tight">
+                            <PositionBadge role={pl.ro} size="2xs" />
+                            <span className="truncate">{pl.n}</span>
+                            {selectedTeam.cap === pl.n && <CaptainBadge team={selectedTeam} size="xs" className="shrink-0" />}
+                          </div>
+                          <div className="text-[10px] mland:text-[7.5px] text-[var(--mut)] tabular leading-tight mt-0.5 mland:mt-0">
+                            {SPN[pl.ro] || pl.ro} · อายุ {pl.age} ปี
+                          </div>
+                        </div>
+                        <OvrBadge ov={pl.ov} size="xs" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Compact Mobile Portrait Metrics Strip */}
-            <div className="sm:hidden mland:hidden px-3 py-1.5 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 text-[10.5px] tabular bg-[var(--surface-2)]/35">
-              <span>รุก <strong className="text-[var(--ink)]">{attOv}</strong></span>
-              <span className="text-[var(--mut)]" aria-hidden="true">·</span>
-              <span>กลาง <strong className="text-[var(--ink)]">{midOv}</strong></span>
-              <span className="text-[var(--mut)]" aria-hidden="true">·</span>
-              <span>รับ <strong className="text-[var(--ink)]">{defOv}</strong></span>
-              <span className="text-[var(--mut)]" aria-hidden="true">·</span>
-              <span className="font-semibold text-[var(--ink)] truncate">{selectedTeam.form}</span>
-            </div>
+              {/* Compact Mobile Portrait Metrics Strip */}
+              <div className="sm:hidden mland:hidden px-3 py-1.5 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 text-[10.5px] tabular bg-[var(--surface-2)]/35">
+                <span>รุก <strong className="text-[var(--ink)]">{attOv}</strong></span>
+                <span className="text-[var(--mut)]" aria-hidden="true">·</span>
+                <span>กลาง <strong className="text-[var(--ink)]">{midOv}</strong></span>
+                <span className="text-[var(--mut)]" aria-hidden="true">·</span>
+                <span>รับ <strong className="text-[var(--ink)]">{defOv}</strong></span>
+                <span className="text-[var(--mut)]" aria-hidden="true">·</span>
+                <span className="font-semibold text-[var(--ink)] truncate">{selectedTeam.form}</span>
+              </div>
 
-            {/* Primary CTA Footer */}
-            <div className="shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-t border-[var(--line)]/75 bg-[var(--surface-2)]/45 space-y-1.5 mland:space-y-1">
-              <p className="hidden sm:block mland:hidden text-[10.5px] text-[var(--mut)] leading-snug">
-                ระดับ{['ง่าย', 'ปกติ', 'ยาก'][diff]}: {diffDesc}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  onStartManager(targetSlot, previewClubs.names, previewClubs.t0, activeIdx, diff);
-                }}
-                className="btn btn-gold btn-lg mland:btn-md w-full font-extrabold"
-              >
-                <span className="truncate">รับคุมทีม {selectedTeam.name}</span>
-                <ChevronRight className="w-4 h-4 shrink-0" />
-              </button>
-            </div>
-          </aside>
+              {/* Primary CTA Footer */}
+              <div className="shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-t border-[var(--line)]/75 bg-[var(--surface-2)]/45 space-y-1.5 mland:space-y-1">
+                <p className="hidden sm:block mland:hidden text-[10.5px] text-[var(--mut)] leading-snug">
+                  ระดับ{['ง่าย', 'ปกติ', 'ยาก'][diff]}: {diffDesc}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onStartManager(targetSlot, previewClubs.names, previewClubs.t0, activeIdx, diff);
+                  }}
+                  className="btn btn-gold btn-lg mland:btn-md w-full font-extrabold"
+                >
+                  <span className="truncate">รับคุมทีม {selectedTeam.name}</span>
+                  <ChevronRight className="w-4 h-4 shrink-0" />
+                </button>
+              </div>
+            </aside>
           </div>
         </div>
       </div>

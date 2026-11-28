@@ -1,6 +1,13 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
-@custom-variant mland (@media (orientation: landscape) and (max-height: 540px));
+@custom-variant mland {
+  @media (orientation: landscape) and (max-height: 540px) {
+    @slot;
+  }
+  &:where(html.is-virtual-landscape *) {
+    @slot;
+  }
+}
 
 :root {
   --bg: #f1f5f3;
@@ -83,13 +90,13 @@ body {
 :-webkit-full-screen,
 html.is-fullscreen,
 html.is-fullscreen body,
-html.is-fullscreen #root,
+html.is-fullscreen:not(.is-virtual-landscape) #root,
 html.is-standalone,
 html.is-standalone body,
-html.is-standalone #root,
+html.is-standalone:not(.is-virtual-landscape) #root,
 html.is-fs-peek,
 html.is-fs-peek body,
-html.is-fs-peek #root {
+html.is-fs-peek:not(.is-virtual-landscape) #root {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -99,10 +106,10 @@ html.is-fs-peek #root {
   background-color: var(--bg);
 }
 
-html.is-fs-peek:not(.kb-open),
-html.is-fs-peek:not(.kb-open) body,
-html.is-fs-peek:not(.kb-open) #root,
-html.is-fs-peek:not(.kb-open) .fixed.inset-0 {
+html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape),
+html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape) body,
+html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape) #root,
+html.is-fs-peek:not(.kb-open):not(.is-virtual-landscape) .fixed.inset-0 {
   top: 0;
   left: 0;
   right: auto;
@@ -111,28 +118,55 @@ html.is-fs-peek:not(.kb-open) .fixed.inset-0 {
   height: var(--app-h, 100%);
 }
 
-html.is-fullscreen:not(.is-fs-peek):not(.kb-open),
-html.is-standalone:not(.is-fs-peek):not(.kb-open),
-html.is-fullscreen:not(.is-fs-peek):not(.kb-open) body,
-html.is-standalone:not(.is-fs-peek):not(.kb-open) body,
-html.is-fullscreen:not(.is-fs-peek):not(.kb-open) #root,
-html.is-standalone:not(.is-fs-peek):not(.kb-open) #root {
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape),
+html.is-standalone:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape),
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) body,
+html.is-standalone:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) body,
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) #root,
+html.is-standalone:not(.is-fs-peek):not(.kb-open):not(.is-virtual-landscape) #root {
   inset: 0;
   width: 100%;
   height: 100%;
   margin: 0;
 }
 
-html.kb-open,
-html.kb-open body,
-html.kb-open #root {
+html.kb-open:not(.is-virtual-landscape),
+html.kb-open:not(.is-virtual-landscape) body,
+html.kb-open:not(.is-virtual-landscape) #root {
   height: var(--kb-vh, 100dvh);
   max-height: var(--kb-vh, 100dvh);
 }
 
-html.kb-open .fixed.inset-0 {
+html.kb-open:not(.is-virtual-landscape) .fixed.inset-0 {
   height: var(--kb-vh, 100dvh);
   max-height: var(--kb-vh, 100dvh);
+}
+
+html.is-virtual-landscape,
+html.is-virtual-landscape body {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: var(--bg);
+}
+
+html.is-virtual-landscape #root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  width: var(--vland-w, 100dvh);
+  height: var(--vland-h, 100vw);
+  max-height: none;
+  margin: 0;
+  transform-origin: 0 0;
+  transform: rotate(90deg) translateY(-100%);
+  overflow: hidden;
 }
 
 html:fullscreen::backdrop,
@@ -188,6 +222,11 @@ html:-webkit-full-screen::backdrop {
     --stage-px: 0.5rem;
     --stage-py: 0.5rem;
   }
+}
+
+html.is-virtual-landscape .stage-viewport {
+  --stage-px: 0.5rem;
+  --stage-py: 0.5rem;
 }
 
 html,
@@ -290,6 +329,10 @@ button:not(:disabled):active {
   }
 }
 
+html.is-virtual-landscape {
+  font-size: clamp(11.5px, calc(var(--app-dvh, 1dvh) * 3.05), 13.5px);
+}
+
 .font-display {
   font-family: 'Chakra Petch', 'Noto Sans Thai', system-ui, sans-serif;
 }
@@ -313,6 +356,10 @@ button:not(:disabled):active {
   .game-card {
     border-radius: 0.75rem;
   }
+}
+
+html.is-virtual-landscape .game-card {
+  border-radius: 0.75rem;
 }
 
 .dark .game-card {

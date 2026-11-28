@@ -18,12 +18,55 @@ type FullscreenEl = HTMLElement & {
 
 let landscapeLockSucceeded = false;
 let pendingOrientationLock: Promise<boolean> | null = null;
+let pendingOrientationForced = false;
 let explicitExitAt = 0;
 let desktopExplicitExit = false;
+let virtualLandscapeDesired = false;
+let updateSafeAreasBridge: (() => void) | null = null;
+let resetDesktopAutoBridge: (() => void) | null = null;
 
 export function isPortraitViewport(): boolean {
   if (typeof window === 'undefined') return false;
   return window.innerHeight > window.innerWidth;
+}
+
+export function isVirtualLandscapeActive(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.documentElement.classList.contains('is-virtual-landscape');
+}
+
+export function setVirtualLandscapeDesired(desired: boolean): void {
+  virtualLandscapeDesired = desired;
+  updateSafeAreasBridge?.();
+}
+
+export function toVirtualLocalPoint(clientX: number, clientY: number): { x: number; y: number } {
+  if (!isVirtualLandscapeActive() || typeof window === 'undefined') {
+    return { x: clientX, y: clientY };
+  }
+  const vpW = document.documentElement.clientWidth || window.innerWidth;
+  return {
+    x: clientY,
+    y: vpW - clientX
+  };
+}
+
+export function liftScreenPoint(clientX: number, clientY: number, liftPx: number): { x: number; y: number } {
+  if (!liftPx) return { x: clientX, y: clientY };
+  if (isVirtualLandscapeActive()) {
+    return { x: clientX + liftPx, y: clientY };
+  }
+  return { x: clientX, y: clientY - liftPx };
+}
+
+export function getLocalViewportSize(): { width: number; height: number } {
+  if (typeof window === 'undefined') return { width: 1024, height: 768 };
+  if (isVirtualLandscapeActive()) {
+    const vpW = document.documentElement.clientWidth || window.innerWidth;
+    const vpH = document.documentElement.clientHeight || window.innerHeight;
+    return { width: vpH, height: vpW };
+  }
+  return { width: window.innerWidth, height: window.innerHeight };
 }
 
 export function isStandaloneDisplayMode(): boolean {
@@ -69,7 +112,7 @@ export function syncFullscreenClass(isFs: boolean) {
 
 export async function lockLandscapeOrientation(force = false): Promise<boolean> {
   if (typeof window === 'undefined' || typeof screen === 'undefined') return false;
-  if (!isMobileDevice()) return false;
+  if (!isMobileDevice() && !isPortraitViewport()) return false;
 
   const orientation = (
     screen as Screen & { orientation?: { type?: string; lock?: (mode: string) => Promise<void> } }
@@ -82,25 +125,34 @@ export async function lockLandscapeOrientation(force = false): Promise<boolean> 
 
   // Never issue overlapping screen.orientation.lock() calls — Chromium aborts the earlier promise with AbortError
   if (pendingOrientationLock) {
-    return pendingOrientationLock;
+    if (!force || pendingOrientationForced) {
+      return pendingOrientationLock;
+    }
+    const prevOk = await pendingOrientationLock;
+    if (prevOk && !isPortraitViewport()) {
+      return true;
+    }
   }
 
   const executeLock = async (): Promise<boolean> => {
     try {
       await orientation.lock('landscape');
       landscapeLockSucceeded = true;
+      updateSafeAreasBridge?.();
       return true;
     } catch (err) {
       const errName = (err as { name?: string } | null)?.name;
       if (errName === 'AbortError') {
         const alreadyLand = Boolean(orientation.type?.startsWith('landscape') && !isPortraitViewport());
         landscapeLockSucceeded = alreadyLand;
+        if (alreadyLand) updateSafeAreasBridge?.();
         return alreadyLand;
       }
       if (errName !== 'SecurityError' && errName !== 'NotAllowedError') {
         try {
           await orientation.lock('landscape-primary');
           landscapeLockSucceeded = true;
+          updateSafeAreasBridge?.();
           return true;
         } catch {
           // Ignore if landscape-primary is also unsupported/restricted
@@ -111,9 +163,11 @@ export async function lockLandscapeOrientation(force = false): Promise<boolean> 
     }
   };
 
+  pendingOrientationForced = force;
   const runPromise = executeLock().finally(() => {
     if (pendingOrientationLock === runPromise) {
       pendingOrientationLock = null;
+      pendingOrientationForced = false;
     }
   });
 
@@ -124,12 +178,12 @@ export async function lockLandscapeOrientation(force = false): Promise<boolean> 
 let pendingEnterFs: Promise<boolean> | null = null;
 let pendingFromClick = false;
 
-export async function enterImmersiveFullscreen(fromClick = false): Promise<boolean> {
+export async function enterImmersiveFullscreen(fromClick = false, lockAfter = true): Promise<boolean> {
   if (typeof document === 'undefined') return false;
 
   if (getFullscreenElement()) {
     syncFullscreenClass(true);
-    if (isMobileDevice() && (isPortraitViewport() || !landscapeLockSucceeded)) {
+    if (lockAfter && isMobileDevice() && (isPortraitViewport() || !landscapeLockSucceeded)) {
       void lockLandscapeOrientation();
     }
     return true;
@@ -157,6 +211,9 @@ export async function enterImmersiveFullscreen(fromClick = false): Promise<boole
         }
       } else if (el.webkitRequestFullscreen && doc.webkitFullscreenEnabled !== false) {
         await Promise.resolve(el.webkitRequestFullscreen());
+        if (!getFullscreenElement()) {
+          await new Promise<void>((r) => window.requestAnimationFrame(() => r()));
+        }
       } else if (el.mozRequestFullScreen && doc.mozFullScreenEnabled !== false) {
         await Promise.resolve(el.mozRequestFullScreen());
       } else if (el.msRequestFullscreen && doc.msFullscreenEnabled !== false) {
@@ -169,7 +226,7 @@ export async function enterImmersiveFullscreen(fromClick = false): Promise<boole
 
     const active = Boolean(getFullscreenElement());
     syncFullscreenClass(active);
-    if (active && isMobileDevice()) {
+    if (active && lockAfter && isMobileDevice()) {
       void lockLandscapeOrientation();
     }
     return active;
@@ -185,23 +242,46 @@ export async function enterImmersiveFullscreen(fromClick = false): Promise<boole
 }
 
 export async function enterLandscapeFullscreen(
-  fromClick = true
+  fromClick = true,
+  options?: { allowVirtualFallback?: boolean }
 ): Promise<{ fullscreen: boolean; landscape: boolean }> {
   if (fromClick) {
     desktopExplicitExit = false;
+    resetDesktopAutoBridge?.();
   }
-  const fullscreen = await enterImmersiveFullscreen(fromClick);
-  const landscape = await lockLandscapeOrientation(true);
+  const allowVirtualFallback = options?.allowVirtualFallback ?? fromClick;
+  const fullscreen = await enterImmersiveFullscreen(fromClick, false);
+  let landscape = await lockLandscapeOrientation(true);
+
+  if (!landscape && fullscreen && isPortraitViewport()) {
+    await new Promise<void>((r) => window.setTimeout(r, 90));
+    if (isPortraitViewport()) {
+      landscape = await lockLandscapeOrientation(true);
+    }
+  }
+
+  if (allowVirtualFallback && isMobileDevice() && isPortraitViewport() && !landscape) {
+    setVirtualLandscapeDesired(true);
+    if (fullscreen) {
+      window.setTimeout(() => {
+        if (isMobileDevice() && isPortraitViewport() && !landscapeLockSucceeded) {
+          void lockLandscapeOrientation(true);
+        }
+      }, 220);
+    }
+  }
+
   return { fullscreen, landscape };
 }
 
 export async function exitFullscreenSafe(): Promise<void> {
   if (typeof document === 'undefined') return;
   explicitExitAt = Date.now();
+  virtualLandscapeDesired = false;
   if (!isMobileDevice()) {
     desktopExplicitExit = true;
   }
-  document.documentElement.classList.remove('is-fs-peek');
+  document.documentElement.classList.remove('is-fs-peek', 'is-virtual-landscape');
   const doc = document as FullscreenDoc;
   try {
     if (doc.fullscreenElement && doc.exitFullscreen) {
@@ -218,6 +298,7 @@ export async function exitFullscreenSafe(): Promise<void> {
   } finally {
     await unlockOrientationSafe();
     syncFullscreenClass(Boolean(getFullscreenElement()));
+    updateSafeAreasBridge?.();
   }
 }
 
@@ -429,14 +510,18 @@ export function bindAutoLandscapeFullscreen(): () => void {
     document.documentElement.classList.remove('kb-open');
     rootStyle.removeProperty('--locked-vw');
     rootStyle.removeProperty('--locked-vh');
+    rootStyle.removeProperty('--vland-w');
+    rootStyle.removeProperty('--vland-h');
     rootStyle.removeProperty('--app-w');
     rootStyle.removeProperty('--app-h');
     rootStyle.removeProperty('--app-dvh');
   };
 
-  const updateViewportLock = (standalone: boolean, activeFs: boolean, barPeek: boolean) => {
-    const curW = Math.round(window.innerWidth || 0);
-    const curH = Math.round(window.innerHeight || 0);
+  const updateViewportLock = (standalone: boolean, activeFs: boolean, barPeek: boolean, virtualLand: boolean) => {
+    const docW = Math.round(document.documentElement.clientWidth || 0);
+    const docH = Math.round(document.documentElement.clientHeight || 0);
+    const curW = virtualLand && docW > 0 ? docW : Math.round(window.innerWidth || docW || 0);
+    const curH = virtualLand && docH > 0 ? docH : Math.round(window.innerHeight || docH || 0);
     const lvhRect = lvhProbe.getBoundingClientRect();
     const lvhH = Math.round(lvhRect.height || 0);
     const refH = Math.max(curH, lvhH);
@@ -449,6 +534,20 @@ export function bindAutoLandscapeFullscreen(): () => void {
     } else {
       rootStyle.removeProperty('--kb-vh');
     }
+
+    if (virtualLand && curW > 0 && curH > 0) {
+      rootStyle.setProperty('--vland-w', `${curH}px`);
+      rootStyle.setProperty('--vland-h', `${curW}px`);
+      rootStyle.setProperty('--locked-vw', `${curH}px`);
+      rootStyle.setProperty('--locked-vh', `${curW}px`);
+      rootStyle.setProperty('--app-w', `${curH}px`);
+      rootStyle.setProperty('--app-h', `${curW}px`);
+      rootStyle.setProperty('--app-dvh', `${(curW / 100).toFixed(4)}px`);
+      return;
+    }
+
+    rootStyle.removeProperty('--vland-w');
+    rootStyle.removeProperty('--vland-h');
 
     if (!isMobileDevice() || (!standalone && !activeFs && !barPeek)) {
       if (!kbOpen) {
@@ -494,9 +593,22 @@ export function bindAutoLandscapeFullscreen(): () => void {
     const standalone = isStandaloneDisplayMode();
     const activeFs = Boolean(getFullscreenElement());
     const barPeek = !activeFs && Date.now() < barPeekUntil;
-    document.documentElement.classList.toggle('is-fs-peek', barPeek);
+    const virtualLand =
+      virtualLandscapeDesired &&
+      isMobileDevice() &&
+      isPortraitViewport() &&
+      !landscapeLockSucceeded;
+    document.documentElement.classList.toggle('is-virtual-landscape', virtualLand);
+    document.documentElement.classList.toggle('is-fs-peek', barPeek && !virtualLand);
     syncFullscreenClass(activeFs);
-    updateViewportLock(standalone, activeFs, barPeek);
+    updateViewportLock(standalone, activeFs, barPeek, virtualLand);
+
+    if (virtualLand) {
+      const cur = readProbeInsets(activeFs);
+      // 90deg clockwise rotation maps physical Left->Top, Top->Right, Right->Bottom, Bottom->Left
+      applyLockedInsets({ t: cur.l, r: cur.t, b: cur.r, l: cur.b });
+      return;
+    }
 
     if (!standalone && !activeFs && !barPeek) {
       clearLockedInsets();
@@ -542,6 +654,10 @@ export function bindAutoLandscapeFullscreen(): () => void {
     lockedByOri.set(oriKey, next);
     applyLockedInsets(next);
   };
+  updateSafeAreasBridge = updateSafeAreas;
+  resetDesktopAutoBridge = () => {
+    desktopAutoTried = false;
+  };
 
   const guardViewportScroll = () => {
     if (!isEditingTextActive() && (window.scrollX !== 0 || window.scrollY !== 0)) {
@@ -564,7 +680,11 @@ export function bindAutoLandscapeFullscreen(): () => void {
 
     if (isAppleStandalone || getFullscreenElement() || !isFullscreenSupported()) {
       if (isPortraitViewport() || !landscapeLockSucceeded) {
-        lockLandscapeOrientation().catch(() => undefined);
+        lockLandscapeOrientation().then((ok) => {
+          if (!ok && isPortraitViewport()) {
+            setVirtualLandscapeDesired(true);
+          }
+        }).catch(() => undefined);
       }
       return;
     }
@@ -734,16 +854,17 @@ export function bindAutoLandscapeFullscreen(): () => void {
   updateSafeAreas();
   initTimer1 = window.setTimeout(() => updateSafeAreas(), 250);
   initTimer2 = window.setTimeout(() => updateSafeAreas(), 800);
-  if (getAutoFullscreenPref()) {
-    if (isStandaloneDisplayMode() || (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported())) {
-      enterImmersiveFullscreen(false).catch(() => undefined);
-    }
+  if (getAutoFullscreenPref() && (isStandaloneDisplayMode() || Boolean(getFullscreenElement()))) {
     if (isMobileDevice()) {
       lockLandscapeOrientation().catch(() => undefined);
     }
   }
 
   return () => {
+    if (updateSafeAreasBridge === updateSafeAreas) {
+      updateSafeAreasBridge = null;
+    }
+    resetDesktopAutoBridge = null;
     if (settleTimer) window.clearTimeout(settleTimer);
     if (fsSettleTimer) window.clearTimeout(fsSettleTimer);
     if (barPeekTimer) window.clearTimeout(barPeekTimer);
@@ -752,7 +873,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
     if (focusTimer) window.clearTimeout(focusTimer);
     probe.remove();
     lvhProbe.remove();
-    document.documentElement.classList.remove('is-fs-peek');
+    document.documentElement.classList.remove('is-fs-peek', 'is-virtual-landscape');
     clearLockedInsets();
     clearLockedViewport();
     displayModeQueries.forEach((m) => m.removeEventListener?.('change', updateSafeAreas));

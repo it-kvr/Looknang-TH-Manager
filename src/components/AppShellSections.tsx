@@ -124,6 +124,7 @@ export const AppTopHud = React.memo<{
   autoSkipMatch: boolean;
   onNavigateToTab: (tab: MainTab, sub?: string, focus?: string, hint?: string) => void;
   onUpdateState?: (updater: (draft: GameState) => void) => void;
+  onOpenDilemma?: () => void;
   onTriggerNextStep: () => void;
   onOpenNtModal: () => void;
   onOpenSettings: () => void;
@@ -141,6 +142,7 @@ export const AppTopHud = React.memo<{
   autoSkipMatch,
   onNavigateToTab,
   onUpdateState,
+  onOpenDilemma,
   onTriggerNextStep,
   onOpenNtModal,
   onOpenSettings,
@@ -212,7 +214,7 @@ export const AppTopHud = React.memo<{
                 {state.mode === 'p' && state.p ? state.p.name : me.name}
               </span>
               {state.mode === 'm' ? (
-                <span className={`sm:hidden inline-flex items-center w-[76px] shrink-0 whitespace-nowrap text-[11px] font-extrabold tabular ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                <span className={`sm:hidden mland:hidden inline-flex items-center w-[76px] shrink-0 whitespace-nowrap text-[11px] font-extrabold tabular ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
                   <AnimatedMoney value={state.money} resetKey={saveEpoch} deltaPlacement="below" />
                 </span>
               ) : (
@@ -222,7 +224,7 @@ export const AppTopHud = React.memo<{
                   size="2xs"
                   prefix="OVR"
                   title={myCareerFavBoost > 0 ? `OVR ${myCareerBaseOv} + ลูกรัก ${myCareerFavBoost} = ${myCareerDispOv}` : undefined}
-                  className="sm:hidden"
+                  className="sm:hidden mland:hidden"
                 />
               )}
             </div>
@@ -243,7 +245,7 @@ export const AppTopHud = React.memo<{
         </div>
 
         {/* Zone 2: Center Club / Player Telemetry Strip */}
-        <div className="hidden sm:flex items-center justify-center shrink-0 relative">
+        <div className="hidden sm:flex mland:flex items-center justify-center shrink-0 relative">
           <div className="flex items-stretch h-10 mland:h-8 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)]/85 divide-x divide-[var(--line)]/80 overflow-hidden">
             {state.mode === 'm' ? (
               <>
@@ -410,11 +412,12 @@ export const AppTopHud = React.memo<{
             </button>
           )}
           <div className="inline-flex items-stretch shrink-0">
-            {nextMatchInfo && (
+            {(nextMatchInfo || state.dilemma) && (
               <TeamReadinessBadge
                 state={state}
                 onNavigateToTab={onNavigateToTab}
                 onUpdateState={onUpdateState}
+                onOpenDilemma={onOpenDilemma}
                 onToast={onToast}
               />
             )}
@@ -427,7 +430,7 @@ export const AppTopHud = React.memo<{
                   : 'สรุปผลฤดูกาล'
               }
               className={`btn btn-gold h-10 mland:h-8 px-3 sm:px-4 mland:px-2.5 text-xs sm:text-sm mland:text-[10.5px] ${
-                nextMatchInfo ? '!rounded-l-none' : ''
+                nextMatchInfo || state.dilemma ? '!rounded-l-none' : ''
               }`}
             >
             {nextMatchInfo

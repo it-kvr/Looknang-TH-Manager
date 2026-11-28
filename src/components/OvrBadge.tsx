@@ -124,6 +124,42 @@ export function getOvrCanvasPalette(v: number): { bg: string; stroke: string; te
   return { bg: '#64748b', stroke: '#e2e8f0', text: '#ffffff' };
 }
 
+const TinyFavHeartBadge: React.FC<{ size?: OvrBadgeSize; variant?: OvrBadgeVariant }> = ({
+  size = 'sm',
+  variant = 'badge'
+}) => {
+  const posCls =
+    variant === 'card'
+      ? '-top-[4px] -right-[4px] w-[11px] h-[11px] mland:w-[9px] mland:h-[9px] mland:-top-[3px] mland:-right-[3px]'
+      : variant === 'inline'
+        ? '-top-[3px] -right-[6px] w-[9px] h-[9px]'
+        : size === '2xs'
+          ? '-top-[3px] -right-[3px] w-[8px] h-[8px]'
+          : size === 'xs'
+            ? '-top-[3px] -right-[3px] w-[9px] h-[9px]'
+            : size === 'md' || size === 'lg'
+              ? '-top-[4px] -right-[4px] w-[11px] h-[11px]'
+              : '-top-[3.5px] -right-[3.5px] w-[9.5px] h-[9.5px]';
+
+  return (
+    <span
+      aria-hidden="true"
+      className={`pointer-events-none absolute z-10 inline-flex items-center justify-center leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)] ${posCls}`}
+    >
+      <svg viewBox="0 0 16 16" className="w-full h-full overflow-visible">
+        <path
+          d="M8 14.1C7.6 13.7 1.7 9.4 1.7 5.3A3.4 3.4 0 0 1 8 3.6a3.4 3.4 0 0 1 6.3 1.7c0 4.1-5.9 8.4-6.3 8.8Z"
+          fill="#f43f5e"
+          stroke="#ffffff"
+          strokeWidth="1.9"
+          strokeLinejoin="round"
+        />
+        <circle cx="5.2" cy="5.1" r="1.05" fill="#ffe4e6" opacity="0.85" />
+      </svg>
+    </span>
+  );
+};
+
 export const OvrBadge: React.FC<OvrBadgeProps> = ({
   ov,
   boost = 0,
@@ -131,7 +167,7 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
   size = 'sm',
   prefix,
   fixedWidth = true,
-  tone = 'dark',
+  tone: _tone = 'dark',
   title,
   className = ''
 }) => {
@@ -156,34 +192,27 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
             : size === 'lg'
               ? 'text-sm mland:text-xs'
               : 'text-[11px] mland:text-[9.5px]';
-    const boostInlineFrameCls =
-      activeBoost > 0
-        ? 'px-1 py-[1px] rounded border border-rose-400/90 dark:border-rose-400/75 ring-1 ring-inset ring-rose-300/35 shadow-[0_1px_6px_-1px_rgba(244,63,94,0.3)]'
-        : '';
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-baseline gap-0.5 font-display font-extrabold tabular leading-none whitespace-nowrap shrink-0 ${tierMeta.textClass} ${sizeCls} ${boostInlineFrameCls} ${className}`}
+        className={`relative inline-flex items-baseline gap-0.5 font-display font-extrabold tabular leading-none whitespace-nowrap shrink-0 ${tierMeta.textClass} ${sizeCls} ${className}`}
       >
         {prefix && <span className="text-[0.76em] opacity-80 font-bold tracking-wider">{prefix}</span>}
         <span>{val}</span>
+        {activeBoost > 0 && <TinyFavHeartBadge size={size} variant="inline" />}
       </span>
     );
   }
-
-  const boostBadgeFrameCls =
-    activeBoost > 0
-      ? '!border-rose-400 ring-[1.5px] ring-rose-400/60 shadow-[0_0_10px_-1px_rgba(244,63,94,0.42)]'
-      : '';
 
   if (variant === 'card') {
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-center justify-center gap-0.5 px-2 py-[3px] mland:px-1.5 mland:py-[2px] rounded-lg border font-display font-extrabold text-[14.5px] sm:text-[15.5px] mland:text-[11px] leading-none tracking-tight tabular select-none shrink-0 whitespace-nowrap ${styleMeta.badgeCls} ${boostBadgeFrameCls} ${className}`}
+        className={`relative inline-flex items-center justify-center gap-0.5 px-2 py-[3px] mland:px-1.5 mland:py-[2px] rounded-lg border font-display font-extrabold text-[14.5px] sm:text-[15.5px] mland:text-[11px] leading-none tracking-tight tabular select-none shrink-0 whitespace-nowrap ${styleMeta.badgeCls} ${className}`}
       >
         {prefix && <span className="text-[0.58em] opacity-90 font-bold tracking-wider">{prefix}</span>}
         <span>{val}</span>
+        {activeBoost > 0 && <TinyFavHeartBadge size={size} variant="card" />}
       </span>
     );
   }
@@ -203,10 +232,11 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${tierMeta.badgeClass} ${sizeCls} ${boostBadgeFrameCls} ${className}`}
+        className={`relative inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${tierMeta.badgeClass} ${sizeCls} ${className}`}
       >
         {prefix && <span className="text-[0.72em] opacity-85 font-bold tracking-wider">{prefix}</span>}
         <span>{val}</span>
+        {activeBoost > 0 && <TinyFavHeartBadge size={size} variant="subtle" />}
       </span>
     );
   }
@@ -226,10 +256,11 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
   return (
     <span
       title={resolvedTitle}
-      className={`inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${styleMeta.badgeCls} ${badgeSizeCls} ${boostBadgeFrameCls} ${className}`}
+      className={`relative inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${styleMeta.badgeCls} ${badgeSizeCls} ${className}`}
     >
       {prefix && <span className="text-[0.7em] opacity-90 font-bold tracking-wider">{prefix}</span>}
       <span>{val}</span>
+      {activeBoost > 0 && <TinyFavHeartBadge size={size} variant="badge" />}
     </span>
   );
 };

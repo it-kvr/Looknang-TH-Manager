@@ -4,6 +4,7 @@ import { FSD, LINE, SPN, ROLE_HINT, POSL } from '../data/thaiFootballData';
 import { PITCH_SVG_BASE } from '../components/SvgVisuals';
 import { PositionBadge, getPositionBadgeClass } from '../components/PositionBadge';
 import { clamp } from '../utils/math';
+import { isVirtualLandscapeActive, liftScreenPoint } from '../utils/fullscreen';
 
 export const CustomFormationModal: React.FC<{
   team: Team;
@@ -130,14 +131,16 @@ export const CustomFormationModal: React.FC<{
     const ds = dragStateRef.current;
     if (!ds) return;
     const dist = Math.hypot(clientX - ds.startX, clientY - ds.startY);
-    const pitchH = ds.cachedRect?.height || svgRef.current?.getBoundingClientRect().height || 260;
+    const rectRef = ds.cachedRect || svgRef.current?.getBoundingClientRect();
+    const pitchH = (isVirtualLandscapeActive() ? rectRef?.width : rectRef?.height) || 260;
     const targetLift = ds.isTouch ? clamp(pitchH * 0.21, 46, 58) : 0;
     const t = clamp(dist / 18, 0, 1);
     const liftRamp = ds.isTouch ? 1 - (1 - t) * (1 - t) : 1;
     const liftPx = targetLift * liftRamp;
 
+    const lifted = liftScreenPoint(clientX, clientY, liftPx);
     const rawPt = clientToSvg(clientX, clientY, ds.cachedRect, ds.cachedInvCtm);
-    const liftPt = clientToSvg(clientX, clientY - liftPx, ds.cachedRect, ds.cachedInvCtm);
+    const liftPt = clientToSvg(lifted.x, lifted.y, ds.cachedRect, ds.cachedInvCtm);
     if (!rawPt || !liftPt) return;
 
     const grabFade = ds.isTouch ? 1 - liftRamp : 1;

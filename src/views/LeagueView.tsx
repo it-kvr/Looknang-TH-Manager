@@ -52,8 +52,9 @@ export const LeagueView = React.memo<{
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
   onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
+  onOpenDilemma?: () => void;
   onToast?: (msg: string) => void;
-}>(({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, onToast }) => {
+}>(({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, onOpenDilemma, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
@@ -277,9 +278,14 @@ export const LeagueView = React.memo<{
           tone: 'urg',
           urgent: true,
           icon: '📌',
-          tag: 'รอตัดสินใจ',
+          tag: `เหตุการณ์ · ${state.dilemma.category}`,
           title: state.dilemma.title,
-          detail: state.dilemma.category,
+          detail: 'รอคุณเปิดอ่านและตัดสินใจ',
+          actionLabel: 'เปิดดู',
+          onAction: () => {
+            SFX.tap();
+            onOpenDilemma?.();
+          }
         });
       }
 
@@ -713,6 +719,23 @@ export const LeagueView = React.memo<{
     } else if (state.p) {
       const p = state.p;
       const mePl = me.sq.find((q) => q.me || q.n === p.name) || null;
+      if (state.dilemma) {
+        items.push({
+          id: 'active-dilemma',
+          kind: 'alert',
+          tone: 'urg',
+          urgent: true,
+          icon: '📌',
+          tag: `เหตุการณ์ · ${state.dilemma.category}`,
+          title: state.dilemma.title,
+          detail: 'รอคุณเปิดอ่านและตัดสินใจ',
+          actionLabel: 'เปิดดู',
+          onAction: () => {
+            SFX.tap();
+            onOpenDilemma?.();
+          }
+        });
+      }
       if ((p.en ?? 100) < 70 && (p.plan ?? 1) !== 3) {
         items.push({
           id: 'player-rest-warn',

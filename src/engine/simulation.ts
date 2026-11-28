@@ -4360,7 +4360,14 @@ export function calcPlayerPerf(
   };
 }
 
-export function creditPlayerPerf(s: GameState, f: PlayerPerfResult) {
+const getTalentTierBadge = (tl: number): { key: string; label: string } => {
+  if (tl >= 85) return { key: 'legend', label: '💎 อัจฉริยะลูกหนัง' };
+  if (tl >= 70) return { key: 'high', label: '🌟 พรสวรรค์สูง' };
+  if (tl >= 50) return { key: 'pro', label: '⚡ มาตรฐานอาชีพ' };
+  return { key: 'grind', label: '🧱 ต้องฝึกหนักเป็นพิเศษ' };
+};
+
+export function creditPlayerPerf(s: GameState, f: PlayerPerfResult): { talentToast?: string } | void {
   const p = s.p!;
   if (f.played === false) {
     p.vid = 0;
@@ -4408,14 +4415,54 @@ export function creditPlayerPerf(s: GameState, f: PlayerPerfResult) {
   if (appMilestone) {
     appendPlayerCareerLog(meSq, `👕 ลงเล่นครบ ${appMilestone} นัดในอาชีพ (ซีซั่น ${s.season})`, p);
   }
+
+  let talentToast: string | undefined;
+  const curTalent = clamp(Math.round(p.talent ?? meSq?.talent ?? 60), 25, 99);
+  const devProf = meSq ? getPlayerDevProfile(meSq, p) : null;
+  const isCleanSheetGK = p.pos === 'GK' && f.op === 0 && (f.mins ?? 90) >= 60 && f.rt >= 7.6;
+  const isCleanSheetDF = p.pos === 'DF' && f.op === 0 && (f.mins ?? 90) >= 60 && f.rt >= 8.0;
+  const isStandoutMatch = Boolean(f.motm || f.rt >= 8.2 || f.gl >= 2 || f.as >= 2 || isCleanSheetGK || isCleanSheetDF);
+  if (isStandoutMatch && curTalent < 99 && (!devProf || devProf.phase !== 'declining')) {
+    const rawChance =
+      (0.05 +
+        (f.motm ? 0.035 : 0) +
+        (f.rt >= 9.0 ? 0.05 : f.rt >= 8.5 ? 0.03 : f.rt >= 8.0 ? 0.015 : 0) +
+        (f.gl >= 3 ? 0.045 : f.gl >= 2 ? 0.02 : 0) +
+        (f.as >= 2 ? 0.015 : 0) +
+        ((p.perks || []).includes('prodigy') ? 0.025 : 0)) *
+      (curTalent >= 88 ? 0.65 : curTalent < 60 ? 1.25 : 1.0);
+    if (Math.random() < clamp(rawChance, 0.04, 0.18)) {
+      const gain = (f.rt >= 9.0 || f.gl >= 3 || (curTalent < 58 && f.motm)) && Math.random() < 0.55 ? 2 : 1;
+      const newTalent = clamp(curTalent + gain, 30, 99);
+      const actualGain = newTalent - curTalent;
+      if (actualGain > 0) {
+        p.talent = newTalent;
+        const curOv = ovMe(p);
+        if (meSq) {
+          meSq.talent = newTalent;
+          meSq.pot = clamp(Math.max(meSq.pot || curOv + 4, newTalent + 3), curOv + 2, 199);
+        }
+        const prevTier = getTalentTierBadge(curTalent);
+        const nextTier = getTalentTierBadge(newTalent);
+        const tierMsg = prevTier.key !== nextTier.key ? ` เลื่อนสู่ระดับ ${nextTier.label}!` : '';
+        const msg = `🌟 ปลดล็อกพรสวรรค์หลังเกมเด่น! ${p.name} พรสวรรค์ ${curTalent} → ${newTalent} (+${actualGain})${tierMsg}`;
+        pushFeed(s, 'ปลดล็อกพรสวรรค์', msg, 'ok');
+        appendPlayerCareerLog(meSq, msg, p);
+        talentToast = msg;
+      }
+    }
+  }
+
   syncMe(s);
+  return talentToast ? { talentToast } : undefined;
 }
 
 export function runPlayerWeek(s: GameState) {
   const p = s.p!;
   const ac = PACT[p.plan ?? 1] || PACT[1];
   const perks = p.perks || [];
-  const mePlayer: Player = s.teams[s.me]?.sq.find((q) => q.me) || {
+  const meSq = s.teams[s.me]?.sq.find((q) => q.me);
+  const mePlayer: Player = meSq || {
     n: p.name, pos: p.pos, ro: p.sp, ov: ovMe(p), age: p.age, pot: 95, fit: p.en ?? 100, inj: 0, me: 1
   };
   const D = DT(mePlayer, p);
@@ -4478,9 +4525,23 @@ export function runPlayerWeek(s: GameState) {
     if (g) m += ` · พัฒนาอัตโนมัติ (${g})`;
   }
   if (mePlayer.me && devProf.strongSeason) {
-    const bt = trySuperstarBreakthrough(mePlayer, p, 0.03);
+    const bt = trySuperstarBreakthrough(mePlayer, p, 0.045);
     if (bt.brokeThrough) {
-      m += ` · 🌟 ทะลุขีดจำกัดศักยภาพสู่ ${bt.newPot}!`;
+      if (bt.talentGain > 0) {
+        p.talent = bt.newTalent;
+        if (meSq) meSq.talent = bt.newTalent;
+      }
+      if (meSq) meSq.pot = bt.newPot;
+      const tlPart = bt.talentGain > 0 ? ` · พรสวรรค์ ${bt.prevTalent}→${bt.newTalent}` : '';
+      const tierPart = bt.tierUpLabel ? ` (${bt.tierUpLabel}!)` : '';
+      const btMsg = `🌟 ปลดล็อกศักยภาพสู่ ${bt.newPot}${tlPart}${tierPart}`;
+      m += ` · ${btMsg}`;
+      pushFeed(s, 'ปลดล็อกพรสวรรค์', `🌟 ${p.name} ฝึกเข้มข้นจน${btMsg.replace('🌟 ', '')}`, 'ok');
+      appendPlayerCareerLog(
+        meSq || mePlayer,
+        `🌟 ซีซั่น ${s.season}: ${p.name} พรสวรรค์ ${bt.prevTalent} → ${bt.newTalent}, ศักยภาพ ${bt.newPot}${tierPart}`,
+        p
+      );
     }
   }
   if ((p.inj || 0) > 0) {
@@ -4488,7 +4549,6 @@ export function runPlayerWeek(s: GameState) {
     p.inj = Math.max(0, (p.inj || 0) - healStep);
     m += p.inj === 0 ? ' · ✚ หายเจ็บพร้อมลงสนาม!' : ` · ✚ พักฟื้นเหลือ ${p.inj} นัด`;
   }
-  const meSq = s.teams[s.me]?.sq.find((q) => q.me);
   if (p.roleTrain && p.roleTrain !== p.sp && !p.altRoles?.includes(p.roleTrain)) {
     const targetRole = p.roleTrain;
     const rawPen = pen(p.sp, targetRole);
@@ -6966,19 +7026,21 @@ export function afterMatchDay(
           q.ov++;
           q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
           gr.push(`${q.n} (${q.ov})`);
-        } else if (devProf.strongSeason && Math.random() < 0.25) {
-          const bt = trySuperstarBreakthrough(q, null, 0.06);
+        } else if (devProf.strongSeason && Math.random() < 0.3) {
+          const bt = trySuperstarBreakthrough(q, null, 0.075);
           if (bt.brokeThrough) {
             q.ov = clamp(q.ov + 1, 1, 199);
             q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
             gr.push(`${q.n} (${q.ov})`);
-            breakthroughs.push(`${q.n} → ศักยภาพ ${bt.newPot}${bt.becameSuperstar ? ' 🌟ซุปตาร์!' : ''}`);
+            const tlTxt = bt.talentGain > 0 ? ` · พรสวรรค์ ${bt.prevTalent}→${bt.newTalent}` : '';
+            const tierTxt = bt.tierUpLabel ? ` [${bt.tierUpLabel}]` : '';
+            breakthroughs.push(`${q.n} → ศักยภาพ ${bt.newPot}${tlTxt}${tierTxt}${bt.becameSuperstar ? ' 🌟ซุปตาร์!' : ''}`);
           }
         }
       });
     }
     if (breakthroughs.length) {
-      pushFeed(s, 'แววซุปตาร์', `🌟 ทะลุขีดจำกัดระหว่างซีซั่น: ${breakthroughs.join(', ')}`, 'ok');
+      pushFeed(s, 'ปลดล็อกพรสวรรค์', `🌟 ทะลุขีดจำกัดระหว่างซีซั่น: ${breakthroughs.join(', ')}`, 'ok');
     }
     const avgFitAfter = myFitCount ? myFitAfterSum / myFitCount : 80;
     const fitDeltaAvg = myFitCount ? Math.round((myFitAfterSum - myFitBeforeSum) / myFitCount) : 0;
@@ -7078,7 +7140,7 @@ export function afterMatchDay(
     }
   } else {
     runPlayerWeek(s);
-    if (s.p?.last) pushFeed(s, 'ฝึกซ้อม', s.p.last, /เพิ่มเป็น|ได้ \+1|พัฒนา/.test(s.p.last) ? 'ok' : '');
+    if (s.p?.last) pushFeed(s, 'ฝึกซ้อม', s.p.last, /เพิ่มเป็น|ได้ \+1|พัฒนา|ปลดล็อก/.test(s.p.last) ? 'ok' : '');
   }
 
   // Ensure AI clubs also hold budgets/board confidence if loading an older save
@@ -7964,9 +8026,13 @@ export function growPlayers(s: GameState) {
           s.p.age = q.age;
           const myProf = getPlayerDevProfile(q, s.p);
           if (myProf.strongSeason && myProf.phase !== 'declining') {
-            const bt = trySuperstarBreakthrough(q, s.p, 0.14);
+            const bt = trySuperstarBreakthrough(q, s.p, 0.22);
             if (bt.brokeThrough) {
-              pushFeed(s, 'แววซุปตาร์', `🌟 ฟอร์มยอดเยี่ยมตลอดซีซั่น! ศักยภาพของ ${q.n} ขยับสู่ ${bt.newPot}`, 'ok');
+              const tlTxt = bt.talentGain > 0 ? ` · พรสวรรค์ ${bt.prevTalent} → ${bt.newTalent}` : '';
+              const tierTxt = bt.tierUpLabel ? ` (เลื่อนสู่ ${bt.tierUpLabel}!)` : '';
+              const msg = `🌟 ฟอร์มยอดเยี่ยมตลอดซีซั่น! ${q.n} ปลดล็อกศักยภาพสู่ ${bt.newPot}${tlTxt}${tierTxt}`;
+              pushFeed(s, 'ปลดล็อกพรสวรรค์', msg, 'ok');
+              appendPlayerCareerLog(q, msg, s.p);
             }
           }
         }
@@ -7979,14 +8045,16 @@ export function growPlayers(s: GameState) {
       const tlVal = D.tlVal;
       const ovScale = getOvGrowthScale(q.ov, q.pot);
 
-      // Performance-driven Superstar Potential Breakthrough (shared equally by User & AI bots)
+      // Performance-driven Superstar Potential & Talent Breakthrough (shared equally by User & AI bots)
       if (devProf.phase !== 'declining' && devProf.strongSeason) {
-        const bt = trySuperstarBreakthrough(q, null, 0.14);
+        const bt = trySuperstarBreakthrough(q, null, 0.18);
         if (bt.brokeThrough && t.id === s.me) {
+          const tlTxt = bt.talentGain > 0 ? ` · พรสวรรค์ ${bt.prevTalent} → ${bt.newTalent}` : '';
+          const tierTxt = bt.tierUpLabel ? ` (${bt.tierUpLabel}!)` : '';
           pushFeed(
             s,
-            'แววซุปตาร์',
-            `🌟 ${q.n} โชว์ฟอร์มเด่นตลอดซีซั่น ทะลุขีดจำกัดศักยภาพสู่ ${bt.newPot}${bt.becameSuperstar ? ' (ก้าวสู่ระดับซุปตาร์!)' : ''}`,
+            'ปลดล็อกพรสวรรค์',
+            `🌟 ${q.n} โชว์ฟอร์มเด่นตลอดซีซั่น ทะลุขีดจำกัดศักยภาพสู่ ${bt.newPot}${tlTxt}${tierTxt}${bt.becameSuperstar ? ' (ก้าวสู่ระดับซุปตาร์!)' : ''}`,
             'ok'
           );
         }

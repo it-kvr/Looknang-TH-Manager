@@ -26,7 +26,7 @@ import { getPlayerMissionView } from './missions';
 export type ReadinessTone = 'urg' | 'warn' | 'ok';
 
 export interface TeamReadinessQuickAction {
-  type: 'rest_recovery' | 'player_rest' | 'ticket_standard' | 'renovate_fac';
+  type: 'rest_recovery' | 'player_rest' | 'ticket_standard' | 'renovate_fac' | 'open_dilemma';
   fk?: FacilityKey;
   baseCost?: number;
 }
@@ -130,12 +130,12 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
         kind: 'alert',
         tone: 'urg',
         icon: '📌',
-        shortLabel: 'รอตัดสินใจ',
-        tag: 'รอตัดสินใจ',
+        shortLabel: 'เหตุการณ์ใหม่',
+        tag: `เหตุการณ์ · ${state.dilemma.category}`,
         title: state.dilemma.title,
-        detail: state.dilemma.category,
-        actionLabel: 'จัดการ',
-        nav: { tab: 't' }
+        detail: 'กดเปิดดูและตัดสินใจภายหลังได้',
+        actionLabel: 'เปิดดู',
+        quickAction: { type: 'open_dilemma' }
       });
     }
 
@@ -530,6 +530,21 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
     const p = state.p;
     const mePl = me.sq.find((q) => q.me || q.n === p.name) || null;
     avgXiFit = Math.round(p.en ?? 100);
+
+    if (state.dilemma) {
+      tasks.push({
+        id: 'active-dilemma',
+        kind: 'alert',
+        tone: 'urg',
+        icon: '📌',
+        shortLabel: 'เหตุการณ์ใหม่',
+        tag: `เหตุการณ์ · ${state.dilemma.category}`,
+        title: state.dilemma.title,
+        detail: 'กดเปิดดูและตัดสินใจภายหลังได้',
+        actionLabel: 'เปิดดู',
+        quickAction: { type: 'open_dilemma' }
+      });
+    }
 
     if ((p.en ?? 100) < 70 && (p.plan ?? 1) !== 3) {
       tasks.push({

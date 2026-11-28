@@ -1970,33 +1970,96 @@ export function getPlayerDevProfile(q: Player, careerP?: PlayerCareerProfile | n
   return { D, age, effPkEnd, phase, ageMult, avgRating, formMult, sp, strongSeason };
 }
 
+const talentTierTag = (tl: number): { key: 'legend' | 'high' | 'pro' | 'grind'; label: string } => {
+  if (tl >= 85) return { key: 'legend', label: '💎 อัจฉริยะลูกหนัง' };
+  if (tl >= 70) return { key: 'high', label: '🌟 พรสวรรค์สูง' };
+  if (tl >= 50) return { key: 'pro', label: '⚡ มาตรฐานอาชีพ' };
+  return { key: 'grind', label: '🧱 ต้องฝึกหนักเป็นพิเศษ' };
+};
+
+export interface BreakthroughOutcome {
+  brokeThrough: boolean;
+  newPot: number;
+  becameSuperstar: boolean;
+  prevTalent: number;
+  newTalent: number;
+  talentGain: number;
+  tierUpLabel: string | null;
+}
+
 export function trySuperstarBreakthrough(
   q: Player,
   careerP?: PlayerCareerProfile | null,
   baseChance = 0.03
-): { brokeThrough: boolean; newPot: number; becameSuperstar: boolean } {
+): BreakthroughOutcome {
   const prof = getPlayerDevProfile(q, careerP);
   const curPot = q.pot || Math.max(q.ov + 2, 78);
-  if (prof.phase === 'declining' || !prof.strongSeason || q.ov < curPot - 4 || curPot >= 195) {
-    return { brokeThrough: false, newPot: curPot, becameSuperstar: false };
+  const prevTalent = clamp(
+    Math.round((q.me && careerP?.talent != null ? careerP.talent : q.talent) ?? prof.D.tlVal),
+    25,
+    99
+  );
+  const noOp: BreakthroughOutcome = {
+    brokeThrough: false,
+    newPot: curPot,
+    becameSuperstar: false,
+    prevTalent,
+    newTalent: prevTalent,
+    talentGain: 0,
+    tierUpLabel: null
+  };
+  const nearPotCap = q.ov >= curPot - 4 && curPot < 199;
+  const canAwakenTalent = prevTalent < 99 && prof.avgRating >= 7.1;
+  if (prof.phase === 'declining' || !prof.strongSeason || (!nearPotCap && !canAwakenTalent)) {
+    return noOp;
   }
-  const tlVal = prof.D.tlVal;
-  const talentFactor = 0.52 + (tlVal / 100) * 0.88;
-  const formBoost = prof.avgRating >= 7.55 ? 1.55 : prof.avgRating >= 7.25 ? 1.25 : 0.95;
-  const ageFactor = prof.phase === 'growing' ? 1.15 : 0.85;
-  const chance = clamp(baseChance * talentFactor * formBoost * ageFactor, 0.006, 0.42);
+  const talentFactor = 0.58 + (prevTalent / 100) * 0.72;
+  const formBoost = prof.avgRating >= 7.65 ? 1.65 : prof.avgRating >= 7.35 ? 1.35 : 1.05;
+  const ageFactor = prof.phase === 'growing' ? 1.2 : 0.88;
+  const perkFactor = careerP?.perks?.includes('prodigy') ? 1.25 : 1.0;
+  const chance = clamp(baseChance * talentFactor * formBoost * ageFactor * perkFactor, 0.01, 0.48);
   if (Math.random() >= chance) {
-    return { brokeThrough: false, newPot: curPot, becameSuperstar: false };
+    return noOp;
   }
-  const gain = (prof.avgRating >= 7.5 || tlVal >= 78) && Math.random() < 0.45 ? 2 : 1;
-  const newPot = clamp(Math.max(curPot + gain, q.ov + 2), q.ov + 1, 199);
+
+  let rawTalentGain = 1;
+  if (prevTalent < 60 && (prof.avgRating >= 7.4 || Math.random() < 0.55)) {
+    rawTalentGain = R(2, 3);
+  } else if ((prevTalent < 78 || prof.avgRating >= 7.55) && Math.random() < 0.5) {
+    rawTalentGain = 2;
+  }
+  const newTalent = clamp(prevTalent + rawTalentGain, 30, 99);
+  const talentGain = newTalent - prevTalent;
+
+  const shouldRaisePot = curPot < 199 && (nearPotCap || newTalent + 4 > curPot || Math.random() < 0.68);
+  const potGain = shouldRaisePot
+    ? (prof.avgRating >= 7.5 || newTalent >= 78) && Math.random() < 0.48
+      ? 2
+      : 1
+    : 0;
+  const newPot = potGain > 0 ? clamp(Math.max(curPot + potGain, q.ov + 2, newTalent + 2), q.ov + 1, 199) : curPot;
+  if (talentGain <= 0 && newPot <= curPot) {
+    return noOp;
+  }
+
   const wasSuperstar = curPot >= 86;
   q.pot = newPot;
-  q.talent = clamp((q.talent ?? tlVal) + R(1, 2), 30, 99);
+  q.talent = newTalent;
   if (q.me && careerP) {
-    careerP.talent = q.talent;
+    careerP.talent = newTalent;
   }
-  return { brokeThrough: true, newPot, becameSuperstar: !wasSuperstar && newPot >= 86 };
+  const prevTier = talentTierTag(prevTalent);
+  const nextTier = talentTierTag(newTalent);
+  const tierUpLabel = prevTier.key !== nextTier.key ? nextTier.label : null;
+  return {
+    brokeThrough: true,
+    newPot,
+    becameSuperstar: !wasSuperstar && newPot >= 86,
+    prevTalent,
+    newTalent,
+    talentGain,
+    tierUpLabel
+  };
 }
 
 export function autoGrow(p: PlayerCareerProfile, n = 1, _potCap?: number): string {
