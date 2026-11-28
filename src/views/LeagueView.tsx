@@ -31,6 +31,7 @@ import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { EffectText } from '../components/DeltaText';
 import { xi, vlu, ensureCon, logFin } from '../engine/playerCore';
+import { ovTextColorClass } from '../engine/missions';
 import {
   sortTable,
   getTransferWindowInfo,
@@ -218,8 +219,11 @@ export const LeagueView = React.memo<{
 
           <div className="text-center px-1 shrink-0">
             <div className="text-xs mland:text-[10px] font-black text-[var(--mut)] tracking-wider">VS</div>
-            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5">
-              XI {ms.ovXi} : {oppSt.ovXi}
+            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 font-display font-black">
+              <span className="text-[var(--g)]">XI</span>{' '}
+              <span className={ovTextColorClass(ms.ovXi)}>{ms.ovXi}</span>
+              <span className="text-[var(--mut)] font-bold mx-0.5">:</span>
+              <span className={ovTextColorClass(oppSt.ovXi)}>{oppSt.ovXi}</span>
             </div>
           </div>
 
@@ -1332,7 +1336,7 @@ export const LeagueView = React.memo<{
               <span />
               <span>สโมสร</span>
               <span>ประเทศ</span>
-              <span className="text-center">XI</span>
+              <span className="text-center font-display font-black text-[var(--g)]">XI</span>
               <span className="text-center">รุก/รับ</span>
               <span className="hidden sm:block text-right">มูลค่าทีม</span>
             </div>
@@ -1371,7 +1375,7 @@ export const LeagueView = React.memo<{
                     )}
                   </div>
                   <div className="flex justify-center">
-                    <OvrBadge ov={st.ovXi} size="2xs" />
+                    <OvrBadge ov={st.ovXi} variant="inline" size="sm" />
                   </div>
                   <div className="text-center tabular text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--mut)]">
                     {st.at}/{st.df}
@@ -2917,7 +2921,10 @@ export const ScheduleCalendarView = React.memo<{
                         {opp.name}
                       </div>
                       <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
-                        เฉลี่ย {ost.ovSq} · ตัวจริง {ost.ovXi}
+                        เฉลี่ย <span className={`font-display font-extrabold ${ovTextColorClass(ost.ovSq)}`}>{ost.ovSq}</span>
+                        {' · '}
+                        <span className="text-[var(--g)] font-bold">ตัวจริง</span>{' '}
+                        <span className={`font-display font-black ${ovTextColorClass(ost.ovXi)}`}>{ost.ovXi}</span>
                       </div>
                     </div>
                   </button>

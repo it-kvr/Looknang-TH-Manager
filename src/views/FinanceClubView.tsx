@@ -40,6 +40,7 @@ import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, K
 import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES, COACH_OUTFITS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis, getShirtNo } from '../engine/playerCore';
+import { ovTextColorClass } from '../engine/missions';
 import {
   sortTable,
   getStaffState,
@@ -3426,9 +3427,13 @@ export const FinanceClubView = React.memo<{
           ) : (
             <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[40px] mland:min-h-[32px] text-center items-center">
               <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
-                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">พลัง XI/ทีม</div>
-                <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
-                  {ts.ovXi}/{ts.ovSq}
+                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">
+                  พลัง <span className="font-display font-black text-[var(--g)]">XI</span>/ทีม
+                </div>
+                <div className="text-[11px] sm:text-xs mland:text-[10px] font-display font-black tabular leading-tight mt-0.5">
+                  <span className={ovTextColorClass(ts.ovXi)}>{ts.ovXi}</span>
+                  <span className="text-[var(--mut)] font-semibold mx-0.5">/</span>
+                  <span className={`font-extrabold ${ovTextColorClass(ts.ovSq)}`}>{ts.ovSq}</span>
                 </div>
               </div>
               <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">

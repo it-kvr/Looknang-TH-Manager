@@ -1857,7 +1857,9 @@ export const SquadTacticsView = React.memo<{
                                 {(q.yc || 0) > 0 && (
                                   <PlayerStatusBadge yc={q.yc} variant="pill" showYellow />
                                 )}
-                                <span className="shrink-0">{isStarter ? 'ตัวจริง' : 'สำรอง'}</span>
+                                <span className={`shrink-0 ${isStarter ? 'text-[var(--g)] font-bold' : ''}`}>
+                                  {isStarter ? 'ตัวจริง' : 'สำรอง'}
+                                </span>
                                 <span
                                   className="inline-flex items-center gap-1 px-1 py-[0.5px] rounded bg-[var(--surface-2)]/80 border border-[var(--line)]/80 text-[9px] mland:text-[7.5px] font-bold shrink-0"
                                   title={`สุขภาพจิตใจ ${mScore}/100 (${mMeta.label}) · สุขภาพกาย ${pScore}/100 (${pMeta.label})`}

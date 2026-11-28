@@ -5,7 +5,7 @@ import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, SPN, AR_T, CONFED_META, getCountryMetaByCode, getForeignClubStadiumName, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK, squadWage, wagOf } from '../engine/playerCore';
-import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
+import { ovColor, ovTextColorClass, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
 import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans, isPlayerShortlisted, toggleShortlistPlayer } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
@@ -749,17 +749,19 @@ export const TeamInspectorModal: React.FC<{
                 <div className="grid grid-cols-4 divide-x divide-[var(--line)]/70 text-center">
                   {(
                     [
-                      ['ตัวจริง XI', st.ovXi, mySt.ovXi],
-                      ['เฉลี่ยทีม', st.ovSq, mySt.ovSq],
-                      ['เกมรุก', st.at, mySt.at],
-                      ['เกมรับ', st.df, mySt.df]
+                      ['xi-ovr', <>ตัวจริง <span className="font-display font-black text-[var(--g)]">XI</span></>, st.ovXi, mySt.ovXi],
+                      ['sq-ovr', 'เฉลี่ยทีม', st.ovSq, mySt.ovSq],
+                      ['att', 'เกมรุก', st.at, mySt.at],
+                      ['def', 'เกมรับ', st.df, mySt.df]
                     ] as const
-                  ).map(([lbl, val, myVal]) => {
+                  ).map(([key, lbl, val, myVal]) => {
                     const diff = val - myVal;
+                    const valTone =
+                      key === 'xi-ovr' || key === 'sq-ovr' ? ovTextColorClass(val) : 'text-[var(--ink)]';
                     return (
-                      <div key={lbl} className="px-1">
+                      <div key={key} className="px-1">
                         <div className="text-[10px] mland:text-[8px] text-[var(--mut)] leading-tight">{lbl}</div>
-                        <div className="font-extrabold text-sm sm:text-base mland:text-xs font-display tabular leading-tight mt-0.5">
+                        <div className={`font-extrabold text-sm sm:text-base mland:text-xs font-display tabular leading-tight mt-0.5 ${valTone}`}>
                           {val}
                           {!isMeTeam && diff !== 0 && (
                             <span className={`ml-0.5 text-[10px] mland:text-[8px] font-bold ${diff > 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
@@ -776,13 +778,13 @@ export const TeamInspectorModal: React.FC<{
                 <div className="grid grid-cols-2 divide-x divide-[var(--line)]/70 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)]/70 py-1 mland:py-0.5 text-center">
                   {(
                     [
-                      ['💰 ค่าเหนื่อย XI/นัด', xiWage, myXiWage],
-                      ['🏦 ค่าเหนื่อยทั้งทีม/นัด', teamWage, myTeamWage]
+                      ['xi-wage', <>💰 ค่าเหนื่อย <span className="font-display font-black text-[var(--g)]">XI</span>/นัด</>, xiWage, myXiWage],
+                      ['sq-wage', '🏦 ค่าเหนื่อยทั้งทีม/นัด', teamWage, myTeamWage]
                     ] as const
-                  ).map(([lbl, val, myVal]) => {
+                  ).map(([key, lbl, val, myVal]) => {
                     const diff = +(val - myVal).toFixed(1);
                     return (
-                      <div key={lbl} className="px-1.5">
+                      <div key={key} className="px-1.5">
                         <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-tight">{lbl}</div>
                         <div className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] font-display tabular leading-tight mt-0.5 text-[var(--ink)]">
                           {fmtMoneyNum(val)}

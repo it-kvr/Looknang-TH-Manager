@@ -1395,7 +1395,7 @@ export const RankingHubView = React.memo<{
 
                       <div className="text-right shrink-0">
                         {clubSub === 'ovXi' || clubSub === 'ovSq' ? (
-                          <OvrBadge ov={metric.raw} size="xs" />
+                          <OvrBadge ov={metric.raw} variant="inline" size="md" />
                         ) : (
                           <div className="font-display font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] text-[var(--ink)] tabular leading-tight">
                             {metric.display}

@@ -22,6 +22,7 @@ import { SFX } from '../utils/audioTheme';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { getFormationSlots, getShirtNo, matchKits, pickBestCaptain, pickGK, playerPen, squadWage, wagOf, xi } from '../engine/playerCore';
 import { getActiveFavBoost, isTeamFavoritePlayer } from '../engine/wellbeing';
+import { ovTextColorClass } from '../engine/missions';
 import {
   EXTRA_CUP_META,
   computeMatchAttendance,
@@ -707,7 +708,10 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   <span>·</span>
                   <span>#{ranks.get(homeTeam.id) ?? '-'}</span>
                   <span>·</span>
-                  <span className="font-bold text-[var(--ink)]">XI {homeXiOv}</span>
+                  <span className="font-display font-black tracking-tight">
+                    <span className="text-[var(--g)]">XI</span>{' '}
+                    <span className={ovTextColorClass(homeXiOv)}>{homeXiOv}</span>
+                  </span>
                 </div>
               </div>
               <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
@@ -748,7 +752,10 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   {!meIsHome && <MyTeamBadge size="sm" />}
                 </div>
                 <div className="mt-0.5 text-[9.5px] mland:text-[7.5px] text-[var(--mut)] flex items-center gap-1 tabular">
-                  <span className="font-bold text-[var(--ink)]">XI {awayXiOv}</span>
+                  <span className="font-display font-black tracking-tight">
+                    <span className="text-[var(--g)]">XI</span>{' '}
+                    <span className={ovTextColorClass(awayXiOv)}>{awayXiOv}</span>
+                  </span>
                   <span>·</span>
                   <span>#{ranks.get(awayTeam.id) ?? '-'}</span>
                   <span>·</span>
@@ -900,18 +907,20 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                           <div className="rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 px-2 py-1 mland:py-0.5">
                             <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">⚡ ค่าพลัง 11 ตัวจริง (รุก/รับ)</div>
                             <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold tabular">
-                              <span className={xiOvDiff > 0 ? 'text-[var(--g)]' : xiOvDiff < 0 ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
-                                {homeXiOv} <span className="text-[9px] mland:text-[7.5px] font-semibold text-[var(--mut)]">({homeRate.at}/{homeRate.df})</span>
+                              <span className={`font-display font-black ${xiOvDiff > 0 ? 'text-[var(--g)]' : xiOvDiff < 0 ? 'text-[var(--mut)]' : ovTextColorClass(homeXiOv)}`}>
+                                {homeXiOv} <span className="text-[9px] mland:text-[7.5px] font-sans font-semibold text-[var(--mut)]">({homeRate.at}/{homeRate.df})</span>
                               </span>
                               <span className="text-[var(--mut)] font-bold">vs</span>
-                              <span className={xiOvDiff < 0 ? 'text-[var(--g)]' : xiOvDiff > 0 ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
-                                {awayXiOv} <span className="text-[9px] mland:text-[7.5px] font-semibold text-[var(--mut)]">({awayRate.at}/{awayRate.df})</span>
+                              <span className={`font-display font-black ${xiOvDiff < 0 ? 'text-[var(--g)]' : xiOvDiff > 0 ? 'text-[var(--mut)]' : ovTextColorClass(awayXiOv)}`}>
+                                {awayXiOv} <span className="text-[9px] mland:text-[7.5px] font-sans font-semibold text-[var(--mut)]">({awayRate.at}/{awayRate.df})</span>
                               </span>
                             </div>
                           </div>
 
                           <div className="rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 px-2 py-1 mland:py-0.5">
-                            <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">💰 ค่าเหนื่อย XI / นัด</div>
+                            <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">
+                              💰 ค่าเหนื่อย <span className="font-display font-black text-[var(--g)]">XI</span> / นัด
+                            </div>
                             <div className="mt-0.5 flex items-center justify-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold tabular">
                               <span className={xiWgDiff > 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}>
                                 {fmtMoneyNum(homeXiWage)}
@@ -953,7 +962,10 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                           {col.team.id === state.me && <MyTeamBadge size="2xs" />}
                         </div>
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-bold tabular shrink-0">
-                          {col.team.cf ? 'กำหนดเอง' : col.team.form} · XI <b className="text-[var(--ink)]">{col.ov}</b> · <b className="text-[#b45309] dark:text-[var(--lamp)]">{fmtMoneyNum(col.xiWg)}/นัด</b>
+                          {col.team.cf ? 'กำหนดเอง' : col.team.form} ·{' '}
+                          <span className="font-display font-black text-[var(--g)]">XI</span>{' '}
+                          <span className={`font-display font-black ${ovTextColorClass(col.ov)}`}>{col.ov}</span> ·{' '}
+                          <b className="text-[#b45309] dark:text-[var(--lamp)]">{fmtMoneyNum(col.xiWg)}/นัด</b>
                         </span>
                       </div>
                       <div

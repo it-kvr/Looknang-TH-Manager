@@ -290,8 +290,19 @@ export const PlayerClubTransferView = React.memo<{
 
         <div className="flex items-center gap-2 shrink-0 ml-auto">
           <div className="hidden lg:flex items-center gap-1.5 text-[11px] font-bold">
-            <span className={`px-2 py-1 rounded-lg border ${isMyStarter ? 'bg-[var(--g-soft)] border-[var(--g)]/40 text-[var(--g)]' : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'}`}>
-              {isMyStarter ? '⭐ ตัวจริง XI' : '🪑 สำรอง/หมุนเวียน'}
+            <span
+              className={`inline-flex items-center gap-1 leading-none tabular shrink-0 ${
+                isMyStarter ? 'text-[var(--g)] font-extrabold' : 'text-[var(--mut)] font-semibold'
+              }`}
+            >
+              {isMyStarter ? (
+                <>
+                  <span>⭐ ตัวจริง</span>
+                  <span className="font-display font-black tracking-wide text-emerald-600 dark:text-emerald-400">XI</span>
+                </>
+              ) : (
+                '🪑 สำรอง/หมุนเวียน'
+              )}
             </span>
             {isMyFav && (
               <span

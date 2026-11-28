@@ -871,11 +871,13 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                                 className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
                               >
                                 <span
-                                  className={`w-6 text-center text-[10px] font-black tabular rounded px-1 py-0.5 shrink-0 ${
-                                    isStarter ? 'bg-[var(--g)] text-white' : 'bg-black/15 text-[var(--mut)]'
+                                  className={`w-7 text-center text-[10.5px] tabular shrink-0 ${
+                                    isStarter
+                                      ? 'font-display font-black tracking-wide text-[var(--g)]'
+                                      : 'font-semibold text-[var(--mut)]/80'
                                   }`}
                                 >
-                                  {isStarter ? `XI` : `สำรอง`}
+                                  {isStarter ? 'XI' : 'สำรอง'}
                                 </span>
                                 <PositionBadge role={slotRole || pl.ro} size="2xs" />
                                 <OvrBadge ov={pl.ov} size="xs" />
