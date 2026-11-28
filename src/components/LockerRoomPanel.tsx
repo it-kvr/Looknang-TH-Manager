@@ -260,39 +260,24 @@ export const LockerRoomPanel: React.FC<{
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      {/* Top Locker Room Header & Controls */}
-      <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 mland:gap-1.5">
-        <div className="flex items-center justify-between gap-2 min-w-0">
-          <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
-            <div className="shrink-0 w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/80 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-              <ClubCrest name={team.name} size={20} team={team} club={state.club} isMyClub={isMgr} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-xs sm:text-sm mland:text-[11px] font-extrabold font-display text-[var(--ink)] truncate leading-tight">
-                ห้องล็อกเกอร์ &amp; เบอร์เสื้อ
-              </h2>
-              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                <span>{team.name}</span>
-                <span aria-hidden="true"> · </span>
-                <span>นักเตะ {team.sq.length} คน</span>
-                <span aria-hidden="true"> · </span>
-                <span>ตัวจริง {starters.length}</span>
-              </div>
-            </div>
+      {/* Top Locker Room Header & Controls (Single Row) */}
+      <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-2 mland:gap-1.5 overflow-x-auto">
+        <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 shrink-0 sm:shrink">
+          <div className="shrink-0 w-6 h-6 mland:w-5 mland:h-5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/80 flex items-center justify-center [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+            <ClubCrest name={team.name} size={16} team={team} club={state.club} isMyClub={isMgr} />
           </div>
-
-          <button
-            type="button"
-            onClick={handleAutoAssignAll}
-            className="lg:hidden btn btn-xs sm:btn-sm btn-primary whitespace-nowrap shrink-0"
-          >
-            <Sparkles className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
-            <span>จัดเบอร์ออโต้</span>
-          </button>
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <h2 className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold font-display text-[var(--ink)] truncate whitespace-nowrap leading-none">
+              ห้องล็อกเกอร์
+            </h2>
+            <span className="hidden xl:inline text-[10.5px] text-[var(--mut)] truncate tabular whitespace-nowrap">
+              · {team.sq.length} คน · ตัวจริง {starters.length}
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between lg:justify-end gap-1.5 mland:gap-1">
-          <div className="seg-bar overflow-x-auto max-w-full">
+        <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
+          <div className="seg-bar shrink-0">
             {([
               ['ALL', 'ทั้งหมด'],
               ['XI', 'ตัวจริง'],
@@ -308,46 +293,52 @@ export const LockerRoomPanel: React.FC<{
                   SFX.tap();
                   setPosFilter(key);
                 }}
-                className={`seg-btn whitespace-nowrap shrink-0 ${posFilter === key ? 'seg-btn-active' : ''}`}
+                className={`seg-btn whitespace-nowrap shrink-0 px-2! py-0.5! mland:px-1.5! mland:py-0.5! ${
+                  posFilter === key ? 'seg-btn-active' : ''
+                }`}
               >
                 {label}
               </button>
             ))}
           </div>
 
-          <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
-            <div className="seg-bar">
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  setKitSide('home');
-                }}
-                className={`seg-btn whitespace-nowrap ${kitSide === 'home' ? 'seg-btn-active' : ''}`}
-              >
-                ชุดเหย้า
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  setKitSide('away');
-                }}
-                className={`seg-btn whitespace-nowrap ${kitSide === 'away' ? 'seg-btn-active' : ''}`}
-              >
-                ชุดเยือน
-              </button>
-            </div>
-
+          <div className="seg-bar shrink-0">
             <button
               type="button"
-              onClick={handleAutoAssignAll}
-              className="hidden lg:inline-flex btn btn-sm btn-primary whitespace-nowrap shrink-0"
+              onClick={() => {
+                SFX.tap();
+                setKitSide('home');
+              }}
+              className={`seg-btn whitespace-nowrap shrink-0 px-2! py-0.5! mland:px-1.5! mland:py-0.5! ${
+                kitSide === 'home' ? 'seg-btn-active' : ''
+              }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>จัดเบอร์ออโต้ทั้งทีม</span>
+              เหย้า
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setKitSide('away');
+              }}
+              className={`seg-btn whitespace-nowrap shrink-0 px-2! py-0.5! mland:px-1.5! mland:py-0.5! ${
+                kitSide === 'away' ? 'seg-btn-active' : ''
+              }`}
+            >
+              เยือน
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={handleAutoAssignAll}
+            title="จัดเบอร์เสื้ออัตโนมัติทั้งทีม"
+            className="btn btn-xs mland:py-0.5 mland:px-1.5 btn-primary whitespace-nowrap shrink-0"
+          >
+            <Sparkles className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
+            <span className="hidden sm:inline">จัดเบอร์ออโต้</span>
+            <span className="sm:hidden">ออโต้</span>
+          </button>
         </div>
       </div>
 

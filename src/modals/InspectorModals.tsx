@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Scissors, Star } from 'lucide-react';
 import type { Position, Player, Team, GameState } from '../types/game';
 import { fmtMoney } from '../utils/math';
-import { TN, SPN, AR_T, CONFED_META, getCountryMetaByCode, getForeignTeamCountryMeta } from '../data/thaiFootballData';
+import { TN, SPN, AR_T, CONFED_META, getCountryMetaByCode, getForeignClubStadiumName, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
@@ -105,7 +105,9 @@ export const PlayerInspectorModal: React.FC<{
               {(() => {
                 const natMeta =
                   getCountryMetaByCode(livePlayer.nat) ||
-                  (liveTeam && liveTeam.tier >= 3 ? getForeignTeamCountryMeta(liveTeam.name) : null);
+                  (liveTeam && (liveTeam.tier >= 3 || liveTeam.foreign === 1)
+                    ? getForeignTeamCountryMeta(liveTeam.name)
+                    : getCountryMetaByCode('TH'));
                 return (
                   <div className="text-xs sm:text-sm mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
                     {natMeta && (
@@ -406,6 +408,7 @@ export const PlayerInspectorModal: React.FC<{
                 onUpdateState={onUpdateState}
                 onToast={onToast}
                 compact
+                showCareActions={state.mode !== 'm'}
               />
 
               {/* Balanced 3x2 Attribute Card Grid (Equal rows per box) */}
@@ -541,6 +544,9 @@ export const TeamInspectorModal: React.FC<{
                 <WdlRecordBadges w={team.w} d={team.d} l={team.l} size="2xs" />
                 <span>({gd >= 0 ? `+${gd}` : gd})</span>
                 <span className="hidden sm:inline mland:inline">· แฟน {fmtFans(ensureTeamFans(team))} คน</span>
+                {team.tier >= 3 && (
+                  <span className="hidden sm:inline mland:inline">· 🏟️ {getForeignClubStadiumName(team.name)}</span>
+                )}
                 <span className="hidden md:inline">· อายุเฉลี่ย {st.age} ปี</span>
               </div>
             </div>

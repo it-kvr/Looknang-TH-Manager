@@ -361,7 +361,7 @@ export interface ForeignClubCatalogEntry {
 }
 
 export const FOREIGN_CLUB_CATALOG: ForeignClubCatalogEntry[] = [
-  // Asia & Oceania (32 original + diverse AFC/AFF/OFC clubs)
+  // Asia & Oceania (32 clubs across 16 countries)
   { name: 'โตเกียว ฮาคุโร', code: 'JP', country: 'ญี่ปุ่น', flag: '🇯🇵', region: 'jp', confed: 'asia', baseOvr: 77, kc: ['#1d4ed8', '#ffffff'] },
   { name: 'โอซาก้า ซากุระ', code: 'JP', country: 'ญี่ปุ่น', flag: '🇯🇵', region: 'jp', confed: 'asia', baseOvr: 75, kc: ['#ec4899', '#1e293b'] },
   { name: 'โซล ชินโดก', code: 'KR', country: 'เกาหลีใต้', flag: '🇰🇷', region: 'kr', confed: 'asia', baseOvr: 76, kc: ['#dc2626', '#111827'] },
@@ -380,14 +380,14 @@ export const FOREIGN_CLUB_CATALOG: ForeignClubCatalogEntry[] = [
   { name: 'บาสรา สปอร์ต', code: 'IQ', country: 'อิรัก', flag: '🇮🇶', region: 'me', confed: 'asia', baseOvr: 71, kc: ['#0f766e', '#ffffff'] },
   { name: 'ทาชเคนต์ เอฟซี', code: 'UZ', country: 'อุซเบกิสถาน', flag: '🇺🇿', region: 'uz', confed: 'asia', baseOvr: 74, kc: ['#0284c7', '#facc15'] },
   { name: 'ซามาร์คันด์ คลับ', code: 'UZ', country: 'อุซเบกิสถาน', flag: '🇺🇿', region: 'uz', confed: 'asia', baseOvr: 72, kc: ['#0369a1', '#ffffff'] },
-  { name: 'ซิดนีย์ ซิตี้', code: 'AU', country: 'ออสเตรเลีย', flag: '🇦🇺', region: 'au', confed: 'asia', baseOvr: 74, kc: ['#38bdf8', '#0f172a'] },
-  { name: 'เมลเบิร์น วิคตอรี่', code: 'AU', country: 'ออสเตรเลีย', flag: '🇦🇺', region: 'au', confed: 'asia', baseOvr: 74, kc: ['#1e3a8a', '#ffffff'] },
+  { name: 'ซิดนีย์ ฮาร์เบอร์', code: 'AU', country: 'ออสเตรเลีย', flag: '🇦🇺', region: 'au', confed: 'asia', baseOvr: 74, kc: ['#38bdf8', '#0f172a'] },
+  { name: 'เมลเบิร์น เซาท์ครอส', code: 'AU', country: 'ออสเตรเลีย', flag: '🇦🇺', region: 'au', confed: 'asia', baseOvr: 74, kc: ['#1e3a8a', '#ffffff'] },
   { name: 'มุมไบ ราชปุระ', code: 'IN', country: 'อินเดีย', flag: '🇮🇳', region: 'in', confed: 'asia', baseOvr: 70, kc: ['#0284c7', '#f97316'] },
   { name: 'เดลี ซันดาร์', code: 'IN', country: 'อินเดีย', flag: '🇮🇳', region: 'in', confed: 'asia', baseOvr: 69, kc: ['#ea580c', '#1e293b'] },
   { name: 'ฮานอย ลองซา', code: 'VN', country: 'เวียดนาม', flag: '🇻🇳', region: 'vn', confed: 'asia', baseOvr: 71, kc: ['#7c3aed', '#facc15'] },
   { name: 'ไซ่ง่อน เอฟซี', code: 'VN', country: 'เวียดนาม', flag: '🇻🇳', region: 'vn', confed: 'asia', baseOvr: 70, kc: ['#dc2626', '#ffffff'] },
   { name: 'จาการ์ตา การูด้า', code: 'ID', country: 'อินโดนีเซีย', flag: '🇮🇩', region: 'id', confed: 'asia', baseOvr: 71, kc: ['#ea580c', '#ffffff'] },
-  { name: 'บาหลี ยูไนเต็ด', code: 'ID', country: 'อินโดนีเซีย', flag: '🇮🇩', region: 'id', confed: 'asia', baseOvr: 70, kc: ['#b91c1c', '#111827'] },
+  { name: 'บาหลี นูซา เอฟซี', code: 'ID', country: 'อินโดนีเซีย', flag: '🇮🇩', region: 'id', confed: 'asia', baseOvr: 70, kc: ['#b91c1c', '#111827'] },
   { name: 'กัวลาลัมเปอร์ ไทเกอร์ส', code: 'MY', country: 'มาเลเซีย', flag: '🇲🇾', region: 'my_sg', confed: 'asia', baseOvr: 70, kc: ['#dc2626', '#1e293b'] },
   { name: 'ยะโฮร์ ซิตี้', code: 'MY', country: 'มาเลเซีย', flag: '🇲🇾', region: 'my_sg', confed: 'asia', baseOvr: 74, kc: ['#1d4ed8', '#dc2626'] },
   { name: 'สิงคโปร์ เมอร์ลิน', code: 'SG', country: 'สิงคโปร์', flag: '🇸🇬', region: 'my_sg', confed: 'asia', baseOvr: 69, kc: ['#0284c7', '#ffffff'] },
@@ -399,18 +399,18 @@ export const FOREIGN_CLUB_CATALOG: ForeignClubCatalogEntry[] = [
   { name: 'ลอนดอน รอยัล เอฟซี', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 82, kc: ['#1d4ed8', '#ffffff'] },
   { name: 'แมนเชสเตอร์ เรดส์', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 82, kc: ['#dc2626', '#111827'] },
   { name: 'ลิเวอร์พูล เมอร์ซีย์', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 83, kc: ['#b91c1c', '#facc15'] },
-  { name: 'เบอร์มิงแฮม ซิตี้', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 78, kc: ['#7c2d12', '#38bdf8'] },
+  { name: 'เบอร์มิงแฮม มิดแลนด์', code: 'GB', country: 'อังกฤษ', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', region: 'en', confed: 'europe', baseOvr: 78, kc: ['#7c2d12', '#38bdf8'] },
   { name: 'มาดริด รอยัล เอฟซี', code: 'ES', country: 'สเปน', flag: '🇪🇸', region: 'es', confed: 'europe', baseOvr: 85, kc: ['#ffffff', '#facc15'] },
-  { name: 'บาร์เซโลนา คาตาลัน', code: 'ES', country: 'สเปน', flag: '🇪🇸', region: 'es', confed: 'europe', baseOvr: 84, kc: ['#1e3a8a', '#b91c1c'] },
+  { name: 'บาร์เซโลนา โนวา เอฟซี', code: 'ES', country: 'สเปน', flag: '🇪🇸', region: 'es', confed: 'europe', baseOvr: 84, kc: ['#1e3a8a', '#b91c1c'] },
   { name: 'เซบีญา แอธเลติก', code: 'ES', country: 'สเปน', flag: '🇪🇸', region: 'es', confed: 'europe', baseOvr: 78, kc: ['#dc2626', '#ffffff'] },
   { name: 'มิวนิก บาวาเรีย', code: 'DE', country: 'เยอรมนี', flag: '🇩🇪', region: 'de', confed: 'europe', baseOvr: 84, kc: ['#dc2626', '#ffffff'] },
-  { name: 'ดอร์ทมุนด์ ซิกนัล', code: 'DE', country: 'เยอรมนี', flag: '🇩🇪', region: 'de', confed: 'europe', baseOvr: 81, kc: ['#facc15', '#111827'] },
+  { name: 'ดอร์ทมุนด์ รูห์ร เอฟซี', code: 'DE', country: 'เยอรมนี', flag: '🇩🇪', region: 'de', confed: 'europe', baseOvr: 81, kc: ['#facc15', '#111827'] },
   { name: 'แฟรงก์เฟิร์ต อีเกิลส์', code: 'DE', country: 'เยอรมนี', flag: '🇩🇪', region: 'de', confed: 'europe', baseOvr: 77, kc: ['#111827', '#dc2626'] },
-  { name: 'มิลาน เนรัซซูรี', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 82, kc: ['#1d4ed8', '#111827'] },
-  { name: 'ตูริน เบียงโคเนรี', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 80, kc: ['#111827', '#ffffff'] },
+  { name: 'มิลาน ลอมบาร์เดีย เอฟซี', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 82, kc: ['#1d4ed8', '#111827'] },
+  { name: 'ตูริน อัลไพน์ เอฟซี', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 80, kc: ['#111827', '#ffffff'] },
   { name: 'โรม่า อิมพีเรียล', code: 'IT', country: 'อิตาลี', flag: '🇮🇹', region: 'it', confed: 'europe', baseOvr: 78, kc: ['#991b1b', '#f59e0b'] },
   { name: 'ปารีส แซงต์-ลูมิแอร์', code: 'FR', country: 'ฝรั่งเศส', flag: '🇫🇷', region: 'fr', confed: 'europe', baseOvr: 83, kc: ['#1e3a8a', '#dc2626'] },
-  { name: 'ลียง โอลิมปิก', code: 'FR', country: 'ฝรั่งเศส', flag: '🇫🇷', region: 'fr', confed: 'europe', baseOvr: 77, kc: ['#ffffff', '#1d4ed8'] },
+  { name: 'ลียง โรน เอฟซี', code: 'FR', country: 'ฝรั่งเศส', flag: '🇫🇷', region: 'fr', confed: 'europe', baseOvr: 77, kc: ['#ffffff', '#1d4ed8'] },
   { name: 'มาร์กเซย อาซูร์', code: 'FR', country: 'ฝรั่งเศส', flag: '🇫🇷', region: 'fr', confed: 'europe', baseOvr: 78, kc: ['#38bdf8', '#ffffff'] },
   { name: 'ลิสบอน ดราก้อนส์', code: 'PT', country: 'โปรตุเกส', flag: '🇵🇹', region: 'pt_br', confed: 'europe', baseOvr: 79, kc: ['#15803d', '#ffffff'] },
   { name: 'ปอร์โต้ แอตแลนติก', code: 'PT', country: 'โปรตุเกส', flag: '🇵🇹', region: 'pt_br', confed: 'europe', baseOvr: 78, kc: ['#1d4ed8', '#ffffff'] },
@@ -421,15 +421,15 @@ export const FOREIGN_CLUB_CATALOG: ForeignClubCatalogEntry[] = [
   { name: 'เซาเปาโล คาริโอกา', code: 'BR', country: 'บราซิล', flag: '🇧🇷', region: 'pt_br', confed: 'americas', baseOvr: 80, kc: ['#16a34a', '#facc15'] },
   { name: 'รีโอ เด จาเนโร เอฟซี', code: 'BR', country: 'บราซิล', flag: '🇧🇷', region: 'pt_br', confed: 'americas', baseOvr: 81, kc: ['#dc2626', '#111827'] },
   { name: 'ปอร์ตู อาเลเกร เอสซี', code: 'BR', country: 'บราซิล', flag: '🇧🇷', region: 'pt_br', confed: 'americas', baseOvr: 78, kc: ['#0284c7', '#111827'] },
-  { name: 'บัวโนสไอเรส ลา โบกา', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 80, kc: ['#1d4ed8', '#facc15'] },
-  { name: 'ริเวอร์ ซิลเวอร์ เอฟซี', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 80, kc: ['#ffffff', '#dc2626'] },
-  { name: 'โรซาริโอ เซนทรัล', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 76, kc: ['#eab308', '#1e3a8a'] },
+  { name: 'บัวโนสไอเรส ปอร์เตญโญ่', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 80, kc: ['#1d4ed8', '#facc15'] },
+  { name: 'ริโอ เด ลา พลาตา เอฟซี', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 80, kc: ['#ffffff', '#dc2626'] },
+  { name: 'โรซาริโอ ปัมปา เอฟซี', code: 'AR', country: 'อาร์เจนตินา', flag: '🇦🇷', region: 'ar_lat', confed: 'americas', baseOvr: 76, kc: ['#eab308', '#1e3a8a'] },
   { name: 'โบโกตา คอนดอร์', code: 'CO', country: 'โคลอมเบีย', flag: '🇨🇴', region: 'ar_lat', confed: 'americas', baseOvr: 75, kc: ['#facc15', '#1d4ed8'] },
   { name: 'เมเดยิน แอธเลติก', code: 'CO', country: 'โคลอมเบีย', flag: '🇨🇴', region: 'ar_lat', confed: 'americas', baseOvr: 75, kc: ['#16a34a', '#ffffff'] },
   { name: 'เม็กซิโก ซิตี้ อาซเท็ก', code: 'MX', country: 'เม็กซิโก', flag: '🇲🇽', region: 'es', confed: 'americas', baseOvr: 76, kc: ['#facc15', '#1e3a8a'] },
   { name: 'มอนเตร์เรย์ ฟีนิกซ์', code: 'MX', country: 'เม็กซิโก', flag: '🇲🇽', region: 'es', confed: 'americas', baseOvr: 76, kc: ['#1e3a8a', '#ffffff'] },
-  { name: 'ลอสแอนเจลิส กาแล็กติก', code: 'US', country: 'สหรัฐอเมริกา', flag: '🇺🇸', region: 'en', confed: 'americas', baseOvr: 76, kc: ['#111827', '#f59e0b'] },
-  { name: 'นิวยอร์ก เมโทร เอสซี', code: 'US', country: 'สหรัฐอเมริกา', flag: '🇺🇸', region: 'en', confed: 'americas', baseOvr: 75, kc: ['#38bdf8', '#1e3a8a'] },
+  { name: 'ลอสแอนเจลิส แปซิฟิก', code: 'US', country: 'สหรัฐอเมริกา', flag: '🇺🇸', region: 'en', confed: 'americas', baseOvr: 76, kc: ['#111827', '#f59e0b'] },
+  { name: 'นิวยอร์ก ฮัดสัน เอสซี', code: 'US', country: 'สหรัฐอเมริกา', flag: '🇺🇸', region: 'en', confed: 'americas', baseOvr: 75, kc: ['#38bdf8', '#1e3a8a'] },
 
   // Africa (8 clubs across 5 countries)
   { name: 'ไคโร ฟาโรห์ เอสซี', code: 'EG', country: 'อียิปต์', flag: '🇪🇬', region: 'me', confed: 'africa', baseOvr: 76, kc: ['#dc2626', '#ffffff'] },
@@ -442,13 +442,81 @@ export const FOREIGN_CLUB_CATALOG: ForeignClubCatalogEntry[] = [
   { name: 'โจฮันเนสเบิร์ก โกลด์', code: 'ZA', country: 'แอฟริกาใต้', flag: '🇿🇦', region: 'af', confed: 'africa', baseOvr: 74, kc: ['#eab308', '#111827'] }
 ];
 
+export const LEGACY_FOREIGN_CLUB_RENAMES: Record<string, string> = {
+  'ซิดนีย์ ซิตี้': 'ซิดนีย์ ฮาร์เบอร์',
+  'เมลเบิร์น วิคตอรี่': 'เมลเบิร์น เซาท์ครอส',
+  'บาหลี ยูไนเต็ด': 'บาหลี นูซา เอฟซี',
+  'เบอร์มิงแฮม ซิตี้': 'เบอร์มิงแฮม มิดแลนด์',
+  'บาร์เซโลนา คาตาลัน': 'บาร์เซโลนา โนวา เอฟซี',
+  'ดอร์ทมุนด์ ซิกนัล': 'ดอร์ทมุนด์ รูห์ร เอฟซี',
+  'มิลาน เนรัซซูรี': 'มิลาน ลอมบาร์เดีย เอฟซี',
+  'ตูริน เบียงโคเนรี': 'ตูริน อัลไพน์ เอฟซี',
+  'ลียง โอลิมปิก': 'ลียง โรน เอฟซี',
+  'บัวโนสไอเรส ลา โบกา': 'บัวโนสไอเรส ปอร์เตญโญ่',
+  'ริเวอร์ ซิลเวอร์ เอฟซี': 'ริโอ เด ลา พลาตา เอฟซี',
+  'โรซาริโอ เซนทรัล': 'โรซาริโอ ปัมปา เอฟซี',
+  'ลอสแอนเจลิส กาแล็กติก': 'ลอสแอนเจลิส แปซิฟิก',
+  'นิวยอร์ก เมโทร เอสซี': 'นิวยอร์ก ฮัดสัน เอสซี'
+};
+
 export const FOREIGN_CLUB_BY_NAME: Record<string, ForeignClubCatalogEntry> = Object.fromEntries(
   FOREIGN_CLUB_CATALOG.map((c) => [c.name, c])
 );
 
 export function getForeignClubEntry(teamName?: string): ForeignClubCatalogEntry | null {
   if (!teamName) return null;
-  return FOREIGN_CLUB_BY_NAME[teamName.trim()] || null;
+  const trimmed = teamName.trim();
+  const canonical = LEGACY_FOREIGN_CLUB_RENAMES[trimmed] || trimmed;
+  return FOREIGN_CLUB_BY_NAME[canonical] || null;
+}
+
+export function getForeignClubStadiumName(teamName?: string): string {
+  const n = (teamName || '').trim();
+  if (!n) return 'อินเตอร์เนชันแนล อารีน่า';
+  const canonical = LEGACY_FOREIGN_CLUB_RENAMES[n] || n;
+  const meta = getForeignTeamCountryMeta(canonical);
+  const city = canonical.split(/\s+/)[0] || canonical;
+  const hash = [...canonical].reduce((acc, ch, i) => acc + ch.charCodeAt(0) * (i + 7), 0) >>> 0;
+
+  if (!meta) return `สเตเดียม ${canonical}`;
+
+  const patternsByCode: Partial<Record<string, string[]>> = {
+    GB: [`${city} พาร์ค`, `${city} คราวน์ กราวด์`, `${city} รอยัล สเตเดียม`],
+    ES: [`เอสตาดิโอ เดอ ${city}`, `${city} เมโทรโปลิตาโน`, `กัมโป ${city}`],
+    DE: [`${city} สตาดิโอน`, `${city} อารีน่า ปาร์ค`, `ซิตี้-สตาดิโอน ${city}`],
+    IT: [`สตาดิโอ โอลิมปิโก ${city}`, `${city} อารีน่า คัลโช่`, `ปาลาซโซ สเตเดียม ${city}`],
+    FR: [`สต๊าด เดอ ${city}`, `ปาร์ก ลูมิแอร์ ${city}`, `${city} เมโทรโปล สเตเดียม`],
+    PT: [`เอสตาดิโอ โด ${city}`, `${city} แอตแลนติก ปาร์ค`],
+    NL: [`สตาดิโอน ฟาน ${city}`, `${city} ออเรนจ์ อารีน่า`],
+    BR: [`เอสตาดิโอ โด ${city}`, `${city} มาราคานา ปาร์ค`, `อารีน่า โด ซอล ${city}`],
+    AR: [`เอสตาดิโอ โมนิวเมนทัล ${city}`, `${city} ลูซ อารีน่า`],
+    CO: [`เอสตาดิโอ ${city}`, `${city} อันเดส อารีน่า`],
+    MX: [`เอสตาดิโอ อาซเท็ก ${city}`, `${city} ซอล อารีน่า`],
+    US: [`${city} เมโทร อารีน่า`, `${city} แปซิฟิก ปาร์ค`],
+    JP: [`${city} โดม สเตเดียม`, `ชิน-สเตเดียม ${city}`, `${city} ซากุระ ปาร์ค`],
+    KR: [`${city} เวิลด์ คัพ ปาร์ค`, `${city} สปอร์ตส์ คอมเพล็กซ์`],
+    CN: [`${city} สปอร์ตส์ เซ็นเตอร์`, `${city} ดราก้อน สเตเดียม`],
+    SA: [`${city} อินเตอร์เนชันแนล อารีน่า`, `อัล-ซาฮิล สเตเดียม ${city}`],
+    AE: [`${city} จิวเวล โดม`, `${city} อินเตอร์เนชันแนล ปาร์ค`],
+    QA: [`${city} กัลฟ์ อารีน่า`, `คราวน์ สเตเดียม ${city}`],
+    IR: [`${city} อาซาดี อารีน่า`, `${city} แกรนด์ สเตเดียม`],
+    IQ: [`${city} เนชันแนล ปาร์ค`, `${city} ยูไนเต็ด สเตเดียม`],
+    UZ: [`${city} เซนทรัล สเตเดียม`, `ซิลค์ โรด อารีน่า ${city}`],
+    AU: [`${city} ฮาร์เบอร์ สเตเดียม`, `${city} โอวัล อารีน่า`],
+    IN: [`${city} เนชันแนล อารีน่า`, `${city} สปอร์ตส์ คอมเพล็กซ์`],
+    VN: [`${city} เซนทรัล สเตเดียม`, `มีดินห์-สไตล์ ปาร์ค ${city}`],
+    ID: [`เกโลรา ${city} สเตเดียม`, `${city} อาร์คิเปลาโก ปาร์ค`],
+    MY: [`${city} บูกิต อารีน่า`, `${city} สปอร์ตส์ ปาร์ค`],
+    SG: [`${city} เนชันแนล โดม`, `มารีน่า วอเตอร์ฟรอนต์ สเตเดียม`],
+    PH: [`${city} เมโทร สเตเดียม`, `${city} สปอร์ตส์ อารีน่า`],
+    EG: [`${city} อินเตอร์เนชันแนล สเตเดียม`, `ไนล์ คราวน์ อารีน่า`],
+    MA: [`สต๊าด เดอ ${city}`, `${city} แอตลาส อารีน่า`],
+    NG: [`${city} เนชันแนล สเตเดียม`, `อีเกิลส์ อารีน่า ${city}`],
+    SN: [`สต๊าด เดอ ${city}`, `เทอแรงก้า อารีน่า ${city}`],
+    ZA: [`${city} โกลด์ อารีน่า`, `ซิตี้ โบว์ล ${city}`]
+  };
+  const pool = patternsByCode[meta.code] || [`${city} อินเตอร์เนชันแนล สเตเดียม`, `${city} สปอร์ตส์ อารีน่า`];
+  return pool[hash % pool.length];
 }
 
 export function getForeignTeamCountryMeta(
@@ -486,7 +554,7 @@ export function getForeignTeamCountryMeta(
   if (/ลิสบอน|ปอร์โต้|โปรตุเกส/.test(n)) return { flag: '🇵🇹', country: 'โปรตุเกส', region: 'pt_br', confed: 'europe', code: 'PT' };
   if (/อัมสเตอร์ดัม|รอตเตอร์ดัม|เนเธอร์แลนด์/.test(n)) return { flag: '🇳🇱', country: 'เนเธอร์แลนด์', region: 'nl', confed: 'europe', code: 'NL' };
   if (/เซาเปาโล|รีโอ|ปอร์ตู อาเลเกร|บราซิล/.test(n)) return { flag: '🇧🇷', country: 'บราซิล', region: 'pt_br', confed: 'americas', code: 'BR' };
-  if (/บัวโนสไอเรส|ริเวอร์|โรซาริโอ|อาร์เจนตินา/.test(n)) return { flag: '🇦🇷', country: 'อาร์เจนตินา', region: 'ar_lat', confed: 'americas', code: 'AR' };
+  if (/บัวโนสไอเรส|ริเวอร์|ริโอ เด ลา พลาตา|โรซาริโอ|อาร์เจนตินา/.test(n)) return { flag: '🇦🇷', country: 'อาร์เจนตินา', region: 'ar_lat', confed: 'americas', code: 'AR' };
   if (/โบโกตา|เมเดยิน|โคลอมเบีย/.test(n)) return { flag: '🇨🇴', country: 'โคลอมเบีย', region: 'ar_lat', confed: 'americas', code: 'CO' };
   if (/เม็กซิโก|มอนเตร์เรย์/.test(n)) return { flag: '🇲🇽', country: 'เม็กซิโก', region: 'es', confed: 'americas', code: 'MX' };
   if (/ลอสแอนเจลิส|นิวยอร์ก|สหรัฐ/.test(n)) return { flag: '🇺🇸', country: 'สหรัฐอเมริกา', region: 'en', confed: 'americas', code: 'US' };
@@ -504,21 +572,21 @@ export function inferForeignTeamRegion(teamName?: string): ForeignNameRegion | n
 
 export const NG = [
   [
-    'บางแสน', 'หัวหิน', 'แม่กลอง', 'อัมพวา', 'ปากน้ำ', 'เชียงคาน', 'ปาย', 'ลำปาง',
-    'หาดใหญ่', 'ศรีราชา', 'พัทยา', 'ชะอำ', 'สัตหีบ', 'ปากช่อง', 'ดอนเมือง', 'แม่สอด',
-    'บ้านโป่ง', 'หล่มสัก', 'เบตง', 'เกาะสมุย', 'อ่าวนาง', 'ท่าเรือ', 'สามพราน', 'ลาดกระบัง',
-    'โพธาราม', 'สันทราย', 'บางปู', 'บางสะพาน', 'สวรรคโลก', 'พานทอง', 'บางเลน', 'วังน้ำเขียว'
+    'อรุณรุ่ง', 'สายหมอก', 'ทุ่งทอง', 'ผาแดง', 'ห้วยมรกต', 'ไพรวัลย์', 'ท่าทรายทอง', 'รุ่งตะวัน',
+    'ดอยอรุณ', 'หาดแก้ว', 'บึงทอง', 'เนินไศล', 'ธาราใส', 'สนไพร', 'วังศิลา', 'ทุ่งแสงดาว',
+    'ภูอรุณ', 'ร่มไทร', 'แสงจันทร์', 'ไร่ทองคำ', 'เนินมณี', 'ชลธารา', 'นทีทอง', 'รวงทอง',
+    'ยอดภู', 'ริมธารา', 'สันผา', 'สวนแก้ว', 'แสงเหนือ', 'พนาลี', 'ริมชล', 'บุษบา'
   ],
   [
-    'เชียงใหม่', 'ขอนแก่น', 'โคราช', 'ชลบุรี', 'สุพรรณ', 'ระยอง', 'สงขลา', 'อุดรธานี',
-    'อยุธยา', 'พิษณุโลก', 'สุโขทัย', 'ภูเก็ต', 'กระบี่', 'นครปฐม', 'ราชบุรี', 'สระบุรี',
-    'ลำพูน', 'แพร่', 'ตราด', 'หนองคาย', 'ศรีสะเกษ', 'บุรีรัมย์', 'จันทบุรี', 'เพชรบุรี',
-    'น่าน', 'ชัยนาท', 'ประจวบ', 'สมุทรสาคร', 'นนทบุรี', 'ปทุมธานี', 'สุรินทร์', 'สกลนคร'
+    'เวียงทอง', 'นครฟ้า', 'นพรัตน์', 'มณีปุระ', 'ศิรินคร', 'เวียงแก้ว', 'สุวรรณปุระ', 'ภูมินทร์',
+    'ชัยวรมัน', 'ทิพยนคร', 'อินทราปุระ', 'สุริยนคร', 'จันทรปุระ', 'วชิรนคร', 'อัคนีปุระ', 'วรุณนคร',
+    'ไกรลาส', 'หิมพานต์', 'พิมานปุระ', 'มรกตปุระ', 'วิมานทอง', 'อุตรนคร', 'ดาราปุระ', 'เหมราช',
+    'นภดล', 'รัชตะนคร', 'อโนดาต', 'สุธาปุระ', 'เวียงสวรรค์', 'ธราดล', 'ศศินคร', 'ปฐพีปุระ'
   ],
   [
-    'สยาม', 'มหานคร', 'เจ้าพระยา', 'สุวรรณภูมิ', 'ธนบุรี', 'อโยธยา', 'ศรีนคร', 'รัตนากร',
-    'บูรพา', 'ทักษิณ', 'ล้านนา', 'อีสาน', 'นพบุรี', 'เวียงพิงค์', 'เทพนคร', 'อินทนนท์',
-    'อันดามัน', 'อ่าวไทย', 'ปทุมวัน', 'พญาไท', 'ราชพฤกษ์', 'บางกอก', 'ศรีวิชัย', 'ทวารวดี',
+    'สยาม', 'มหานคร', 'เจ้าพระยา', 'สุวรรณภูมิ', 'ราชธานี', 'อรุณทวีป', 'ศรีนคร', 'รัตนากร',
+    'บูรพา', 'ทักษิณ', 'อัคคี', 'เทวา', 'มหิธร', 'จตุรทิศ', 'เทพนคร', 'จักรวาล',
+    'อันดามัน', 'อ่าวไทย', 'ราชันย์', 'เอกราช', 'ราชพฤกษ์', 'ก้องฟ้า', 'เมฆา', 'สิงขร',
     'ไตรรงค์', 'สุริยา', 'ดารา', 'นครินทร์', 'วายุ', 'อัศวิน', 'เกียรติสยาม', 'ราชสีห์'
   ]
 ];
@@ -527,21 +595,57 @@ export const TIER_STANDALONE_CLUBS = [
   [
     'สิงห์สายน้ำ', 'เสือตะวันตก', 'ช้างป่าดงพญา', 'อินทรีทะเลใต้',
     'พยัคฆ์ทุ่งหลวง', 'ม้าศึกเมืองเหนือ', 'เหยี่ยวปากอ่าว', 'กระทิงดอย',
-    'นาคาลุ่มน้ำ', 'หงส์ฟ้าชายแดน', 'มังกรคาบสมุทร', 'นักรบปากน้ำโพ'
+    'นาคาลุ่มน้ำ', 'หงส์ฟ้าชายแดน', 'มังกรคาบสมุทร', 'นักรบรุ่งอรุณ'
   ],
   [
-    'พยัคฆ์ล้านนา', 'ขุนพลกรุงเก่า', 'มังกรอีสาน', 'นักรบปักษ์ใต้',
-    'ราชันเมืองโอ่ง', 'อินทรีอันดามัน', 'สิงห์เจ้าพระยา', 'ช้างขาวบูรพา',
+    'พยัคฆ์ล้านนา', 'ขุนพลแดนทอง', 'มังกรอีสาน', 'นักรบปักษ์ใต้',
+    'ราชันภูผา', 'อินทรีอันดามัน', 'สิงห์เจ้าพระยา', 'ช้างขาวบูรพา',
     'กระทิงตะวันตก', 'นาคามรกต', 'หงส์หยกเมืองเหนือ', 'คชสารแดนใต้',
-    'เหยี่ยวอีสานใต้', 'ฉลามอ่าวไทย'
+    'เหยี่ยวฟ้าพนา', 'ฉลามอ่าวไทย'
   ],
   [
-    'ปราสาทสายฟ้า', 'กิเลนผยอง', 'แข้งเทพ', 'ราชันมังกร',
-    'กระต่ายแก้ว', 'เขี้ยวสมุทร', 'ฉลามชล', 'สวาทแคท',
-    'กว่างโซ้ง', 'ม้านิลมังกร', 'ค้างคาวไฟ', 'ต่อพิฆาต',
-    'เสือป่าราชา', 'รถม้ามรกต', 'เทพอินทรี', 'เงือกสมิหลา'
+    'อัศวินนครหลวง', 'พยัคฆ์เจ้าพระยา', 'ราชสีห์สุวรรณภูมิ', 'มังกรบูรพา',
+    'อินทรีอรุณรุ่ง', 'ฉลามทะเลทอง', 'นาคินทร์ลุ่มน้ำ', 'สิงห์ทักษิณ',
+    'เสือดาวเหนือฟ้า', 'อาชาไนยไตรรงค์', 'เหยี่ยวฟ้าอันดามัน', 'กระทิงนคร',
+    'พญาหงส์อัคนี', 'ขุนศึกสยาม', 'เทพราชสีห์', 'วายุภักษ์อารีน่า'
   ]
 ];
+
+export const LEGACY_THAI_CLUB_PREFIX_RENAMES: Record<string, string> = {
+  // Old Tier 0 district/town names -> Fictional names
+  บางแสน: 'อรุณรุ่ง', หัวหิน: 'สายหมอก', แม่กลอง: 'ทุ่งทอง', อัมพวา: 'ผาแดง',
+  ปากน้ำ: 'ห้วยมรกต', เชียงคาน: 'ไพรวัลย์', ปาย: 'ท่าทรายทอง', ลำปาง: 'รุ่งตะวัน',
+  หาดใหญ่: 'ดอยอรุณ', ศรีราชา: 'หาดแก้ว', พัทยา: 'บึงทอง', ชะอำ: 'เนินไศล',
+  สัตหีบ: 'ธาราใส', ปากช่อง: 'สนไพร', ดอนเมือง: 'วังศิลา', แม่สอด: 'ทุ่งแสงดาว',
+  บ้านโป่ง: 'ภูอรุณ', หล่มสัก: 'ร่มไทร', เบตง: 'แสงจันทร์', เกาะสมุย: 'ไร่ทองคำ',
+  อ่าวนาง: 'เนินมณี', ท่าเรือ: 'ชลธารา', สามพราน: 'นทีทอง', ลาดกระบัง: 'รวงทอง',
+  โพธาราม: 'ยอดภู', สันทราย: 'ริมธารา', บางปู: 'สันผา', บางสะพาน: 'สวนแก้ว',
+  สวรรคโลก: 'แสงเหนือ', พานทอง: 'พนาลี', บางเลน: 'ริมชล', วังน้ำเขียว: 'บุษบา',
+  // Old Tier 1 province names -> Fictional names
+  เชียงใหม่: 'เวียงทอง', ขอนแก่น: 'นครฟ้า', โคราช: 'นพรัตน์', ชลบุรี: 'มณีปุระ',
+  สุพรรณ: 'ศิรินคร', ระยอง: 'เวียงแก้ว', สงขลา: 'สุวรรณปุระ', อุดรธานี: 'ภูมินทร์',
+  อยุธยา: 'ชัยวรมัน', พิษณุโลก: 'ทิพยนคร', สุโขทัย: 'อินทราปุระ', ภูเก็ต: 'สุริยนคร',
+  กระบี่: 'จันทรปุระ', นครปฐม: 'วชิรนคร', ราชบุรี: 'อัคนีปุระ', สระบุรี: 'วรุณนคร',
+  ลำพูน: 'ไกรลาส', แพร่: 'หิมพานต์', ตราด: 'พิมานปุระ', หนองคาย: 'มรกตปุระ',
+  ศรีสะเกษ: 'วิมานทอง', บุรีรัมย์: 'อุตรนคร', จันทบุรี: 'ดาราปุระ', เพชรบุรี: 'เหมราช',
+  น่าน: 'นภดล', ชัยนาท: 'รัชตะนคร', ประจวบ: 'อโนดาต', สมุทรสาคร: 'สุธาปุระ',
+  นนทบุรี: 'เวียงสวรรค์', ปทุมธานี: 'ธราดล', สุรินทร์: 'ศศินคร', สกลนคร: 'ปฐพีปุระ',
+  // Old Tier 2 place names -> Fictional names
+  ธนบุรี: 'ราชธานี', อโยธยา: 'อรุณทวีป', ล้านนา: 'อัคคี', อีสาน: 'เทวา',
+  นพบุรี: 'มหิธร', เวียงพิงค์: 'จตุรทิศ', อินทนนท์: 'จักรวาล', ปทุมวัน: 'ราชันย์',
+  พญาไท: 'เอกราช', บางกอก: 'ก้องฟ้า', ศรีวิชัย: 'เมฆา', ทวารวดี: 'สิงขร'
+};
+
+export const LEGACY_THAI_STANDALONE_RENAMES: Record<string, string> = {
+  นักรบปากน้ำโพ: 'นักรบรุ่งอรุณ',
+  ขุนพลกรุงเก่า: 'ขุนพลแดนทอง',
+  ราชันเมืองโอ่ง: 'ราชันภูผา',
+  เหยี่ยวอีสานใต้: 'เหยี่ยวฟ้าพนา',
+  อินทรีอโยธยา: 'อินทรีอรุณรุ่ง',
+  เสือดาวล้านนา: 'เสือดาวเหนือฟ้า',
+  อาชาไนยอีสาน: 'อาชาไนยไตรรงค์',
+  พญาหงส์กรุงธน: 'พญาหงส์อัคนี'
+};
 
 export const AN = FOREIGN_CLUB_CATALOG.map((c) => c.name);
 

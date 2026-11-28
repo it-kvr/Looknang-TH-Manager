@@ -1,6 +1,6 @@
 import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, TransferLogEntry, TransferLogKind, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrainingIntensity, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
-import { RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, inferForeignTeamRegion, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
+import { RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL, COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, LEGACY_FOREIGN_CLUB_RENAMES, inferForeignTeamRegion, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { getDefaultSponsorSeed, pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, SPW, normalizeSubRole, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles, localizeForeignTeams } from './playerCore';
@@ -3051,6 +3051,14 @@ export function ensureAsia(s: GameState) {
   if (!Array.isArray(s.asia)) {
     s.asia = [];
   }
+  s.asia.forEach((id) => {
+    const tm = s.teams[id];
+    if (!tm?.name) return;
+    const renamed = LEGACY_FOREIGN_CLUB_RENAMES[tm.name.trim()];
+    if (renamed && renamed !== tm.name) {
+      tm.name = renamed;
+    }
+  });
   const existingNames = new Set(
     s.asia.map((id) => s.teams[id]?.name).filter((n): n is string => Boolean(n))
   );

@@ -89,6 +89,7 @@ import { renderCrestPattern, ClubCrest, KitJersey, KitPatternThumb, PlayerFace }
 import { MainSponsorLogo, PartnerBrandLogo, TicketPlanLogo, BroadcastPlanLogo } from '../components/SponsorLogos';
 import { FacilityUpgradeSvg, StaffRoleSvg, getFacilityTierLabel, getStaffTierLabel, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
+import { ClubTalkRoomsPanel } from '../components/ClubTalkRoomsPanel';
 
 interface FinTooltipProps {
   active?: boolean;
@@ -164,7 +165,7 @@ export const FinanceClubView = React.memo<{
   const [merchPeriod, setMerchPeriod] = useState<'season' | 'alltime' | 'seasons'>('season');
   const [partnerFilter, setPartnerFilter] = useState<'all' | 'ready' | 'merch'>('all');
   const [finChartMode, setFinChartMode] = useState<'balance' | 'cashflow'>('balance');
-  const [clubTab, setClubTab] = useState<'info' | 'infra' | 'identity' | 'activities' | 'legacy'>('info');
+  const [clubTab, setClubTab] = useState<'info' | 'rooms' | 'infra' | 'identity' | 'activities' | 'legacy'>('info');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
   const [showCoachEditor, setShowCoachEditor] = useState(false);
   const [editingClubInfo, setEditingClubInfo] = useState(false);
@@ -215,9 +216,14 @@ export const FinanceClubView = React.memo<{
       setFinTab(navIntent.sub);
     } else if (
       navIntent?.tab === 'u' &&
-      (navIntent.sub === 'info' || navIntent.sub === 'infra' || navIntent.sub === 'identity' || navIntent.sub === 'activities' || navIntent.sub === 'legacy')
+      (navIntent.sub === 'info' || navIntent.sub === 'rooms' || navIntent.sub === 'infra' || navIntent.sub === 'identity' || navIntent.sub === 'activities' || navIntent.sub === 'legacy')
     ) {
       setClubTab(navIntent.sub);
+    } else if (
+      navIntent?.tab === 'u' &&
+      (navIntent.focus === 'team-talk' || navIntent.focus?.startsWith('talk:'))
+    ) {
+      setClubTab('rooms');
     } else if (navIntent?.tab === 'f' && navIntent.sub === 'infra') {
       setClubTab('infra');
     }
@@ -3451,11 +3457,12 @@ export const FinanceClubView = React.memo<{
         </div>
       </div>
 
-      {/* Club HQ Sub-navigation (4 Tabs — Crest & Kit sits beside the top Logo & Jerseys) */}
-      <div className="seg-bar grid grid-cols-4 w-full bg-[var(--surface)] shrink-0">
+      {/* Club HQ Sub-navigation (5 Tabs — Crest & Kit sits beside the top Logo & Jerseys) */}
+      <div className="seg-bar grid grid-cols-5 w-full bg-[var(--surface)] shrink-0">
         {(
           [
             ['info', '🏛️ ข้อมูล & บอร์ด'],
+            ['rooms', '🚪 ห้องคุย'],
             ['infra', '🏗️ สนาม & ทีมงาน'],
             ['activities', '🤝 กิจกรรม'],
             ['legacy', '🏆 ประวัติ & ถ้วย']
@@ -3478,6 +3485,18 @@ export const FinanceClubView = React.memo<{
       </div>
 
       <NavFocusBanner hint={activeHint} onJumpToTarget={scrollToFocused} onDismiss={clearFocus} />
+
+      {/* Club Tab: Private Office & Team Meeting Rooms */}
+      {clubTab === 'rooms' && (
+        <ClubTalkRoomsPanel
+          state={state}
+          onUpdateState={onUpdateState}
+          onInspectPlayer={onInspectPlayer}
+          onToast={onToast}
+          navIntent={navIntent}
+          isFocused={isFocused}
+        />
+      )}
 
       {/* Club Tab 1: Basic Info + Board Confidence & Dressing Room */}
       {clubTab === 'info' && (() => {

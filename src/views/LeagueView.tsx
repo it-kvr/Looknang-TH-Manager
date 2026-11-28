@@ -615,13 +615,13 @@ export const LeagueView = React.memo<{
               ? `ลูกรักรอปลุกพลัง (${favShort})`
               : `ลูกรักรอปลุกพลัง ${unboostedFavs.length} คน (${favShort})`,
           detail: `ใจ ${fm} · กาย ${fp} (ต้อง ≥72)`,
-          actionLabel: 'ดูแลทีม',
+          actionLabel: 'เข้าออฟฟิศ',
           onAction: () =>
             onNavigate?.(
-              'r',
-              'talk',
+              'u',
+              'rooms',
               `talk:${favPl.n}`,
-              `เลือกหัวข้อพูดคุยหรือกดฟื้นฟูกล้ามเนื้อให้ ${favPl.n} ในกรอบที่ไฮไลต์ (ทำ ใจ≥72 และ กาย≥72)`
+              `คุยส่วนตัวหรือส่งกายภาพให้ ${favPl.n} ในห้องออฟฟิศ (ทำ ใจ≥72 และ กาย≥72)`
             )
         });
       } else if (avgMental < 60 && careQuota.remaining > 0) {
@@ -630,17 +630,17 @@ export const LeagueView = React.memo<{
           kind: 'alert',
           tone: 'warn',
           urgent: true,
-          icon: '💬',
-          tag: 'ทีมทอล์ก',
+          icon: '🏛️',
+          tag: 'ห้องประชุม',
           title: `ขวัญทีมต่ำ (${avgMental}/100)`,
-          detail: `เหลือโควตาดูแล ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
-          actionLabel: 'พูดคุย',
+          detail: `เหลือโควตาออฟฟิศ ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
+          actionLabel: 'เข้าห้องประชุม',
           onAction: () =>
             onNavigate?.(
-              'r',
-              'talk',
+              'u',
+              'rooms',
               'team-talk',
-              'เลือกหัวข้อ "ประชุมทีมทอล์ก" ฝั่งซ้ายเพื่อปลุกขวัญทั้งทีม หรือคุยรายคนฝั่งขวา'
+              'เลือกวาระประชุมรวมใน "ห้องประชุมทีม" เพื่อปลุกขวัญทั้งสโมสร'
             )
         });
       }

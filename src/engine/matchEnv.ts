@@ -6,10 +6,51 @@ import {
   getPartnerDealBoardSpec,
   resolveStateSponsorBrand
 } from '../data/sponsorBrands';
+import {
+  COUNTRY_META_BY_CODE,
+  getForeignClubStadiumName,
+  getForeignTeamCountryMeta
+} from '../data/thaiFootballData';
 import type { GameState, MatchEnvironment, MatchPitchPuddle, PitchPerimeterBrand, StadiumStyleId, Team } from '../types/game';
 import { getActivePartnerDeals, getFacilityCondition } from './simulation';
 
 export type MatchFixtureKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
+
+function findCountryMetaByNameOrTeam(name?: string) {
+  const n = (name || '').trim();
+  if (!n) return null;
+  const byTeam = getForeignTeamCountryMeta(n);
+  if (byTeam) return byTeam;
+  return Object.values(COUNTRY_META_BY_CODE).find((c) => n.includes(c.country)) || null;
+}
+
+function getRegionWeatherProfile(countryCode?: string, confed?: string): { rainChance: number; nightChance: number } {
+  if (!countryCode && !confed) {
+    return { rainChance: 0.5, nightChance: 0.5 };
+  }
+  if (countryCode && ['SA', 'AE', 'QA', 'IR', 'IQ', 'EG', 'MA'].includes(countryCode)) {
+    return { rainChance: 0.08, nightChance: 0.78 };
+  }
+  if (countryCode && ['GB', 'DE', 'NL', 'FR'].includes(countryCode)) {
+    return { rainChance: 0.58, nightChance: 0.58 };
+  }
+  if (countryCode && ['ES', 'IT', 'PT'].includes(countryCode)) {
+    return { rainChance: 0.22, nightChance: 0.65 };
+  }
+  if (countryCode && ['VN', 'ID', 'MY', 'SG', 'PH', 'MM', 'KH', 'IN'].includes(countryCode)) {
+    return { rainChance: 0.56, nightChance: 0.62 };
+  }
+  if (countryCode && ['JP', 'KR', 'CN', 'AU', 'UZ'].includes(countryCode)) {
+    return { rainChance: 0.34, nightChance: 0.64 };
+  }
+  if (confed === 'americas') {
+    return { rainChance: 0.36, nightChance: 0.62 };
+  }
+  if (confed === 'africa') {
+    return { rainChance: 0.25, nightChance: 0.52 };
+  }
+  return { rainChance: 0.38, nightChance: 0.58 };
+}
 
 function toPartnerPerimeterBrand(id: string, fallbackName?: string): PitchPerimeterBrand {
   const spec = getPartnerDealBoardSpec(id, fallbackName);
@@ -110,8 +151,16 @@ export function buildMatchEnvironment(
   meIsHome: boolean,
   state: GameState
 ): MatchEnvironment {
-  const season: 'rainy' | 'summer' = Math.random() < 0.5 ? 'rainy' : 'summer';
-  const timeOfDay: 'day' | 'night' = Math.random() < 0.5 ? 'night' : 'day';
+  const isForeignClubHost = homeOrig.tier >= 3 || homeOrig.foreign === 1;
+  const hostCountryMeta =
+    kind === 'nt' && !meIsHome
+      ? findCountryMetaByNameOrTeam(homeOrig.name)
+      : isForeignClubHost
+        ? findCountryMetaByNameOrTeam(homeOrig.name)
+        : null;
+  const weatherProfile = getRegionWeatherProfile(hostCountryMeta?.code, hostCountryMeta?.confed);
+  const season: 'rainy' | 'summer' = Math.random() < weatherProfile.rainChance ? 'rainy' : 'summer';
+  const timeOfDay: 'day' | 'night' = Math.random() < weatherProfile.nightChance ? 'night' : 'day';
   const clubSeed = (homeOrig.id + 1) * 97 + (homeOrig.name?.length || 5) * 31;
   let turfLv = 4;
   let turfCond = 90;
@@ -123,9 +172,16 @@ export function buildMatchEnvironment(
     const deficitPenalty = state.money < -30 ? 14 : state.money < 0 ? 7 : 0;
     effectiveCond = clamp(turfCond - deficitPenalty, 30, 100);
   } else if (kind === 'asia' || kind === 'sc' || kind === 'nt') {
-    turfLv = homeOrig.tier >= 2 || kind === 'nt' ? 9 : 8;
-    turfCond = 96;
-    effectiveCond = 96;
+    if (isForeignClubHost || (kind === 'nt' && !meIsHome)) {
+      const avgOv = Math.round(homeOrig.sq.reduce((s, q) => s + q.ov, 0) / Math.max(1, homeOrig.sq.length));
+      turfLv = clamp(avgOv >= 79 ? 10 : avgOv >= 73 ? 9 : avgOv >= 67 ? 8 : 7, 7, 10);
+      turfCond = clamp(90 + (avgOv >= 76 ? 6 : 2) - (season === 'rainy' ? 4 : 0), 84, 100);
+      effectiveCond = turfCond;
+    } else {
+      turfLv = homeOrig.tier >= 2 || kind === 'nt' ? 9 : 8;
+      turfCond = 96;
+      effectiveCond = 96;
+    }
   } else {
     const avgOv = Math.round(homeOrig.sq.reduce((s, q) => s + q.ov, 0) / Math.max(1, homeOrig.sq.length));
     const budgetBoost =
@@ -172,12 +228,19 @@ export function buildMatchEnvironment(
               : 0;
   const dirtMix = Number(clamp(rawDirtMix + (season === 'rainy' && rawDirtMix > 0 ? 0.08 : 0), 0, 0.92).toFixed(2));
 
+  const ntAwayStyles: StadiumStyleId[] = ['modern_bowl', 'fortress_kop', 'cyber_dome', 'open_track'];
   const stadiumStyle: StadiumStyleId =
-    kind === 'sc' || kind === 'nt'
+    kind === 'sc'
       ? 'modern_bowl'
-      : meIsHome && state.mode === 'm'
-        ? state.club?.stadiumStyle || 'open_track'
-        : getAiTeamStadiumStyleId(homeOrig.id, homeOrig.name, homeOrig.tier);
+      : kind === 'nt'
+        ? meIsHome
+          ? 'modern_bowl'
+          : hostCountryMeta
+            ? getAiTeamStadiumStyleId(homeOrig.id + 17, hostCountryMeta.country, 3)
+            : ntAwayStyles[clubSeed % ntAwayStyles.length]
+        : meIsHome && state.mode === 'm'
+          ? state.club?.stadiumStyle || 'open_track'
+          : getAiTeamStadiumStyleId(homeOrig.id, homeOrig.name, homeOrig.tier);
   const styleSpec = getStadiumStyleSpec(stadiumStyle);
 
   const rawPuddleCount =
@@ -226,13 +289,22 @@ export function getStadiumDisplayName(
   state: GameState
 ): string {
   if (kind === 'nt') {
-    return meIsHome ? 'ราชมังคลากีฬาสถาน (ทีมชาติไทย)' : `สนามกีฬาแห่งชาติ (${homeOrig.name})`;
+    if (meIsHome) return 'ราชมังคลากีฬาสถาน (ทีมชาติไทย)';
+    const ntMeta = findCountryMetaByNameOrTeam(homeOrig.name);
+    return ntMeta
+      ? `สนามกีฬาแห่งชาติ (${ntMeta.flag} ${ntMeta.country})`
+      : `สนามกีฬาแห่งชาติ (${homeOrig.name})`;
   }
   if (meIsHome && state.mode === 'm' && state.club?.std?.trim()) {
     return state.club.std.trim();
   }
   if (kind === 'sc') {
     return 'สนามราชมังคลากีฬาสถาน (สนามกลาง)';
+  }
+  const foreignMeta = homeOrig.tier >= 3 || homeOrig.foreign === 1 ? getForeignTeamCountryMeta(homeOrig.name) : null;
+  if (homeOrig.tier >= 3 || homeOrig.foreign === 1 || foreignMeta) {
+    const stadiumName = getForeignClubStadiumName(homeOrig.name);
+    return foreignMeta ? `${stadiumName} (${foreignMeta.flag} ${foreignMeta.country})` : stadiumName;
   }
   return `สนามเหย้า ${homeOrig.name}`;
 }

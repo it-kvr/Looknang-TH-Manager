@@ -5,21 +5,18 @@ import type {
   Player,
   Team,
   GameState,
-  TrainingProgramMeta,
-  TalkTopicId,
-  TeamTalkId
+  TrainingProgramMeta
 } from '../types/game';
 import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
-import { DeltaValue, EffectText } from '../components/DeltaText';
+import { EffectText } from '../components/DeltaText';
 import { clamp, fmtMoney } from '../utils/math';
 import {
-  PLAYER_PERSONALITIES,
   TEAM_TRAINING_PROGRAMS,
   TRAINING_INTENSITY_META,
   getTeamTrainingPlan
 } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { xi, logFin, getPlayerDevProfile, ef } from '../engine/playerCore';
+import { xi, logFin, getPlayerDevProfile } from '../engine/playerCore';
 import { getPlayerMissionView, getPlayerTalent } from '../engine/missions';
 import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
@@ -33,27 +30,15 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import {
-  GOOD_MENTAL_THRESHOLD,
-  GOOD_PHYS_THRESHOLD,
-  MANAGER_TALK_TOPICS,
-  TEAM_TALK_OPTIONS,
-  applyPlayerCareAction,
-  applyTeamTalkAction,
   getActiveFavBoost,
   getPlayerMentalScore,
   getPlayerPhysScore,
-  getTeamCareQuotaInfo,
-  getTeamFavoriteNames,
   getTeamFavoritePlayers,
   getWellbeingTierMeta,
-  isPlayerMentalGood,
-  isPlayerPhysGood,
-  isTeamFavoritePlayer,
-  resolvePersonalityId
+  isTeamFavoritePlayer
 } from '../engine/wellbeing';
 
 type RosterFilter = 'all' | 'need_care' | 'starters' | 'youth';
-type TalkFilter = 'all' | 'stressed' | 'tired' | 'fav';
 
 export const TeamTrainingView = React.memo<{
   state: GameState;
@@ -62,27 +47,16 @@ export const TeamTrainingView = React.memo<{
   onToast: (msg: string) => void;
   navIntent?: NavIntent | null;
 }>(({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
-  const [trainingMode, setTrainingMode] = useState<'program' | 'talk' | 'missions'>('program');
+  const [trainingMode, setTrainingMode] = useState<'program' | 'missions'>('program');
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>('all');
-  const [talkFilter, setTalkFilter] = useState<TalkFilter>('all');
   const { activeHint, clearFocus, isFocused, scrollToFocused } = useNavFocus(navIntent, 'r');
 
   const me = state.teams[state.me];
   const [selectedMissionPlayer, setSelectedMissionPlayer] = useState<string>(() => me.sq[0]?.n || '');
-  const [selectedTalkPlayer, setSelectedTalkPlayer] = useState<string>(
-    () => getTeamFavoriteNames(me)[0] || me.sq[0]?.n || ''
-  );
 
   useEffect(() => {
     if (navIntent?.tab !== 'r') return;
-    if (navIntent.sub === 'talk' || navIntent.focus === 'team-talk' || navIntent.focus?.startsWith('talk:')) {
-      setTrainingMode('talk');
-      if (navIntent.focus?.startsWith('talk:')) {
-        const targetName = navIntent.focus.slice(5);
-        setTalkFilter('all');
-        if (targetName) setSelectedTalkPlayer(targetName);
-      }
-    } else if (navIntent.sub === 'missions') {
+    if (navIntent.sub === 'missions') {
       setTrainingMode('missions');
     } else if (navIntent.sub === 'program' || navIntent.focus === 'rehab') {
       setTrainingMode('program');
@@ -98,7 +72,6 @@ export const TeamTrainingView = React.memo<{
   const curInt = TRAINING_INTENSITY_META[plan.intensity];
   const curTurn = (state.season ?? 1) * 100 + (state.md ?? 0);
   const sessionUsed = plan.doubleSessionMd === curTurn;
-  const teamTalkUsed = plan.teamTalkMd === curTurn;
 
   const avgAllFit = me.sq.length ? Math.round(me.sq.reduce((s, q) => s + (q.fit ?? 100), 0) / me.sq.length) : 100;
   const avgMental = me.sq.length
@@ -116,9 +89,7 @@ export const TeamTrainingView = React.memo<{
   const indMap = plan.individualFocus || {};
   const restedIndivCount = Object.values(indMap).filter((v) => v === 'REST').length;
 
-  const careQuota = useMemo(() => getTeamCareQuotaInfo(state, me), [state, me]);
   const favPlayersList = useMemo(() => getTeamFavoritePlayers(me), [me]);
-  const favNamesSet = useMemo(() => new Set(favPlayersList.map((q) => q.n)), [favPlayersList]);
   const favBoostedList = useMemo(
     () => favPlayersList.filter((q) => getActiveFavBoost(q, me, null) > 0),
     [favPlayersList, me]
@@ -138,27 +109,6 @@ export const TeamTrainingView = React.memo<{
     });
   }, [me.sq, indMap, rosterFilter, starterNames]);
 
-  const sortedTalkPlayers = useMemo(() => {
-    const base = me.sq.filter((q) => {
-      if (talkFilter === 'stressed') return getPlayerMentalScore(q, null) < GOOD_MENTAL_THRESHOLD;
-      if (talkFilter === 'tired') return q.inj > 0 || getPlayerPhysScore(q, null) < GOOD_PHYS_THRESHOLD || (q.fit ?? 100) < 74;
-      if (talkFilter === 'fav') return favNamesSet.has(q.n) || starterNames.has(q.n);
-      return true;
-    });
-    return base.sort((a, b) => {
-      const aFav = favNamesSet.has(a.n) ? 1 : 0;
-      const bFav = favNamesSet.has(b.n) ? 1 : 0;
-      if (aFav !== bFav) return bFav - aFav;
-      const aNeed = (getPlayerMentalScore(a, null) < 60 ? 2 : 0) + (a.inj > 0 || getPlayerPhysScore(a, null) < 62 ? 2 : 0);
-      const bNeed = (getPlayerMentalScore(b, null) < 60 ? 2 : 0) + (b.inj > 0 || getPlayerPhysScore(b, null) < 62 ? 2 : 0);
-      if (aNeed !== bNeed) return bNeed - aNeed;
-      return b.ov - a.ov;
-    });
-  }, [me.sq, favNamesSet, talkFilter, starterNames]);
-
-  const talkTargetPlayer =
-    me.sq.find((q) => q.n === selectedTalkPlayer) || sortedTalkPlayers[0] || me.sq[0];
-
   const missionTargetPlayer = me.sq.find((q) => q.n === selectedMissionPlayer) || me.sq[0];
   const sortedMissionSquad = useMemo(
     () =>
@@ -167,66 +117,6 @@ export const TeamTrainingView = React.memo<{
         .sort((a, b) => getPlayerTalent(b, null) - getPlayerTalent(a, null) || b.ov - a.ov),
     [me.sq]
   );
-
-  const jumpToPlayerTalk = (playerName: string) => {
-    SFX.tap();
-    setTalkFilter('all');
-    setSelectedTalkPlayer(playerName);
-    setTrainingMode('talk');
-  };
-
-  const handleOneOnOneTalk = (player: Player, topicId: TalkTopicId) => {
-    let out: ReturnType<typeof applyPlayerCareAction> = {
-      ok: false,
-      msg: '',
-      boostNow: 0,
-      deltaMental: 0,
-      deltaPhys: 0
-    };
-    const prevBoost = getActiveFavBoost(player, me, null);
-    onUpdateState((d) => {
-      out = applyPlayerCareAction(d, player.n, 'talk', topicId);
-    });
-    if (out.ok) {
-      if (out.boostNow > 0 && prevBoost === 0) SFX.win();
-      else SFX.confirm();
-    } else SFX.tap();
-    if (out.msg) onToast(out.msg);
-  };
-
-  const handlePhysioCare = (player: Player) => {
-    let out: ReturnType<typeof applyPlayerCareAction> = {
-      ok: false,
-      msg: '',
-      boostNow: 0,
-      deltaMental: 0,
-      deltaPhys: 0
-    };
-    const prevBoost = getActiveFavBoost(player, me, null);
-    onUpdateState((d) => {
-      out = applyPlayerCareAction(d, player.n, 'physio_care');
-    });
-    if (out.ok) {
-      if (out.boostNow > 0 && prevBoost === 0) SFX.win();
-      else SFX.confirm();
-    } else SFX.tap();
-    if (out.msg) onToast(out.msg);
-  };
-
-  const handleTeamTalk = (talkId: TeamTalkId) => {
-    let res: ReturnType<typeof applyTeamTalkAction> = {
-      ok: false,
-      msg: '',
-      opt: TEAM_TALK_OPTIONS[0],
-      avgMentalDelta: 0
-    };
-    onUpdateState((d) => {
-      res = applyTeamTalkAction(d, talkId);
-    });
-    if (res.ok) SFX.win();
-    else SFX.tap();
-    if (res.msg) onToast(res.msg);
-  };
 
   return (
     <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -242,13 +132,6 @@ export const TeamTrainingView = React.memo<{
           </button>
           <button
             type="button"
-            onClick={() => { SFX.tap(); setTrainingMode('talk'); }}
-            className={`seg-btn ${trainingMode === 'talk' ? 'seg-btn-active' : ''}`}
-          >
-            💬 พูดคุย &amp; ดูแลทีม{careQuota.remaining > 0 ? ` (${careQuota.remaining})` : ''}
-          </button>
-          <button
-            type="button"
             onClick={() => { SFX.tap(); setTrainingMode('missions'); }}
             className={`seg-btn ${trainingMode === 'missions' ? 'seg-btn-active' : ''}`}
           >
@@ -258,12 +141,6 @@ export const TeamTrainingView = React.memo<{
         <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
           {trainingMode === 'missions' ? (
             <span>สะสมทุกภารกิจพร้อมกัน · อัปขั้นอัตโนมัติตามค่าพรสวรรค์</span>
-          ) : trainingMode === 'talk' ? (
-            <span>
-              ทีมทอล์ก <b className={teamTalkUsed ? 'text-[var(--mut)]' : 'text-[var(--g)]'}>{teamTalkUsed ? 'คุยแล้ว' : 'พร้อม 1 ครั้ง'}</b>
-              {' · '}
-              ดูแลใกล้ชิด <b className={careQuota.remaining > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{careQuota.remaining}/{careQuota.limit}</b>
-            </span>
           ) : (
             <span>
               ศูนย์ฝึก Lv.{trLv} · สตาฟฟ์ฟิต +{stf.fit * 2}% · ใจเฉลี่ย <b className={getWellbeingTierMeta(avgMental, 'mental', false).txtCls}>{avgMental}</b> · กายเฉลี่ย <b className={getWellbeingTierMeta(avgPhys, 'phys', false).txtCls}>{avgPhys}</b>
@@ -362,420 +239,6 @@ export const TeamTrainingView = React.memo<{
               onUpdateState={onUpdateState}
               onToast={onToast}
             />
-          </div>
-        </div>
-      ) : trainingMode === 'talk' && talkTargetPlayer ? (
-        /* ==================== TAB 2: TALK & WELLBEING ROOM ==================== */
-        <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.35fr] mland:grid-cols-[0.88fr_1.42fr] grid-rows-[minmax(0,1fr)] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-          {/* Left Column: Squad Team Talk (Once per matchday) */}
-          <div
-            data-focus-id="team-talk"
-            className={`p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col gap-2.5 mland:gap-1.5 h-full overflow-y-auto ${
-              isFocused('team-talk') ? 'task-focus-spotlight' : ''
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/70">
-              <div>
-                <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5 flex-wrap">
-                  <span>📣 ประชุมทีมทอล์ก (ทั้งสโมสร)</span>
-                  {isFocused('team-talk') && <NavFocusBadge />}
-                </h3>
-                <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
-                  เรียกประชุมห้องแต่งตัว 1 ครั้งต่อแมตช์เดย์ — ไม่หักโควตาคุยรายคน
-                </p>
-              </div>
-              <span className={`text-[10.5px] mland:text-[9px] font-bold shrink-0 ${teamTalkUsed ? 'text-[var(--mut)]' : 'text-[var(--g)]'}`}>
-                {teamTalkUsed ? '✓ คุยแล้วรอบนี้' : 'พร้อม 1/1'}
-              </span>
-            </div>
-
-            {teamTalkUsed && plan.lastTeamTalkNote && (
-              <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--g-soft)]/70 border border-[var(--g)]/35 space-y-1 text-[11px] mland:text-[9px]">
-                <div className="font-bold text-[var(--g)]">✓ ผลทีมทอล์กประจำนัด</div>
-                <div className="text-[var(--ink)] font-medium">{plan.lastTeamTalkNote}</div>
-                {plan.lastTeamTalkId && (
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] italic">
-                    {TEAM_TALK_OPTIONS.find((x) => x.id === plan.lastTeamTalkId)?.coachSpeech}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-2 mland:gap-1.5">
-              {TEAM_TALK_OPTIONS.map((opt) => {
-                const isLast = teamTalkUsed && plan.lastTeamTalkId === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={teamTalkUsed}
-                    onClick={() => handleTeamTalk(opt.id)}
-                    className={`p-2.5 mland:p-1.5 rounded-xl border text-left transition-all cursor-pointer disabled:cursor-default space-y-1 ${
-                      isLast
-                        ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]/35'
-                        : teamTalkUsed
-                          ? 'bg-[var(--surface-2)]/40 border-[var(--line)] opacity-55'
-                          : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/35'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)]">
-                        {opt.icon} {opt.label}
-                      </span>
-                      <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular shrink-0">
-                        {isLast ? (
-                          <span className="text-[var(--g)]">✓ ใช้รอบนี้</span>
-                        ) : (
-                          <EffectText text={opt.effectHint.split('·')[0].trim()} />
-                        )}
-                      </span>
-                    </div>
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
-                      <EffectText text={`${opt.effectHint} · ${opt.whenToUse}`} />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mt-auto pt-2 border-t border-[var(--line)]/70 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] space-y-0.5 tabular">
-              <div className="flex items-center justify-between">
-                <span>ขวัญกำลังใจสโมสร</span>
-                <b className="text-[var(--ink)]">{state.mor ?? 55}%</b>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>สุขภาพจิตใจเฉลี่ยทั้งทีม</span>
-                <b className={getWellbeingTierMeta(avgMental, 'mental', false).txtCls}>{avgMental}/100</b>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>นักเตะเครียด/ใจต่ำ (&lt; 60)</span>
-                <b className={lowMentalCount > 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>{lowMentalCount} คน</b>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: 1-on-1 Talk & Recovery Studio */}
-          <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col gap-2 mland:gap-1.5 h-full min-h-0 overflow-hidden">
-            <div className="flex flex-wrap items-center justify-between gap-2 shrink-0 pb-1.5 border-b border-[var(--line)]/70">
-              <div>
-                <h3 className="font-bold text-sm mland:text-xs">🗣️ ห้องพูดคุย &amp; ดูแลรายบุคคล</h3>
-                <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
-                  เลือกนักเตะเพื่อคุยตัวต่อตัวหรือฟื้นฟูกล้ามเนื้อ (ลูกรักประจำทีม 1–5 คน ปลุกพลังได้เมื่อใจ/กาย ≥72)
-                </p>
-              </div>
-              <div className="text-[11px] mland:text-[9px] font-bold tabular">
-                โควตาดูแลใกล้ชิด:{' '}
-                <span className={careQuota.remaining > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
-                  {careQuota.remaining}/{careQuota.limit} ครั้ง
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-[215px_1fr] mland:grid-cols-[185px_1fr] grid-rows-[minmax(0,1fr)] gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-hidden">
-              {/* Sub-list: Select Player to Talk */}
-              <div className="flex flex-col gap-1.5 min-h-0 overflow-hidden">
-                <div className="grid grid-cols-4 gap-1 shrink-0">
-                  {([
-                    ['all', 'ทั้งหมด'],
-                    ['stressed', 'ใจต่ำ'],
-                    ['tired', 'ล้า/เจ็บ'],
-                    ['fav', 'หลัก/รัก']
-                  ] as [TalkFilter, string][]).map(([k, lbl]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => { SFX.tap(); setTalkFilter(k); }}
-                      className={`py-1 px-1 rounded-lg text-[10px] mland:text-[8.5px] font-bold border cursor-pointer truncate ${
-                        talkFilter === k
-                          ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                          : 'bg-[var(--surface-2)] text-[var(--mut)] border-[var(--line)] hover:text-[var(--ink)]'
-                      }`}
-                    >
-                      {lbl}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto flex-1 min-h-0">
-                  {sortedTalkPlayers.length === 0 ? (
-                    <div className="p-3 text-center text-[11px] text-[var(--mut)]">ไม่มีนักเตะในกลุ่มนี้</div>
-                  ) : (
-                    sortedTalkPlayers.map((q) => {
-                      const active = q.n === talkTargetPlayer.n;
-                      const m = getPlayerMentalScore(q, null);
-                      const p = getPlayerPhysScore(q, null);
-                      const mMeta = getWellbeingTierMeta(m, 'mental', false);
-                      const pMeta = getWellbeingTierMeta(p, 'phys', q.inj > 0);
-                      const isFav = favNamesSet.has(q.n);
-                      const talkDone = q.careTalkMd === curTurn;
-                      const physDone = q.carePhysMd === curTurn;
-                      return (
-                        <button
-                          key={q.n}
-                          type="button"
-                          onClick={() => { SFX.tap(); setSelectedTalkPlayer(q.n); }}
-                          className={`w-full px-2 py-1.5 mland:py-1 flex items-center gap-2 text-left cursor-pointer transition-colors ${
-                            active ? 'bg-[var(--g-soft)]' : 'hover:bg-[var(--surface-2)]'
-                          }`}
-                        >
-                          <PlayerFace player={q} team={me} state={state} size={26} />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-[11.5px] mland:text-[9.5px] font-bold flex items-center gap-1 min-w-0">
-                              <PositionBadge role={q.ro} size="2xs" />
-                              <span className="truncate">{q.n}</span>
-                              {isFav && <span className="shrink-0">💖</span>}
-                            </div>
-                            <div className="text-[10px] mland:text-[8.5px] tabular flex items-center gap-1.5 text-[var(--mut)] mt-0.5">
-                              <span className={`font-bold ${mMeta.txtCls}`}>🧠{m}</span>
-                              <span className={`font-bold ${pMeta.txtCls}`}>💪{p}</span>
-                              {q.inj > 0 && <span className="text-[var(--red)] font-bold">เจ็บ{q.inj}</span>}
-                              {(talkDone || physDone) && <span className="text-[var(--g)]">✓</span>}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-
-              {/* Focused Player Conversation Card */}
-              {(() => {
-                const q = talkTargetPlayer;
-                const m = getPlayerMentalScore(q, null);
-                const p = getPlayerPhysScore(q, null);
-                const mMeta = getWellbeingTierMeta(m, 'mental', false);
-                const pMeta = getWellbeingTierMeta(p, 'phys', q.inj > 0);
-                const isFav = favNamesSet.has(q.n);
-                const favBoost = getActiveFavBoost(q, me, null);
-                const talkDone = q.careTalkMd === curTurn;
-                const physDone = q.carePhysMd === curTurn;
-                const persId = resolvePersonalityId(q, null);
-                const persName = PLAYER_PERSONALITIES[persId]?.name || 'สมดุล';
-                const effOv = ef(q);
-                const mGood = isPlayerMentalGood(q, null);
-                const pGood = isPlayerPhysGood(q, null);
-                const activeLog = plan.lastTalkLog?.playerName === q.n ? plan.lastTalkLog : null;
-
-                return (
-                  <div className="overflow-y-auto pr-1 space-y-2.5 mland:space-y-1.5 min-h-0">
-                    {/* Player Identity + Compact Favorite Bar */}
-                    <div className="rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] overflow-hidden">
-                      <div className="p-2.5 mland:p-2 flex items-center justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onInspectPlayer(q, me)}
-                          className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
-                        >
-                          <PlayerFace player={q} team={me} state={state} size={38} />
-                          <div className="min-w-0">
-                            <div className="text-sm mland:text-xs font-extrabold flex items-center gap-1.5 flex-wrap">
-                              <PositionBadge role={q.ro} size="xs" />
-                              <span className="group-hover:text-[var(--g)] transition-colors truncate">{q.n}</span>
-                              {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" />}
-                              {isFav && (
-                                <span
-                                  className={`px-1.5 py-[1px] rounded text-[9.5px] mland:text-[8px] font-black tabular ${
-                                    favBoost > 0
-                                      ? 'bg-rose-600 text-white'
-                                      : 'bg-amber-500/15 border border-amber-500/35 text-amber-800 dark:text-[var(--lamp)]'
-                                  }`}
-                                >
-                                  {favBoost > 0 ? `💖 +${favBoost} OVR` : '💖 ลูกรัก'}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular flex items-center gap-1.5 flex-wrap mt-0.5">
-                              <span>
-                                พลังรวม <b className="text-[var(--ink)]">{effOv}</b>
-                                {effOv !== q.ov ? ` (ฐาน ${q.ov})` : ''}
-                              </span>
-                              <span>·</span>
-                              <span>บุคลิก: <b className="text-[var(--ink)]">{persName}</b></span>
-                              <span>·</span>
-                              <span>ฟิต <b className={getStaminaMeta(Math.round(q.fit ?? 100)).txtCls}>{Math.round(q.fit ?? 100)}%</b></span>
-                            </div>
-                          </div>
-                        </button>
-
-                        <span className="px-2 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap tabular">
-                          {isFav ? '💖 ลูกรักประจำทีม' : `💖 ลูกรัก ${favPlayersList.length}/5`}
-                        </span>
-                      </div>
-
-                      {/* Sleek Integrated Favorite Status Strip */}
-                      <div
-                        className={`px-2.5 py-1 mland:px-2 mland:py-0.5 border-t flex flex-wrap items-center justify-between gap-2 text-[10px] mland:text-[8.5px] ${
-                          isFav && favBoost > 0
-                            ? 'bg-rose-500/10 border-rose-500/25 text-rose-700 dark:text-rose-300 font-semibold'
-                            : isFav
-                              ? 'bg-[var(--lamp-soft)]/50 border-[var(--lamp)]/35 text-amber-800 dark:text-[var(--lamp)]'
-                              : 'bg-[var(--surface)]/55 border-[var(--line)]/70 text-[var(--mut)]'
-                        }`}
-                      >
-                        {isFav ? (
-                          <>
-                            <span className="font-bold">
-                              {favBoost > 0
-                                ? `✨ ปลุกพลังทำงาน (+${favBoost} OVR ในสนามจริง)`
-                                : '⏳ รอเงื่อนไขปลุกพลัง (+5~10 OVR)'}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5 tabular font-bold">
-                              <span className={mGood ? 'text-[var(--g)]' : ''}>
-                                🧠 {m}/{GOOD_MENTAL_THRESHOLD}{mGood ? '✓' : ''}
-                              </span>
-                              <span className="opacity-35">·</span>
-                              <span className={!q.inj && pGood ? 'text-[var(--g)]' : ''}>
-                                {q.inj > 0 ? `🏥 เจ็บ ${q.inj} นัด` : `💪 ${p}/${GOOD_PHYS_THRESHOLD}${pGood ? '✓' : ''}`}
-                              </span>
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="truncate">
-                              💖 ลูกรักทีม ({favPlayersList.length}/5):{' '}
-                              <b className="text-[var(--ink)]">
-                                {favPlayersList.length > 0
-                                  ? favPlayersList.map((fp) => fp.n.split(' ')[0]).join(', ')
-                                  : 'ยังไม่มีลูกรัก'}
-                              </b>
-                            </span>
-                            <span className="tabular shrink-0">
-                              เงื่อนไข: ใจ/กาย ≥{GOOD_MENTAL_THRESHOLD} รับ +5~10 OVR
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Mental & Physical Meters + Top Factors */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5">
-                      <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)] space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] mland:text-[9px]">
-                          <span className="font-bold">🧠 สุขภาพจิตใจ</span>
-                          <span className={`font-black tabular ${mMeta.txtCls}`}>{mMeta.short} · {m}/100</span>
-                        </div>
-                        <div className="relative h-2 rounded-full bg-[var(--surface)] border border-[var(--line)]/60 overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${m}%`, backgroundColor: mMeta.barColor }} />
-                          <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--ink)]/55" style={{ left: `${GOOD_MENTAL_THRESHOLD}%` }} />
-                        </div>
-                        <div className="space-y-0.5">
-                          {(q.mentalFactors || []).slice(0, 3).map((f, idx) => (
-                            <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px]">
-                              <span className="text-[var(--mut)] truncate">{f.label}</span>
-                              <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                                {f.delta >= 0 ? `+${f.delta}` : f.delta}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)] space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] mland:text-[9px]">
-                          <span className="font-bold">💪 สุขภาพกาย</span>
-                          <span className={`font-black tabular ${pMeta.txtCls}`}>{pMeta.short} · {p}/100</span>
-                        </div>
-                        <div className="relative h-2 rounded-full bg-[var(--surface)] border border-[var(--line)]/60 overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${p}%`, backgroundColor: pMeta.barColor }} />
-                          <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--ink)]/55" style={{ left: `${GOOD_PHYS_THRESHOLD}%` }} />
-                        </div>
-                        <div className="space-y-0.5">
-                          {(q.physFactors || []).slice(0, 3).map((f, idx) => (
-                            <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px]">
-                              <span className="text-[var(--mut)] truncate">{f.label}</span>
-                              <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                                {f.delta >= 0 ? `+${f.delta}` : f.delta}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 4 Interactive Talk Topics + Physio Recovery */}
-                    <div
-                      data-focus-id={`talk:${q.n}`}
-                      className={`space-y-1.5 rounded-xl ${
-                        isFocused(`talk:${q.n}`) ? 'p-2 border border-amber-500/70 bg-amber-500/[0.06] task-focus-spotlight' : ''
-                      }`}
-                    >
-                      <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold gap-2">
-                        <span className="flex items-center gap-1.5">
-                          {isFocused(`talk:${q.n}`) && <NavFocusBadge />}
-                          <span>เลือกหัวข้อพูดคุยตัวต่อตัว ({talkDone ? '✓ คุยแล้วนัดนี้' : 'พร้อมคุย'})</span>
-                        </span>
-                        <span className="text-[var(--mut)] font-normal">ใช้ 1 โควตาดูแล</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {MANAGER_TALK_TOPICS.map((tp) => (
-                          <button
-                            key={tp.id}
-                            type="button"
-                            disabled={talkDone || careQuota.remaining <= 0}
-                            onClick={() => handleOneOnOneTalk(q, tp.id)}
-                            className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/35 text-left cursor-pointer disabled:opacity-45 disabled:cursor-default transition-all space-y-0.5"
-                          >
-                            <div className="font-bold text-[11.5px] mland:text-[9.5px] text-[var(--ink)]">
-                              {tp.icon} {tp.label}
-                            </div>
-                            <div className="text-[10px] mland:text-[8px] text-[var(--mut)] font-semibold">
-                              <EffectText text={tp.effectHint} />
-                            </div>
-                            <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-tight line-clamp-2">{tp.desc}</div>
-                          </button>
-                        ))}
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={physDone || careQuota.remaining <= 0}
-                        onClick={() => handlePhysioCare(q)}
-                        className="w-full p-2 mland:p-1.5 rounded-xl bg-sky-500/10 border border-sky-500/35 hover:border-sky-500 flex items-center justify-between gap-2 text-left cursor-pointer disabled:opacity-45 disabled:cursor-default transition-all"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-bold text-[11.5px] mland:text-[9.5px] text-sky-700 dark:text-sky-300">
-                            {physDone ? '✓ ฟื้นฟูกล้ามเนื้อรอบนี้แล้ว' : '🧊 ส่งกายภาพนวดคลายกล้ามเนื้อตัวต่อตัว'}
-                          </div>
-                          <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">
-                            <EffectText
-                              text={`เพิ่มสุขภาพกาย +${5 + Math.floor(medLv / 4) + (state.staff?.physio ? 1 : 0)}..${7 + Math.floor(medLv / 4) + (state.staff?.physio ? 1 : 0)} · ความฟิต +3%`}
-                            />
-                          </div>
-                        </div>
-                        <span className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0">
-                          {physDone ? 'เรียบร้อย' : '+กาย & ฟิต'}
-                        </span>
-                      </button>
-                    </div>
-
-                    {/* Live Dialogue Log Bubble */}
-                    {activeLog && (
-                      <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--g-soft)]/50 border border-[var(--g)]/35 space-y-1 text-[11px] mland:text-[9px]">
-                        <div className="flex items-center justify-between gap-2 font-bold">
-                          <span className="text-[var(--g)]">🗣️ บทสนทนากับ {activeLog.playerName} · {activeLog.topicLabel}</span>
-                          <span className="tabular font-bold">
-                            {activeLog.deltaMental !== 0 && (
-                              <span>
-                                จิตใจ <DeltaValue value={activeLog.deltaMental} />
-                              </span>
-                            )}
-                            {activeLog.deltaMental !== 0 && activeLog.deltaPhys !== 0 ? ' · ' : ''}
-                            {activeLog.deltaPhys !== 0 && (
-                              <span>
-                                กาย <DeltaValue value={activeLog.deltaPhys} />
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="text-[var(--mut)]">{activeLog.coachLine}</div>
-                        <div className="text-[var(--ink)] font-semibold">{activeLog.playerReply}</div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
           </div>
         </div>
       ) : (
@@ -1173,14 +636,6 @@ export const TeamTrainingView = React.memo<{
                       </button>
 
                       <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          title={`เปิดห้องพูดคุยกับ ${q.n}`}
-                          onClick={() => jumpToPlayerTalk(q.n)}
-                          className="btn btn-xs btn-ghost px-1.5"
-                        >
-                          💬
-                        </button>
                         <button
                           type="button"
                           onClick={() => {

@@ -39,6 +39,7 @@ export const PlayerWellbeingCard: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
   compact?: boolean;
+  showCareActions?: boolean;
 }> = ({
   player,
   team,
@@ -48,7 +49,8 @@ export const PlayerWellbeingCard: React.FC<{
   isRetired = false,
   onUpdateState,
   onToast,
-  compact = false
+  compact = false,
+  showCareActions = true
 }) => {
   const [showGuide, setShowGuide] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<TalkTopicId>(
@@ -242,7 +244,7 @@ export const PlayerWellbeingCard: React.FC<{
           </div>
           <div className="space-y-0.5">
             {mFactors.length > 0 ? (
-              mFactors.slice(0, 3).map((f, idx) => (
+              mFactors.slice(0, 5).map((f, idx) => (
                 <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px]">
                   <span className="text-[var(--mut)] truncate">{f.label}</span>
                   <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
@@ -281,7 +283,7 @@ export const PlayerWellbeingCard: React.FC<{
           </div>
           <div className="space-y-0.5">
             {pFactors.length > 0 ? (
-              pFactors.slice(0, 3).map((f, idx) => (
+              pFactors.slice(0, 5).map((f, idx) => (
                 <div key={`${f.label}-${idx}`} className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px]">
                   <span className="text-[var(--mut)] truncate">{f.label}</span>
                   <span className={`font-bold tabular shrink-0 ${f.delta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
@@ -298,8 +300,8 @@ export const PlayerWellbeingCard: React.FC<{
         </div>
       </div>
 
-      {/* Interactive Talk & Recovery Actions */}
-      {canCare && (
+      {/* Interactive Talk & Recovery Actions (hidden when Manager inspects read-only, since talks live in Club Office) */}
+      {canCare && showCareActions ? (
         <div className="space-y-1.5 pt-1 border-t border-[var(--line)]/70">
           <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[8.5px]">
             <span className="font-bold text-[var(--ink)]">💬 เลือกแนวทางพูดคุย &amp; ฟื้นฟู</span>
@@ -441,7 +443,11 @@ export const PlayerWellbeingCard: React.FC<{
             </div>
           )}
         </div>
-      )}
+      ) : canCare && !showCareActions ? (
+        <div className="pt-1.5 border-t border-[var(--line)]/60 text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
+          🚪 พูดคุยส่วนตัวหรือส่งกายภาพได้ที่ <b className="text-[var(--ink)]">สโมสร → ห้องคุย → ห้องออฟฟิศ</b>
+        </div>
+      ) : null}
     </div>
   );
 };

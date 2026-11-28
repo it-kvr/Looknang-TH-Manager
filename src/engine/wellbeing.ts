@@ -148,6 +148,32 @@ const isResilientPersonality = (tr: number) =>
 const isVolatilePersonality = (tr: number) =>
   tr === 1 || tr === 5 || tr === 7 || tr === 15 || tr === 19 || tr === 22;
 
+export function getPersonalityCareHint(tr: number): {
+  tone: 'resilient' | 'volatile' | 'balanced';
+  label: string;
+  hint: string;
+} {
+  if (isResilientPersonality(tr)) {
+    return {
+      tone: 'resilient',
+      label: 'ใจนิ่งรับแรงกดดันดี',
+      hint: 'ตอบสนองดีกับการกระตุ้นปลุกฟอร์ม (+โบนัสใจสู้)'
+    };
+  }
+  if (isVolatilePersonality(tr)) {
+    return {
+      tone: 'volatile',
+      label: 'อารมณ์อ่อนไหว/ขึ้นลงไว',
+      hint: 'เหมาะให้กำลังใจหรือผ่อนคลาย (กระตุ้นหนักเสี่ยงเครียดหากใจ < 50)'
+    };
+  }
+  return {
+    tone: 'balanced',
+    label: 'บุคลิกสมดุล',
+    hint: 'รับฟังทุกหัวข้อได้สม่ำเสมอ เลือกคุยให้ตรงสถานการณ์'
+  };
+}
+
 const bellRoll = (min: number, max: number): number => {
   const span = max - min;
   const half = Math.floor(span / 2);

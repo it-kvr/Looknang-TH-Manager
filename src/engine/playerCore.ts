@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSea
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp, capMoney } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, COUNTRY_META_BY_CODE, getForeignTeamCountryMeta, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, COUNTRY_META_BY_CODE, LEGACY_FOREIGN_CLUB_RENAMES, LEGACY_THAI_CLUB_PREFIX_RENAMES, LEGACY_THAI_STANDALONE_RENAMES, getForeignClubStadiumName, getForeignTeamCountryMeta, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
 import { ensureTeamWellbeing, getActiveFavBoost, getWellbeingOvrAdjustment, initPlayerWellbeing } from './wellbeing';
 
 export const NMU = new Set<string>();
@@ -70,6 +70,11 @@ export function localizeForeignTeams(teams?: Team[] | null): boolean {
 
   teams.forEach((tm) => {
     if (!(tm.foreign === 1 || tm.tier >= 3) || !Array.isArray(tm.sq)) return;
+    const renamedClub = LEGACY_FOREIGN_CLUB_RENAMES[tm.name?.trim() || ''];
+    if (renamedClub && renamedClub !== tm.name) {
+      tm.name = renamedClub;
+      changed = true;
+    }
     const meta = getForeignTeamCountryMeta(tm.name);
     const region = meta?.region || inferForeignTeamRegion(tm.name) || 'intl';
     const renameMap = new Map<string, string>();
@@ -116,6 +121,49 @@ export function localizeForeignTeams(teams?: Team[] | null): boolean {
         }
       }
     }
+  });
+
+  return changed;
+}
+
+const VALID_THAI_CLUB_SUFFIXES = new Set(SFX0.flat().filter(Boolean));
+
+export function localizeDomesticThaiTeams(teams?: Team[] | null, state?: GameState | null): boolean {
+  if (!Array.isArray(teams)) return false;
+  let changed = false;
+  const usedNames = new Set(teams.map((t) => t.name?.trim()).filter((n): n is string => Boolean(n)));
+
+  teams.forEach((tm) => {
+    if (tm.foreign === 1 || tm.tier >= 3 || !tm.name) return;
+    const raw = tm.name.trim();
+    let nextName: string | null = LEGACY_THAI_STANDALONE_RENAMES[raw] || null;
+    if (!nextName) {
+      const parts = raw.split(/\s+/);
+      if (parts.length === 2 && VALID_THAI_CLUB_SUFFIXES.has(parts[1]) && LEGACY_THAI_CLUB_PREFIX_RENAMES[parts[0]]) {
+        nextName = `${LEGACY_THAI_CLUB_PREFIX_RENAMES[parts[0]]} ${parts[1]}`;
+      }
+    }
+    if (!nextName || nextName === raw) return;
+    if (state?.mode === 'm' && tm.id === state.me && state.club?.name && state.club.name.trim() !== raw) {
+      return;
+    }
+    if (usedNames.has(nextName)) {
+      const altPool = NG[Math.min(2, Math.max(0, tm.tier))] || NG[0];
+      const suffix = raw.split(/\s+/)[1] || 'เอฟซี';
+      const fallback = altPool.map((p) => `${p} ${suffix}`).find((cand) => !usedNames.has(cand));
+      if (!fallback) return;
+      nextName = fallback;
+    }
+    usedNames.delete(raw);
+    usedNames.add(nextName);
+    tm.name = nextName;
+    if (state?.mode === 'm' && tm.id === state.me && state.club && state.club.name?.trim() === raw) {
+      state.club.name = nextName;
+      if (state.club.std === `สนาม${raw}`) {
+        state.club.std = `สนาม${nextName}`;
+      }
+    }
+    changed = true;
   });
 
   return changed;
@@ -339,6 +387,7 @@ export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
       if (mePl?.no) d.p.no = mePl.no;
     }
     localizeForeignTeams(d.teams);
+    localizeDomesticThaiTeams(d.teams, d);
     ensureAiTeamPhilosophies(d, false);
     d.teams.forEach((tm) => ensureTeamWellbeing(tm, d));
     d.money = capMoney(d.money);
@@ -2727,10 +2776,11 @@ export function getTeamClubIdentity(t: Team, s?: GameState | null): ClubIdentity
   const h = ([...(t.name || 'T')].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
   const icKeys = Object.keys(CREST_IC);
   const [c1, c2] = teamKits(t, s);
+  const isForeignClub = t.tier >= 3 || t.foreign === 1 || Boolean(getForeignTeamCountryMeta(t.name));
   return {
     name: t.name,
     nick: '',
-    std: 'สนาม' + t.name,
+    std: isForeignClub ? getForeignClubStadiumName(t.name) : 'สนาม' + t.name,
     c1,
     c2,
     shape: h % CREST_SHAPES.length,

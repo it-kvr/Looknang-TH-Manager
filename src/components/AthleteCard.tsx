@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PlayerBio, StatCategorySummary } from '../engine/playerCore';
+import { getCountryMetaByCode, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { clamp } from '../utils/math';
 import { statBarColor, statTierMeta } from '../engine/missions';
 import { PlayerFace, resolveGkKitPalette } from './SvgVisuals';
@@ -34,6 +35,7 @@ export interface AthleteCardProps {
   kit2: string;
   faceProps: Omit<React.ComponentProps<typeof PlayerFace>, 'size' | 'bare'>;
   name: string;
+  nationalityCode?: string | null;
   clubCrest?: React.ReactNode;
   subtitle: string;
   bio: PlayerBio;
@@ -64,6 +66,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   kit2,
   faceProps,
   name,
+  nationalityCode,
   clubCrest,
   subtitle,
   bio,
@@ -89,6 +92,14 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   const ycCount = discipline?.yc ?? faceProps.player?.yc ?? faceProps.careerProfile?.yc ?? 0;
   const rcCount = discipline?.rc ?? faceProps.player?.rc ?? faceProps.careerProfile?.rc ?? 0;
   const injCount = discipline?.inj ?? faceProps.player?.inj ?? faceProps.careerProfile?.inj ?? 0;
+  const resolvedNatCode =
+    nationalityCode ||
+    faceProps.player?.nat ||
+    (faceProps.team && (faceProps.team.tier >= 3 || faceProps.team.foreign === 1)
+      ? getForeignTeamCountryMeta(faceProps.team.name)?.code
+      : undefined) ||
+    'TH';
+  const natMeta = getCountryMetaByCode(resolvedNatCode) || getCountryMetaByCode('TH');
 
   return (
     <div
@@ -267,9 +278,18 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
       {/* Athlete Identity */}
       <div className="px-2.5 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-0.5 shrink-0">
         <div
-          className={`font-display font-extrabold text-[13px] mland:text-[10.5px] truncate leading-tight ${cardPalette.nameText}`}
+          className={`flex items-center justify-center gap-1 min-w-0 font-display font-extrabold text-[13px] mland:text-[10.5px] leading-tight ${cardPalette.nameText}`}
         >
-          {name}
+          {natMeta && (
+            <span
+              title={`สัญชาติ${natMeta.country} (${natMeta.code})`}
+              aria-label={`สัญชาติ${natMeta.country}`}
+              className="shrink-0 text-[12px] mland:text-[9.5px] leading-none select-none drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]"
+            >
+              {natMeta.flag}
+            </span>
+          )}
+          <span className="truncate">{name}</span>
         </div>
         <div
           className={`flex items-center justify-center gap-1 text-[9.5px] mland:text-[7.5px] tabular leading-tight min-w-0 ${cardPalette.metaText}`}

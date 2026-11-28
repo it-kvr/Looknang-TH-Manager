@@ -1,4 +1,5 @@
 import type { MatchEnvironment, StadiumStyleId, TurfMatchModifiers } from '../types/game';
+import { getForeignTeamCountryMeta } from './thaiFootballData';
 
 export const CREST_SHAPES: { label: string; d: string }[] = [
   { label: 'โล่คลาสสิก', d: 'M3 2h18v11c0 5-4 8-9 10-5-2-9-5-9-10z' },
@@ -226,8 +227,8 @@ export const TURF_GRADE_SPECS: readonly TurfGradeSpec[] = [
   {
     id: 'fifa_hybrid',
     grade: 'S',
-    name: 'เกรด S · พื้นไฮบริด FIFA Pro',
-    shortName: 'เกรด S FIFA Pro',
+    name: 'เกรด S · พื้นไฮบริดระดับโลก (Pro Hybrid)',
+    shortName: 'เกรด S ไฮบริดโลก',
     desc: 'หญ้าไฮบริดตัดลายแชมเปียนส์ทูโทน พร้อมระบบดูดน้ำใต้ดิน ไร้แอ่งน้ำขัง',
     cutStyle: 'hybrid_pro',
     maxPuddles: 0,
@@ -460,6 +461,20 @@ export const getStadiumStyleSpec = (id?: string | null): StadiumStyleSpec =>
 export const getAiTeamStadiumStyleId = (teamId: number, teamName?: string, tier = 0): StadiumStyleId => {
   const hash =
     ([...(teamName || 'Club')].reduce((acc, ch, idx) => acc + ch.charCodeAt(0) * (idx + 5), 0) + (teamId + 1) * 29) >>> 0;
+  const foreignMeta = tier >= 3 ? getForeignTeamCountryMeta(teamName) : getForeignTeamCountryMeta(teamName);
+  if (tier >= 3 || foreignMeta) {
+    const confed = foreignMeta?.confed;
+    const foreignPools: Record<'europe' | 'asia' | 'americas' | 'africa', StadiumStyleId[]> = {
+      europe: ['fortress_kop', 'modern_bowl', 'glass_pavilion', 'cyber_dome'],
+      asia: ['cyber_dome', 'modern_bowl', 'glass_pavilion', 'open_track'],
+      americas: ['fortress_kop', 'modern_bowl', 'open_track', 'cyber_dome'],
+      africa: ['open_track', 'modern_bowl', 'fortress_kop']
+    };
+    const pool = confed
+      ? foreignPools[confed]
+      : (['modern_bowl', 'fortress_kop', 'glass_pavilion', 'cyber_dome'] as StadiumStyleId[]);
+    return pool[hash % pool.length];
+  }
   if (tier >= 2) {
     const elitePool: StadiumStyleId[] = ['modern_bowl', 'fortress_kop', 'glass_pavilion', 'cyber_dome', 'thai_heritage'];
     return elitePool[hash % elitePool.length];

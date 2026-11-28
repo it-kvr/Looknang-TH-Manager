@@ -436,12 +436,12 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
             ? `ลูกรักรอปลุกพลัง (${favShort})`
             : `ลูกรักรอปลุกพลัง ${unboostedFavs.length} คน (${favShort})`,
         detail: `ใจ ${fm} · กาย ${fp} (ต้อง ≥72)`,
-        actionLabel: 'ดูแลทีม',
+        actionLabel: 'เข้าออฟฟิศ',
         nav: {
-          tab: 'r',
-          sub: 'talk',
+          tab: 'u',
+          sub: 'rooms',
           focus: `talk:${favPl.n}`,
-          hint: `เลือกหัวข้อพูดคุยหรือกดฟื้นฟูกล้ามเนื้อให้ ${favPl.n} ในกรอบที่ไฮไลต์ (ทำ ใจ≥72 และ กาย≥72)`
+          hint: `คุยส่วนตัวหรือส่งกายภาพให้ ${favPl.n} ในห้องออฟฟิศ (ทำ ใจ≥72 และ กาย≥72)`
         }
       });
     } else if (avgMental < 60 && careQuota.remaining > 0) {
@@ -449,17 +449,17 @@ export function buildTeamReadinessSummary(state: GameState): TeamReadinessSummar
         id: 'team-morale-low',
         kind: 'alert',
         tone: 'warn',
-        icon: '💬',
+        icon: '🏛️',
         shortLabel: `ขวัญทีม ${avgMental}`,
-        tag: 'ทีมทอล์ก',
+        tag: 'ห้องประชุม',
         title: `ขวัญทีมต่ำ (${avgMental}/100)`,
-        detail: `เหลือโควตาดูแล ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
-        actionLabel: 'พูดคุย',
+        detail: `เหลือโควตาออฟฟิศ ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
+        actionLabel: 'เข้าห้องประชุม',
         nav: {
-          tab: 'r',
-          sub: 'talk',
+          tab: 'u',
+          sub: 'rooms',
           focus: 'team-talk',
-          hint: 'เลือกหัวข้อ "ประชุมทีมทอล์ก" ฝั่งซ้ายเพื่อปลุกขวัญทั้งทีม หรือคุยรายคนฝั่งขวา'
+          hint: 'เลือกวาระประชุมรวมใน "ห้องประชุมทีม" เพื่อปลุกขวัญทั้งสโมสร'
         }
       });
     }

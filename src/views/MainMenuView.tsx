@@ -1421,6 +1421,7 @@ export const MainMenu = React.memo<{
                 trimColor: '#fad05a'
               }}
               name={previewName}
+              nationalityCode={previewPlayer.nat || 'TH'}
               subtitle={`นักเตะใหม่ · อายุ ${cAge} ปี`}
               bio={previewBio}
               categories={summarizeStatGroups(subStats)}

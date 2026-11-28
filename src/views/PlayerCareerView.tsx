@@ -153,6 +153,7 @@ export const PlayerCareerView = React.memo<{
             careerProfile: p
           }}
           name={p.name}
+          nationalityCode={fakePlayer.nat || 'TH'}
           clubCrest={<ClubCrest name={meTeam.name} size={14} team={meTeam} club={state.club} isMyClub={false} />}
           subtitle={`${meTeam.name} · อายุ ${p.age} ปี`}
           bio={details.bio}
