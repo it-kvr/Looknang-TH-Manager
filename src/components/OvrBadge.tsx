@@ -7,6 +7,7 @@ export type OvrBadgeSize = '2xs' | 'xs' | 'sm' | 'md' | 'lg';
 
 interface OvrBadgeProps {
   ov: number;
+  boost?: number;
   variant?: OvrBadgeVariant;
   size?: OvrBadgeSize;
   prefix?: string;
@@ -125,6 +126,7 @@ export function getOvrCanvasPalette(v: number): { bg: string; stroke: string; te
 
 export const OvrBadge: React.FC<OvrBadgeProps> = ({
   ov,
+  boost = 0,
   variant = 'badge',
   size = 'sm',
   prefix,
@@ -134,9 +136,14 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
   className = ''
 }) => {
   const val = clamp(Math.round(ov || 0), 1, 199);
+  const activeBoost = Math.max(0, Math.round(boost || 0));
   const styleMeta = getOvrTierStyle(val);
   const tierMeta = statTierMeta(val);
-  const resolvedTitle = title || `ค่าพลังรวม ${val} · ${styleMeta.label}`;
+  const resolvedTitle =
+    title ||
+    (activeBoost > 0
+      ? `ค่าพลังรวม ${val} (รวมโบนัสลูกรัก +${activeBoost}) · ${styleMeta.label}`
+      : `ค่าพลังรวม ${val} · ${styleMeta.label}`);
 
   if (variant === 'inline') {
     const sizeCls =
@@ -149,10 +156,14 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
             : size === 'lg'
               ? 'text-sm mland:text-xs'
               : 'text-[11px] mland:text-[9.5px]';
+    const boostInlineFrameCls =
+      activeBoost > 0
+        ? 'px-1 py-[1px] rounded border border-rose-400/90 dark:border-rose-400/75 ring-1 ring-inset ring-rose-300/35 shadow-[0_1px_6px_-1px_rgba(244,63,94,0.3)]'
+        : '';
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-baseline gap-0.5 font-display font-extrabold tabular leading-none whitespace-nowrap shrink-0 ${tierMeta.textClass} ${sizeCls} ${className}`}
+        className={`inline-flex items-baseline gap-0.5 font-display font-extrabold tabular leading-none whitespace-nowrap shrink-0 ${tierMeta.textClass} ${sizeCls} ${boostInlineFrameCls} ${className}`}
       >
         {prefix && <span className="text-[0.76em] opacity-80 font-bold tracking-wider">{prefix}</span>}
         <span>{val}</span>
@@ -160,16 +171,18 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
     );
   }
 
+  const boostBadgeFrameCls =
+    activeBoost > 0
+      ? '!border-rose-400 ring-[1.5px] ring-rose-400/60 shadow-[0_0_10px_-1px_rgba(244,63,94,0.42)]'
+      : '';
+
   if (variant === 'card') {
-    const isLight = tone === 'light';
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-[2px] mland:px-1 mland:py-[1px] rounded-md border font-display font-extrabold text-[15px] sm:text-[16px] mland:text-[11.5px] leading-none tracking-tight tabular select-none shrink-0 ${
-          isLight ? styleMeta.lightCardCls : styleMeta.darkCardCls
-        } ${className}`}
+        className={`inline-flex items-center justify-center gap-0.5 px-2 py-[3px] mland:px-1.5 mland:py-[2px] rounded-lg border font-display font-extrabold text-[14.5px] sm:text-[15.5px] mland:text-[11px] leading-none tracking-tight tabular select-none shrink-0 whitespace-nowrap ${styleMeta.badgeCls} ${boostBadgeFrameCls} ${className}`}
       >
-        {prefix && <span className="text-[0.58em] opacity-80 font-bold tracking-wider">{prefix}</span>}
+        {prefix && <span className="text-[0.58em] opacity-90 font-bold tracking-wider">{prefix}</span>}
         <span>{val}</span>
       </span>
     );
@@ -190,7 +203,7 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${tierMeta.badgeClass} ${sizeCls} ${className}`}
+        className={`inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${tierMeta.badgeClass} ${sizeCls} ${boostBadgeFrameCls} ${className}`}
       >
         {prefix && <span className="text-[0.72em] opacity-85 font-bold tracking-wider">{prefix}</span>}
         <span>{val}</span>
@@ -213,7 +226,7 @@ export const OvrBadge: React.FC<OvrBadgeProps> = ({
   return (
     <span
       title={resolvedTitle}
-      className={`inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${styleMeta.badgeCls} ${badgeSizeCls} ${className}`}
+      className={`inline-flex items-center justify-center gap-0.5 border font-display font-extrabold leading-none tabular select-none shrink-0 whitespace-nowrap ${styleMeta.badgeCls} ${badgeSizeCls} ${boostBadgeFrameCls} ${className}`}
     >
       {prefix && <span className="text-[0.7em] opacity-90 font-bold tracking-wider">{prefix}</span>}
       <span>{val}</span>

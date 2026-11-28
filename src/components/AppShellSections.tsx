@@ -218,6 +218,7 @@ export const AppTopHud = React.memo<{
               ) : (
                 <OvrBadge
                   ov={myCareerDispOv}
+                  boost={myCareerFavBoost}
                   size="2xs"
                   prefix="OVR"
                   title={myCareerFavBoost > 0 ? `OVR ${myCareerBaseOv} + ลูกรัก ${myCareerFavBoost} = ${myCareerDispOv}` : undefined}
@@ -307,6 +308,7 @@ export const AppTopHud = React.memo<{
                   <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">OVR</div>
                   <OvrBadge
                     ov={myCareerDispOv}
+                    boost={myCareerFavBoost}
                     variant="inline"
                     size="xs"
                     title={myCareerFavBoost > 0 ? `OVR ${myCareerBaseOv} + ลูกรัก ${myCareerFavBoost} = ${myCareerDispOv}` : undefined}

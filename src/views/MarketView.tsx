@@ -10,6 +10,8 @@ import { appendPlayerCareerLog } from '../engine/history';
 import {
   LEAGUE_TRANSFER_RULES,
   getLeagueTransferContext,
+  getVeteranDiscountedPrice,
+  canTeamSignForeignPlayer,
   mkMarket,
   createScoutMission,
   getIncomingOffers,
@@ -192,10 +194,10 @@ export function isPlayerOpenToDomesticMove(
   const isAsean = ASEAN_NATIONAL_CODES.has(natCode);
   const isAsia = natMeta?.confed === 'asia';
 
-  const tierCeiling = me.tier >= 2 ? 78 : me.tier === 1 ? 70 : 65;
+  const tierCeiling = me.tier >= 2 ? 80 : me.tier === 1 ? 72 : 66;
   const regionBonus = isAsean ? 4 : isAsia ? 2 : 0;
-  const ageBonus = q.age >= 33 ? 5 : q.age >= 30 ? 3 : q.age <= 21 ? 2 : 0;
-  const statusBonus = q.listed ? 4 : 0;
+  const ageBonus = q.age >= 34 ? 11 : q.age >= 32 ? 8 : q.age >= 30 ? 5 : q.age <= 21 ? 2 : 0;
+  const statusBonus = q.listed ? 5 : 0;
 
   return q.ov <= tierCeiling + regionBonus + ageBonus + statusBonus;
 }
@@ -439,7 +441,7 @@ export const MarketView = React.memo<{
         } else if (countryFilter !== 'ALL') {
           if (pCode !== countryFilter) return;
         }
-        items.push({ q, team: t, idx, price: Math.max(8, vlu(q)) });
+        items.push({ q, team: t, idx, price: Math.max(8, getVeteranDiscountedPrice({ ov: q.ov, age: q.age, free: 0 })) });
       });
     });
     return items;
@@ -791,7 +793,7 @@ export const MarketView = React.memo<{
       .filter(({ z }) => !z.loan && !z.me && z.inj === 0 && tx.posCounts[z.pos] > tx.minPos[z.pos])
       .sort((a, b) => vlu(b.z) - vlu(a.z));
 
-    const targetWithPrice: Player = source === 'club' && !q.price ? { ...q, price: Math.max(8, vlu(q)) } : q;
+    const targetWithPrice: Player = source === 'club' && !q.price ? { ...q, price: Math.max(8, getVeteranDiscountedPrice({ ov: q.ov, age: q.age, free: 0 })) } : q;
     setOfferDraft({
       source,
       idx,
@@ -814,7 +816,9 @@ export const MarketView = React.memo<{
     if (!offerDraft) return;
     const { q: rawQ, sellerTeam } = getDraftTarget(offerDraft, state);
     if (!rawQ) return;
-    const q: Player = offerDraft.source === 'club' && !rawQ.price ? { ...rawQ, price: Math.max(8, vlu(rawQ)) } : rawQ;
+    const qBase: Player = offerDraft.source === 'club' && !rawQ.price ? { ...rawQ, price: Math.max(8, getVeteranDiscountedPrice({ ov: rawQ.ov, age: rawQ.age, free: 0 })) } : rawQ;
+    const resolvedNat = qBase.nat || (offerDraft.source === 'club' && sellerTeam && sellerTeam.tier >= 3 ? getForeignTeamCountryMeta(sellerTeam.name)?.code : undefined);
+    const q: Player = resolvedNat && !qBase.nat ? { ...qBase, nat: resolvedNat } : qBase;
     const deal = useCounter && offerDraft.counter ? offerDraft.counter : evalOffer(q, offerDraft, me);
     if (!tx.tw.open && !q.free) { onToast('ตลาดซื้อขายปิดอยู่ ไม่สามารถย้ายสังกัดสโมสรอื่นได้'); return; }
     if (offerDraft.source === 'club' && sellerTeam && deal.type !== 'swap' && sellerTeam.sq.length <= 16) {
@@ -828,6 +832,17 @@ export const MarketView = React.memo<{
     if (tx.ffpLocked && deal.cashNow > 0) { onToast('งบติดลบตามกฎ FFP ห้ามจ่ายค่าตัวจนกว่างบจะกลับมาเป็นบวก'); return; }
     if (state.money < deal.cashNow) { onToast('งบสโมสรไม่พอจ่ายทันที'); return; }
     if (me.sq.length >= tx.maxSquad && deal.type !== 'swap') { onToast(`ทีมเต็ม ${tx.maxSquad} คนแล้ว`); return; }
+    const foreignChk = canTeamSignForeignPlayer(me, q, {
+      outgoingPlayer: deal.type === 'swap' ? deal.swapQ : null
+    });
+    if (!foreignChk.ok) {
+      onToast(
+        deal.type === 'swap'
+          ? `โควตาต่างชาติเต็ม ${foreignChk.maxForeign} คนแล้ว (หากต้องการสลับตัว ให้เลือกแลกนักเตะต่างชาติออก)`
+          : foreignChk.err || `โควตานักเตะต่างชาติเต็ม ${foreignChk.maxForeign} คนแล้ว`
+      );
+      return;
+    }
     const freedWage = deal.type === 'swap' && deal.swapQ ? ensureCon(deal.swapQ).wg : 0;
     if (tx.curWage - freedWage + deal.wg > tx.wageCap) {
       onToast(`เกินเพดานค่าเหนื่อยลีก (${fmtMoneyNum(tx.wageCap)}/นัด) กรุณาขายหรือลดค่าเหนื่อยก่อน`);
@@ -880,6 +895,10 @@ export const MarketView = React.memo<{
         const origCon = target.con ? { ...target.con } : undefined;
         removeFromSrc();
         const incoming: Player = { ...target };
+        if (sellerRef && sellerRef.tier >= 3 && !incoming.nat) {
+          const clubCode = getForeignTeamCountryMeta(sellerRef.name)?.code;
+          if (clubCode) incoming.nat = clubCode;
+        }
         if (deal.type === 'loan' || deal.type === 'loanopt') {
           incoming.loan = 1;
           if (deal.loanOpt) incoming.loanOpt = deal.loanOpt;
@@ -1005,7 +1024,9 @@ export const MarketView = React.memo<{
     if (!offerDraft) return null;
     const { q: rawQ, sellerTeam } = getDraftTarget(offerDraft, state);
     if (!rawQ) return null;
-    const q: Player = offerDraft.source === 'club' && !rawQ.price ? { ...rawQ, price: Math.max(8, vlu(rawQ)) } : rawQ;
+    const qBase: Player = offerDraft.source === 'club' && !rawQ.price ? { ...rawQ, price: Math.max(8, getVeteranDiscountedPrice({ ov: rawQ.ov, age: rawQ.age, free: 0 })) } : rawQ;
+    const resolvedNat = qBase.nat || (offerDraft.source === 'club' && sellerTeam && sellerTeam.tier >= 3 ? getForeignTeamCountryMeta(sellerTeam.name)?.code : undefined);
+    const q: Player = resolvedNat && !qBase.nat ? { ...qBase, nat: resolvedNat } : qBase;
     const info = dtInfo(q);
     const swCands = me.sq
       .map((z, i) => ({ z, i }))
@@ -1020,6 +1041,10 @@ export const MarketView = React.memo<{
     const needSwapOk = offerDraft.type !== 'swap' || !!E.swapQ;
     const fullSq = me.sq.length >= tx.maxSquad && offerDraft.type !== 'swap';
     const loanCapHit = isLoanType && tx.loansCount >= tx.maxLoans;
+    const foreignChk = canTeamSignForeignPlayer(me, q, {
+      outgoingPlayer: offerDraft.type === 'swap' ? E.swapQ : null
+    });
+    const foreignCapHit = !foreignChk.ok;
     const freedWage = offerDraft.type === 'swap' && E.swapQ ? ensureCon(E.swapQ).wg : 0;
     const projectedWage = +(tx.curWage - freedWage + E.wg).toFixed(1);
     const wageOverCap = projectedWage > tx.wageCap;
@@ -1033,7 +1058,8 @@ export const MarketView = React.memo<{
     const counterProjectedWage = counter ? +(tx.curWage - counterFreedWage + counter.wg).toFixed(1) : 0;
     const counterCanAfford = counter ? state.money >= counter.cashNow && !(tx.ffpLocked && counter.cashNow > 0) : true;
     const counterWageOverCap = counter ? counterProjectedWage > tx.wageCap : false;
-    const counterBlocked = !!counter && (!counterCanAfford || counterWageOverCap || fullSq || loanCapHit || !needSwapOk || windowBlocked);
+    const counterForeignCapHit = counter ? !canTeamSignForeignPlayer(me, q, { outgoingPlayer: counter.type === 'swap' ? counter.swapQ : null }).ok : false;
+    const counterBlocked = !!counter && (!counterCanAfford || counterWageOverCap || fullSq || loanCapHit || foreignCapHit || counterForeignCapHit || !needSwapOk || windowBlocked);
 
     const types: [OfferDraft['type'], string][] = q.free
       ? [['free', '🆓 เซ็นฟรีเอเยนต์']]
@@ -1685,11 +1711,17 @@ export const MarketView = React.memo<{
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px] pt-0.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] mland:text-[8.5px] pt-0.5">
                   <span>
                     เพดานค่าเหนื่อย:{' '}
                     <b className={wageOverCap ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
                       {fmtMoneyNum(projectedWage)}/{fmtMoneyNum(tx.wageCap)}
+                    </b>
+                  </span>
+                  <span>
+                    ต่างชาติ:{' '}
+                    <b className={foreignCapHit ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                      {tx.foreignCount}/{tx.maxForeign} คน
                     </b>
                   </span>
                   <span>
@@ -1737,7 +1769,7 @@ export const MarketView = React.memo<{
             </button>
             <button
               type="button"
-              disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || sellerMinBlocked || windowBlocked || !!q.locked}
+              disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || foreignCapHit || wageOverCap || sellerMinBlocked || windowBlocked || !!q.locked}
               onClick={() => submitOffer(false)}
               className="btn btn-md btn-gold flex-1"
             >
@@ -1749,15 +1781,19 @@ export const MarketView = React.memo<{
                     ? `ทีมขายมีนักเตะขั้นต่ำ ${sellerTeam?.sq.length} คน (ต้องแลกตัว)`
                     : loanCapHit
                       ? `โควตายืมเต็ม ${tx.maxLoans} คน`
-                      : wageOverCap
-                        ? `เกินเพดานค่าเหนื่อย ${fmtMoneyNum(tx.wageCap)}`
-                        : fullSq
-                          ? `ทีมเต็ม ${tx.maxSquad} คน`
-                          : !needSwapOk
-                            ? 'ยังไม่มีนักเตะให้แลกตัว'
-                            : !canAfford
-                              ? (tx.ffpLocked ? 'งบติดลบตามกฎ FFP' : 'งบสโมสรไม่พอจ่ายทันที')
-                              : '🤝 ยื่นข้อเสนออย่างเป็นทางการ'}
+                      : foreignCapHit
+                        ? (offerDraft.type === 'swap'
+                          ? `ต้องแลกต่างชาติออก (โควตา ${tx.foreignCount}/${tx.maxForeign})`
+                          : `โควตาต่างชาติเต็ม ${tx.foreignCount}/${tx.maxForeign} คน`)
+                        : wageOverCap
+                          ? `เกินเพดานค่าเหนื่อย ${fmtMoneyNum(tx.wageCap)}`
+                          : fullSq
+                            ? `ทีมเต็ม ${tx.maxSquad} คน`
+                            : !needSwapOk
+                              ? 'ยังไม่มีนักเตะให้แลกตัว'
+                              : !canAfford
+                                ? (tx.ffpLocked ? 'งบติดลบตามกฎ FFP' : 'งบสโมสรไม่พอจ่ายทันที')
+                                : '🤝 ยื่นข้อเสนออย่างเป็นทางการ'}
             </button>
           </div>
         </div>
@@ -1903,7 +1939,8 @@ export const MarketView = React.memo<{
     { id: 'history', icon: '📊', label: 'ประวัติลีก', count: transferHistoryStats.entries.length > 0 ? `${transferHistoryStats.entries.length}` : undefined }
   ];
 
-  const scoutFocusCards: { focus: ScoutMission['focus']; icon: string; title: string; desc: string }[] = [
+  const scoutFocusCards: { focus: ScoutMission['focus']; icon: string; title: string; desc: string; spanTwo?: boolean }[] = [
+    { focus: 'foreign', icon: '✈️', title: 'บิ๊กเนมต่างชาติ', desc: 'สตาร์ต่างชาติ/สายเก๋า OVR สูง พร้อมดีลลดค่าตัวหรือฟรีเอเยนต์', spanTwo: true },
     { focus: 'wonderkid', icon: '🌟', title: 'ดาวรุ่ง U20', desc: 'อายุน้อย แววพัฒนาสูง' },
     { focus: 'free', icon: '🆓', title: 'ฟรีเอเยนต์', desc: 'ไร้ค่าตัว เซ็นได้ทันที' },
     { focus: 'gk', icon: '🧤', title: 'ผู้รักษาประตู', desc: 'นายด่านเฝ้าเสา' },
@@ -1975,6 +2012,12 @@ export const MarketView = React.memo<{
               <div className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)] leading-none">ขนาดทีม</div>
               <div className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold text-[var(--ink)] mt-0.5 leading-tight whitespace-nowrap">
                 {me.sq.length}/{tx.maxSquad}
+              </div>
+            </div>
+            <div className="px-2.5 mland:px-2">
+              <div className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)] leading-none">โควตาต่างชาติ</div>
+              <div className={`text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold mt-0.5 leading-tight whitespace-nowrap ${tx.foreignCount >= tx.maxForeign ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                {tx.foreignCount}/{tx.maxForeign}
               </div>
             </div>
             <div className="pl-2.5 mland:pl-2">
@@ -2083,6 +2126,9 @@ export const MarketView = React.memo<{
                     SFX.tap();
                     setMarketSource('club');
                     setFreeOnlyFilter(false);
+                    if (clubTierFilter === 'MY_TIER' && countryFilter !== 'ALL' && countryFilter !== 'TH') {
+                      setClubTierFilter('ALL');
+                    }
                   }}
                   className={`py-1 mland:py-0.5 px-1 rounded-[8px] text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 cursor-pointer transition-all ${
                     marketSource === 'club'
@@ -2985,6 +3031,8 @@ export const MarketView = React.memo<{
                   const q = cand.player;
                   const alreadyInSquad = me.sq.some((z) => z.n === q.n);
                   const squadFull = me.sq.length >= tx.maxSquad;
+                  const createdForeignChk = canTeamSignForeignPlayer(me, q);
+                  const createdForeignFull = !createdForeignChk.ok;
                   const signCreatedPlayer = (payTransferFee: boolean) => {
                     if (alreadyInSquad) {
                       onToast(`${q.n} อยู่ในทีมของคุณแล้ว`);
@@ -2992,6 +3040,10 @@ export const MarketView = React.memo<{
                     }
                     if (squadFull) {
                       onToast(`ทีมเต็ม ${tx.maxSquad} คนแล้ว`);
+                      return;
+                    }
+                    if (createdForeignFull) {
+                      onToast(createdForeignChk.err || `โควตานักเตะต่างชาติเต็ม ${tx.maxForeign} คนแล้ว`);
                       return;
                     }
                     const fee = payTransferFee ? cand.price : 0;
@@ -3197,19 +3249,19 @@ export const MarketView = React.memo<{
                             </button>
                             <button
                               type="button"
-                              disabled={squadFull}
+                              disabled={squadFull || createdForeignFull}
                               onClick={() => signCreatedPlayer(false)}
                               className="btn btn-xs btn-primary shrink-0 px-1.5"
-                              title="ดึงเข้าทีมฟรีในฐานะเด็กปั้นสโมสร"
+                              title={createdForeignFull ? `โควตาต่างชาติเต็ม ${tx.maxForeign} คน` : 'ดึงเข้าทีมฟรีในฐานะเด็กปั้นสโมสร'}
                             >
                               🌱 ฟรี
                             </button>
                             <button
                               type="button"
-                              disabled={squadFull || state.money < cand.price || (tx.ffpLocked && cand.price > 0)}
+                              disabled={squadFull || createdForeignFull || state.money < cand.price || (tx.ffpLocked && cand.price > 0)}
                               onClick={() => signCreatedPlayer(true)}
                               className="btn btn-xs btn-gold shrink-0 px-1.5"
-                              title="ซื้อตัวเข้าทีมพร้อมสัญลักษณ์เด็กปั้น"
+                              title={createdForeignFull ? `โควตาต่างชาติเต็ม ${tx.maxForeign} คน` : 'ซื้อตัวเข้าทีมพร้อมสัญลักษณ์เด็กปั้น'}
                             >
                               {fmtMoneyNum(cand.price)}
                             </button>
@@ -4172,7 +4224,7 @@ export const MarketView = React.memo<{
                   <div className="space-y-1.5">
                     <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">เลือกเป้าหมายด่วน</div>
                     <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
-                      {scoutFocusCards.map(({ focus, icon, title, desc }) => (
+                      {scoutFocusCards.map(({ focus, icon, title, desc, spanTwo }) => (
                         <button
                           key={focus}
                           type="button"
@@ -4186,7 +4238,7 @@ export const MarketView = React.memo<{
                             });
                             onToast('ส่งแมวมองออกเดินทางแล้ว! รอรายงานในอีก 2 นัด');
                           }}
-                          className="text-left p-2.5 mland:p-2 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 hover:bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)]/60 transition-colors cursor-pointer disabled:opacity-45 disabled:pointer-events-none"
+                          className={`text-left p-2.5 mland:p-2 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 hover:bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)]/60 transition-colors cursor-pointer disabled:opacity-45 disabled:pointer-events-none ${spanTwo ? 'col-span-2' : ''}`}
                         >
                           <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] flex items-center gap-1.5 leading-tight">
                             <span>{icon}</span>

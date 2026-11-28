@@ -307,6 +307,7 @@ export const PlayerClubTransferView = React.memo<{
             )}
             <OvrBadge
               ov={ov + myFavBoost}
+              boost={myFavBoost}
               size="sm"
               prefix="OVR"
               title={myFavBoost > 0 ? `OVR ${ov} + ลูกรัก ${myFavBoost} = ${ov + myFavBoost}` : undefined}
@@ -434,6 +435,7 @@ export const PlayerClubTransferView = React.memo<{
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
                         <OvrBadge
                           ov={q.ov + qBoost}
+                          boost={qBoost}
                           size="xs"
                           title={qBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${qBoost} = ${q.ov + qBoost}` : undefined}
                         />
@@ -634,6 +636,7 @@ export const PlayerClubTransferView = React.memo<{
                         </div>
                         <OvrBadge
                           ov={q.ov + dBoost}
+                          boost={dBoost}
                           size="xs"
                           prefix="OVR"
                           title={dBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${dBoost} = ${q.ov + dBoost}` : undefined}

@@ -1,15 +1,16 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { MainTab, NavIntent, Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
+import type { MainTab, NavIntent, Position, SubRole, Mentality, Player, CustomSlot, Team, GameState, PitchDragPreview } from '../types/game';
 import { NavFocusBanner, NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoneyNum } from '../utils/math';
-import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
+import { POS, FSD, LINE, AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio, autoAssignTeamRoles, scoreCaptainCandidate, scoreSetPieceCandidate, teamKits, pickGK } from '../engine/playerCore';
+import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio, teamKits, pickGK } from '../engine/playerCore';
 import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
-import { PlayerFace, ClubCrest, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
+import { PlayerFace, ClubCrest, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from '../modals/MatchSharedComponents';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { LockerRoomPanel } from '../components/LockerRoomPanel';
+import { TacticsBoardPanel } from '../components/TacticsBoardPanel';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { CustomFormationModal } from '../modals/TacticsModals';
 import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
@@ -911,21 +912,6 @@ export const SquadTacticsView = React.memo<{
     return t.form;
   };
 
-  const coachAdvice = () => {
-    const av = (p: 'MF' | 'FW' | 'DF') => {
-      const idxList = starters.map((q, i) => ((slots[i]?.pos || q.pos) === p ? i : -1)).filter((i) => i >= 0);
-      return idxList.reduce((s, i) => s + starters[i].ov, 0) / (idxList.length || 1);
-    };
-    const m = av('MF');
-    const f = av('FW');
-    const out: string[] = [];
-    if (m > f + 4) out.push('กองกลางเด่น เหมาะบอลสั้น');
-    if (f > m + 4) out.push('กองหน้าเด่น เหมาะบอลยาวหรือเกมสวน');
-    if (av('DF') < m - 5) out.push('แนวรับอ่อน อย่าตั้งแนวรับสูง');
-    if (starters.some((q) => (q.fit ?? 100) < 60)) out.push('มีตัวจริงเหนื่อย ลดเพรสซิ่งหรือโรเตชั่น');
-    return 'คำแนะนำโค้ช: ' + (out.join(' · ') || 'ทีมสมดุล เลือกแผนได้ตามต้องการ');
-  };
-
   const renderPlayerRow = (q: Player, slotSp?: SubRole) => {
     const stMeta = getStaminaMeta(q.fit);
     const f = stMeta.f;
@@ -1058,6 +1044,7 @@ export const SquadTacticsView = React.memo<{
           <FormTrendBadge trend={formTrend} size="xs" />
           <OvrBadge
             ov={q.ov + rowFavBoost}
+            boost={rowFavBoost}
             size="2xs"
             title={rowFavBoost > 0 ? `OVR ${q.ov} + ลูกรัก ${rowFavBoost} = ${q.ov + rowFavBoost}` : undefined}
           />
@@ -1104,7 +1091,7 @@ export const SquadTacticsView = React.memo<{
               📋 ทั้งทีม ({me.sq.length})
             </button>
             <button type="button" onClick={() => setSquadSubTab(3)} className={`seg-btn ${sub === 3 ? 'seg-btn-active' : ''}`}>
-              👕 ล็อกเกอร์
+              👕 ห้องแต่งตัว
             </button>
           </div>
         );
@@ -1187,57 +1174,86 @@ export const SquadTacticsView = React.memo<{
                     )}
 
                     {isMgr && showFormationSheet && (
-                      <div className="mt-1.5 w-[275px] sm:w-[310px] mland:w-[250px] max-w-[calc(100%-4px)] p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--g)]/55 shadow-xl space-y-1.5 mland:space-y-1">
-                        <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
-                          <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์คุมทีม</span>
+                      <div className="mt-1.5 w-[290px] sm:w-[325px] mland:w-[265px] max-w-[calc(100%-4px)] p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xl space-y-2 mland:space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/80 text-[11px] mland:text-[9px]">
+                          <span className="font-extrabold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์ด่วน</span>
                           <button
                             type="button"
                             onClick={() => setShowFormationSheet(false)}
-                            className="btn btn-xs btn-secondary !py-0 !px-1.5"
+                            className="w-5 h-5 inline-flex items-center justify-center rounded-md text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] cursor-pointer"
+                            aria-label="ปิด"
                           >
                             ✕
                           </button>
                         </div>
-                        <div className="grid grid-cols-5 gap-1">
-                          {Object.keys(FSD).map((f) => (
+                        <div className="space-y-1">
+                          <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)]">ระบบการเล่น</div>
+                          <div className="grid grid-cols-3 gap-1">
+                            {Object.keys(FSD).map((f) => (
+                              <button
+                                key={f}
+                                type="button"
+                                onClick={() => {
+                                  SFX.tap();
+                                  onUpdateState((d) => {
+                                    const t = d.teams[d.me];
+                                    if (t.form !== f) {
+                                      t.form = f;
+                                      t.lu = null;
+                                      t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
+                                    }
+                                  });
+                                }}
+                                className={`btn btn-xs truncate !px-1 tabular ${
+                                  me.form === f ? 'btn-primary' : 'btn-secondary'
+                                }`}
+                              >
+                                {f}
+                              </button>
+                            ))}
                             <button
-                              key={f}
                               type="button"
                               onClick={() => {
                                 SFX.tap();
-                                onUpdateState((d) => {
-                                  const t = d.teams[d.me];
-                                  if (t.form !== f) {
-                                    t.form = f;
-                                    t.lu = null;
-                                    t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
-                                  }
-                                });
+                                setShowFormationSheet(false);
+                                setShowCustomEditor(true);
                               }}
                               className={`btn btn-xs truncate !px-1 ${
-                                me.form === f ? 'btn-primary' : 'btn-secondary'
+                                me.form === 'custom' ? 'btn-primary' : 'btn-secondary'
                               }`}
                             >
-                              {f}
+                              ✏️ ปรับเอง
                             </button>
-                          ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                setShowFormationSheet(false);
+                                setSquadSubTab(1);
+                              }}
+                              className="btn btn-xs btn-secondary truncate !px-1 text-[var(--g)]"
+                            >
+                              หน้าแผนเต็ม →
+                            </button>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-5 gap-1">
-                          {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                onUpdateState((d) => { d.teams[d.me].tac = k; });
-                              }}
-                              className={`btn btn-xs truncate !px-1 ${
-                                me.tac === k ? 'btn-gold' : 'btn-secondary text-[var(--mut)]'
-                              }`}
-                            >
-                              {AR_T[k]}
-                            </button>
-                          ))}
+                        <div className="space-y-1 pt-1.5 border-t border-[var(--line)]/70">
+                          <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)]">สไตล์คุมทีม</div>
+                          <div className="seg-bar grid grid-cols-5 w-full">
+                            {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
+                              <button
+                                key={k}
+                                type="button"
+                                onClick={() => {
+                                  SFX.tap();
+                                  onUpdateState((d) => { d.teams[d.me].tac = k; });
+                                }}
+                                className={`seg-btn truncate !px-0.5 ${me.tac === k ? 'seg-btn-active' : ''}`}
+                              >
+                                {AR_T[k]}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1380,607 +1396,18 @@ export const SquadTacticsView = React.memo<{
       })()}
 
       {sub === 0 ? null : sub === 1 ? (
-        <div className="p-3 sm:p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col gap-2.5 mland:gap-1.5 overflow-hidden">
-          {/* Top Summary Header */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)] shrink-0">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-extrabold font-display text-sm mland:text-xs text-[var(--ink)]">
-                  🧭 แผนเกม &amp; ยุทธวิธี
-                </h3>
-                <span className="text-xs mland:text-[10.5px] font-extrabold text-[var(--g)] tabular">
-                  · {formName(me)}
-                </span>
-              </div>
-              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate mt-0.5">
-                {coachAdvice()}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2.5 shrink-0">
-              <div className="flex flex-col items-end gap-0.5">
-                <div className="flex items-center gap-1.5 text-[11px] mland:text-[9.5px] tabular">
-                  <span className="text-[var(--mut)] font-semibold">ความเข้าใจแผน</span>
-                  <span className="font-extrabold text-[var(--g)]">{me.tacFam ?? 65}%</span>
-                </div>
-                <div className="w-24 sm:w-28 mland:w-20 h-1.5 rounded-full bg-[var(--surface-2)] border border-[var(--line)]/80 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-[var(--g)] transition-all duration-300"
-                    style={{ width: `${clamp(me.tacFam ?? 65, 8, 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {isMgr ? (
-            <div className="grid grid-cols-1 md:grid-cols-[0.94fr_1.06fr] mland:grid-cols-[0.92fr_1.08fr] grid-rows-[minmax(0,1fr)] gap-3.5 mland:gap-2.5 flex-1 min-h-0 overflow-hidden">
-              {/* Left Column: Pitch + Formation Grid + Presets + Quick Save Slots */}
-              <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-1">
-                {/* Formation & Live Mini-Pitch */}
-                <div className="grid grid-cols-[124px_1fr] sm:grid-cols-[142px_1fr] mland:grid-cols-[110px_1fr] gap-3 mland:gap-2 items-center">
-                  <div className="shrink-0">
-                    <TacticsMiniPitch team={me} state={state} />
-                  </div>
-                  <div className="min-w-0 space-y-1.5 mland:space-y-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">ระบบการเล่น</span>
-                      <span className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular">
-                        {me.form === 'custom' ? `ปรับเอง ${formName(me)}` : me.form}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
-                      {Object.keys(FSD).map((f) => (
-                        <button
-                          key={f}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => {
-                              const t = d.teams[d.me];
-                              if (t.form !== f) {
-                                t.form = f;
-                                t.lu = null;
-                                t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
-                              }
-                            });
-                          }}
-                          className={`btn btn-xs sm:btn-sm !px-1 truncate tabular ${
-                            me.form === f ? 'btn-primary' : 'btn-secondary'
-                          }`}
-                        >
-                          {f}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setShowCustomEditor(true);
-                        }}
-                        className={`col-span-2 btn btn-xs sm:btn-sm !px-2 truncate ${
-                          me.form === 'custom' ? 'btn-primary' : 'btn-secondary'
-                        }`}
-                      >
-                        ✏️ ปรับแผนเอง
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tactical Presets */}
-                <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/70 space-y-1.5 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">⚡ ชุดยุทธวิธีสำเร็จรูป</span>
-                    <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">เลือกใช้ทันที</span>
-                  </div>
-                  <div className="grid grid-cols-6 gap-1.5 mland:gap-1">
-                    {PRE.map(([lbl, cfg], idx) => {
-                      const isActivePreset =
-                        me.form === cfg.form &&
-                        me.tac === cfg.tac &&
-                        (me.press ?? 1) === cfg.press &&
-                        (me.tempo ?? 1) === cfg.tempo &&
-                        (me.wid ?? 1) === cfg.wid &&
-                        (me.line ?? 1) === cfg.line &&
-                        (me.pass ?? 1) === cfg.pass;
-                      return (
-                        <button
-                          key={lbl}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => {
-                              Object.assign(d.teams[d.me], cfg);
-                              d.teams[d.me].lu = null;
-                            });
-                            onToast(`ใช้ยุทธวิธี "${lbl}"`);
-                          }}
-                          className={`${idx < 3 ? 'col-span-2' : 'col-span-3'} btn btn-xs sm:btn-sm !px-1.5 truncate ${
-                            isActivePreset
-                              ? 'btn-primary'
-                              : 'btn-secondary hover:border-[var(--g)]/70'
-                          }`}
-                        >
-                          {lbl}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Quick Save / Load Slots */}
-                <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/70 space-y-1.5 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">💾 ช่องบันทึกแผนด่วน</span>
-                    <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">สลับแผนก่อนแข่ง</span>
-                  </div>
-                  <div className="space-y-1.5 mland:space-y-1">
-                    {[0, 1].map((idx) => {
-                      const savedSlot = state.slots?.[idx];
-                      const slotForm = typeof savedSlot?.form === 'string' ? savedSlot.form : '';
-                      const slotTac = typeof savedSlot?.tac === 'string' && savedSlot.tac in AR_T ? (savedSlot.tac as Mentality) : null;
-                      const slotSummary = savedSlot
-                        ? `${slotForm === 'custom' ? 'ปรับเอง' : slotForm || 'แผนบันทึก'}${slotTac ? ` · ${AR_T[slotTac]}` : ''}`
-                        : 'ยังว่าง';
-                      return (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)]/80"
-                        >
-                          <div className="min-w-0 flex items-center gap-1.5 text-[11px] mland:text-[9.5px]">
-                            <span className="font-bold text-[var(--ink)] shrink-0">แผน {idx + 1}</span>
-                            <span className="text-[var(--mut)] opacity-50">·</span>
-                            <span className={`truncate tabular ${savedSlot ? 'text-[var(--g)] font-semibold' : 'text-[var(--mut)]'}`}>
-                              {slotSummary}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                onUpdateState((d) => {
-                                  const t = d.teams[d.me];
-                                  d.slots = d.slots || [null, null];
-                                  d.slots[idx] = { form: t.form, cf: t.cf, tac: t.tac, press: t.press, tempo: t.tempo, wid: t.wid, line: t.line, pass: t.pass };
-                                });
-                                onToast(`บันทึกแผน ${idx + 1} แล้ว`);
-                              }}
-                              className="btn btn-xs btn-secondary"
-                            >
-                              บันทึก
-                            </button>
-                            <button
-                              type="button"
-                              disabled={!savedSlot}
-                              onClick={() => {
-                                SFX.tap();
-                                onUpdateState((d) => {
-                                  const s = d.slots?.[idx];
-                                  if (s) {
-                                    Object.assign(d.teams[d.me], s);
-                                    d.teams[d.me].lu = null;
-                                  }
-                                });
-                                onToast(`โหลดแผน ${idx + 1} แล้ว`);
-                              }}
-                              className="btn btn-xs btn-primary"
-                            >
-                              โหลด
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Mentality, Passing, Intensity Controls, Captain & Set Pieces, Auto Rules */}
-              <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-1">
-                {/* Mentality & Passing Style */}
-                <div className="space-y-2 mland:space-y-1.5">
-                  <div>
-                    <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] mb-1">สไตล์คุมทีม (Mentality)</div>
-                    <div className="seg-bar grid grid-cols-5 w-full">
-                      {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => { d.teams[d.me].tac = k; });
-                          }}
-                          className={`seg-btn truncate !px-1 ${me.tac === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {AR_T[k]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] mb-1">สไตล์การจ่ายบอล</div>
-                    <div className="seg-bar grid grid-cols-4 w-full">
-                      {['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'].map((l, k) => (
-                        <button
-                          key={l}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => { d.teams[d.me].pass = k; });
-                          }}
-                          className={`seg-btn truncate !px-1 ${(me.pass ?? 1) === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4 Tactical Sliders (2x2 Grid) */}
-                <div className="grid grid-cols-2 gap-2.5 mland:gap-2">
-                  <div>
-                    <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] mb-1">เพรสซิ่ง</div>
-                    <div className="seg-bar grid grid-cols-3 w-full">
-                      {['ต่ำ', 'กลาง', 'สูง'].map((l, k) => (
-                        <button
-                          key={l}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => { d.teams[d.me].press = k; });
-                          }}
-                          className={`seg-btn !px-1 ${(me.press ?? 1) === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] mb-1">จังหวะเกม</div>
-                    <div className="seg-bar grid grid-cols-3 w-full">
-                      {['ช้า', 'กลาง', 'เร็ว'].map((l, k) => (
-                        <button
-                          key={l}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => { d.teams[d.me].tempo = k; });
-                          }}
-                          className={`seg-btn !px-1 ${(me.tempo ?? 1) === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] mb-1">ความกว้าง</div>
-                    <div className="seg-bar grid grid-cols-3 w-full">
-                      {['แคบ', 'กลาง', 'กว้าง'].map((l, k) => (
-                        <button
-                          key={l}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => { d.teams[d.me].wid = k; });
-                          }}
-                          className={`seg-btn !px-1 ${(me.wid ?? 1) === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] mb-1">แนวรับ</div>
-                    <div className="seg-bar grid grid-cols-3 w-full">
-                      {['ลึก', 'กลาง', 'สูง'].map((l, k) => (
-                        <button
-                          key={l}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => { d.teams[d.me].line = k; });
-                          }}
-                          className={`seg-btn !px-1 ${(me.line ?? 1) === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Captain & Set-Piece Takers */}
-                <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/70 space-y-2 mland:space-y-1.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] flex items-center gap-1.5">
-                        <CaptainBadge team={me} state={state} size="sm" />
-                        <span>กัปตันทีม &amp; 🎯 มือสังหารลูกนิ่ง</span>
-                      </div>
-                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">สลับกัปตันชั่วคราวให้อัตโนมัติหากโดนเปลี่ยนออกหรือใบแดง</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        onUpdateState((d) => {
-                          autoAssignTeamRoles(d.teams[d.me], { careerP: d.p, forceAll: true });
-                        });
-                        onToast('🤖 AI คัดเลือกกัปตันและมือสังหารลูกนิ่งให้เหมาะสมที่สุดแล้ว');
-                      }}
-                      className="btn btn-xs btn-secondary whitespace-nowrap"
-                    >
-                      🤖 AI ตั้งให้อัตโนมัติ
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
-                    <div>
-                      <label className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] flex items-center gap-1 mb-1 mland:mb-0.5">
-                        <CaptainBadge team={me} state={state} size="xs" />
-                        <span>กัปตันทีม</span>
-                      </label>
-                      <select
-                        value={me.cap || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          onUpdateState((d) => { d.teams[d.me].cap = val; });
-                          onToast('อัปเดตกัปตันทีมแล้ว');
-                        }}
-                        className="w-full px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10px] font-semibold"
-                      >
-                        <option value="">ไม่ระบุ (ให้ AI เลือกหน้างาน)</option>
-                        {me.sq
-                          .slice()
-                          .sort((a, b) => scoreCaptainCandidate(b, state.p) - scoreCaptainCandidate(a, state.p))
-                          .slice(0, 14)
-                          .map((q) => (
-                            <option key={q.n} value={q.n}>
-                              {q.n} ({q.ro} · OVR {q.ov})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] block mb-1 mland:mb-0.5">🚩 คนเตะมุม</label>
-                      <select
-                        value={me.setPieces?.corner || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          onUpdateState((d) => {
-                            const tm = d.teams[d.me];
-                            tm.setPieces = { ...(tm.setPieces || {}), corner: val || undefined };
-                          });
-                          onToast('อัปเดตคนเตะมุมแล้ว');
-                        }}
-                        className="w-full px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10px] font-semibold"
-                      >
-                        <option value="">อัตโนมัติ (ตามค่าพลังในสนาม)</option>
-                        {me.sq
-                          .filter((q) => q.pos !== 'GK')
-                          .slice()
-                          .sort((a, b) => scoreSetPieceCandidate(b, 'corner', state.p) - scoreSetPieceCandidate(a, 'corner', state.p))
-                          .slice(0, 14)
-                          .map((q) => (
-                            <option key={q.n} value={q.n}>
-                              {q.n} ({q.ro} · OVR {q.ov})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] block mb-1 mland:mb-0.5">🎯 คนยิงฟรีคิก</label>
-                      <select
-                        value={me.setPieces?.freekick || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          onUpdateState((d) => {
-                            const tm = d.teams[d.me];
-                            tm.setPieces = { ...(tm.setPieces || {}), freekick: val || undefined };
-                          });
-                          onToast('อัปเดตคนยิงฟรีคิกแล้ว');
-                        }}
-                        className="w-full px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10px] font-semibold"
-                      >
-                        <option value="">อัตโนมัติ (ตามค่าพลังในสนาม)</option>
-                        {me.sq
-                          .filter((q) => q.pos !== 'GK')
-                          .slice()
-                          .sort((a, b) => scoreSetPieceCandidate(b, 'freekick', state.p) - scoreSetPieceCandidate(a, 'freekick', state.p))
-                          .slice(0, 14)
-                          .map((q) => (
-                            <option key={q.n} value={q.n}>
-                              {q.n} ({q.ro} · OVR {q.ov})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] block mb-1 mland:mb-0.5">🥅 เพชฌฆาตจุดโทษ</label>
-                      <select
-                        value={me.setPieces?.penalty || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          onUpdateState((d) => {
-                            const tm = d.teams[d.me];
-                            tm.setPieces = { ...(tm.setPieces || {}), penalty: val || undefined };
-                          });
-                          onToast('อัปเดตคนยิงจุดโทษแล้ว');
-                        }}
-                        className="w-full px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10px] font-semibold"
-                      >
-                        <option value="">อัตโนมัติ (ตามค่าพลังในสนาม)</option>
-                        {me.sq
-                          .filter((q) => q.pos !== 'GK')
-                          .slice()
-                          .sort((a, b) => scoreSetPieceCandidate(b, 'penalty', state.p) - scoreSetPieceCandidate(a, 'penalty', state.p))
-                          .slice(0, 14)
-                          .map((q) => (
-                            <option key={q.n} value={q.n}>
-                              {q.n} ({q.ro} · OVR {q.ov})
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Auto In-Match Rules */}
-                <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/70 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">
-                      🤖 กฎปรับแผนอัตโนมัติในแมตช์
-                      <span className="ml-1.5 text-[10px] font-semibold text-[var(--mut)] tabular">
-                        ({(state.rules || []).length}/3)
-                      </span>
-                    </span>
-                    {(state.rules || []).length < 3 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          onUpdateState((d) => {
-                            d.rules = [...(d.rules || []), { c: 'tr', min: 65, tac: 'A' }];
-                          });
-                        }}
-                        className="btn btn-xs btn-secondary"
-                      >
-                        ＋ เพิ่มกฎ
-                      </button>
-                    )}
-                  </div>
-                  {(state.rules || []).length === 0 ? (
-                    <p className="text-[11px] mland:text-[9px] text-[var(--mut)]">
-                      ยังไม่มีกฎอัตโนมัติ (เช่น ถ้าตามอยู่ หลังนาที 65 ให้เปลี่ยนเป็นบุกหนัก)
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5 mland:space-y-1">
-                      {(state.rules || []).map((rl, idx) => (
-                        <div key={idx} className="flex flex-wrap items-center gap-1.5 p-2 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/70 text-xs mland:text-[10px]">
-                          <select
-                            value={rl.c}
-                            onChange={(e) => onUpdateState((d) => { if (d.rules?.[idx]) d.rules[idx].c = e.target.value as AutoRule['c']; })}
-                            className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] font-semibold"
-                          >
-                            {Object.entries(AR_C).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                          </select>
-                          <span className="text-[var(--mut)]">หลังนาที</span>
-                          <select
-                            value={rl.min}
-                            onChange={(e) => onUpdateState((d) => { if (d.rules?.[idx]) d.rules[idx].min = Number(e.target.value); })}
-                            className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] font-semibold tabular"
-                          >
-                            {[45, 60, 70, 75, 80].map((m) => <option key={m} value={m}>{m}&apos;</option>)}
-                          </select>
-                          <span className="text-[var(--mut)]">→</span>
-                          <select
-                            value={rl.tac}
-                            onChange={(e) => onUpdateState((d) => { if (d.rules?.[idx]) d.rules[idx].tac = e.target.value as Mentality; })}
-                            className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] font-semibold"
-                          >
-                            {Object.entries(AR_T).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              onUpdateState((d) => { d.rules = (d.rules || []).filter((_, j) => j !== idx); });
-                            }}
-                            aria-label="ลบกฎ"
-                            className="ml-auto btn btn-xs btn-danger"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-[190px_1fr] mland:grid-cols-[150px_1fr] gap-3.5 mland:gap-2.5 flex-1 min-h-0 overflow-y-auto items-start">
-              <div className="flex flex-col items-center gap-2">
-                <TacticsMiniPitch team={me} state={state} />
-                <div className="text-center text-[11px] mland:text-[9px] text-[var(--mut)]">
-                  ระบบทีมปัจจุบัน: <b className="text-[var(--ink)]">{formName(me)}</b>
-                </div>
-              </div>
-
-              <div className="space-y-3 mland:space-y-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mland:gap-1.5 text-xs mland:text-[10px]">
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ระบบการเล่น</div>
-                    <div className="font-bold mt-0.5">{formName(me)}</div>
-                  </div>
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">สไตล์คุมทีม</div>
-                    <div className="font-bold mt-0.5">{AR_T[me.tac]}</div>
-                  </div>
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">การจ่ายบอล</div>
-                    <div className="font-bold mt-0.5">{['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'][me.pass ?? 1]}</div>
-                  </div>
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">เพรสซิ่ง · จังหวะ</div>
-                    <div className="font-bold mt-0.5">{['ต่ำ', 'กลาง', 'สูง'][me.press ?? 1]} · {['ช้า', 'กลาง', 'เร็ว'][me.tempo ?? 1]}</div>
-                  </div>
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ความกว้าง · แนวรับ</div>
-                    <div className="font-bold mt-0.5">{['แคบ', 'กลาง', 'กว้าง'][me.wid ?? 1]} · {['ลึก', 'กลาง', 'สูง'][me.line ?? 1]}</div>
-                  </div>
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-1">
-                      <CaptainBadge team={me} state={state} size="xs" />
-                      <span>กัปตันทีม</span>
-                    </div>
-                    <div className="font-bold mt-0.5 truncate">
-                      {me.cap || 'AI เลือกอัตโนมัติ'}
-                      {me.cap && me.cap === state.p?.name ? ' (คุณ)' : ''}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-[var(--line)]/70">
-                  <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] mb-1.5">🎯 มือสังหารลูกนิ่งของทีม</div>
-                  <div className="grid grid-cols-3 gap-2 mland:gap-1.5 text-xs mland:text-[10px]">
-                    <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70 min-w-0">
-                      <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">🚩 เตะมุม</div>
-                      <div className="font-bold truncate mt-0.5">
-                        {me.setPieces?.corner || 'อัตโนมัติ'}
-                        {me.setPieces?.corner && me.setPieces.corner === state.p?.name ? ' (คุณ)' : ''}
-                      </div>
-                    </div>
-                    <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70 min-w-0">
-                      <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">🎯 ฟรีคิก</div>
-                      <div className="font-bold truncate mt-0.5">
-                        {me.setPieces?.freekick || 'อัตโนมัติ'}
-                        {me.setPieces?.freekick && me.setPieces.freekick === state.p?.name ? ' (คุณ)' : ''}
-                      </div>
-                    </div>
-                    <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70 min-w-0">
-                      <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">🥅 จุดโทษ</div>
-                      <div className="font-bold truncate mt-0.5">
-                        {me.setPieces?.penalty || 'อัตโนมัติ'}
-                        {me.setPieces?.penalty && me.setPieces.penalty === state.p?.name ? ' (คุณ)' : ''}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        <TacticsBoardPanel
+          state={state}
+          team={me}
+          isMgr={isMgr}
+          onUpdateState={onUpdateState}
+          onOpenCustomEditor={() => setShowCustomEditor(true)}
+          onGoToLineup={() => {
+            if (onShallowPatch) onShallowPatch(() => ({ sub: 0 }));
+            else onUpdateState((d) => { d.sub = 0; });
+          }}
+          onToast={onToast}
+        />
       ) : sub === 3 ? (
         <LockerRoomPanel
           state={state}
@@ -2038,11 +1465,12 @@ export const SquadTacticsView = React.memo<{
 
             return (
               <>
-                <div className="grid grid-cols-4 gap-2 mland:gap-1 text-center shrink-0">
+                <div className="grid grid-cols-3 sm:grid-cols-5 mland:grid-cols-5 gap-2 mland:gap-1 text-center shrink-0">
                   <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ขนาดทีม (18–28)</div><div className="font-bold text-sm mland:text-[11px] tabular">{me.sq.length}/28</div></div>
                   <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ค่าเหนื่อย/เพดาน</div><div className={`font-bold text-sm mland:text-[11px] tabular ${tx.wagePct > 95 ? 'text-[var(--red)]' : ''}`}>{tx.curWage}/{tx.wageCap}k</div></div>
+                  <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">โควตาต่างชาติ</div><div className={`font-bold text-sm mland:text-[11px] tabular ${tx.foreignCount >= tx.maxForeign ? 'text-[var(--red)]' : ''}`}>{tx.foreignCount}/{tx.maxForeign}</div></div>
                   <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">โควตายืมตัว</div><div className="font-bold text-sm mland:text-[11px] tabular">{tx.loansCount}/{tx.maxLoans}</div></div>
-                  <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ตลาดซื้อขาย</div><div className={`font-bold text-[11px] mland:text-[10px] mt-0.5 mland:mt-0 ${tx.tw.open ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>{tx.tw.shortLabel}</div></div>
+                  <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ตลาดซื้อขาย</div><div className={`font-bold text-sm mland:text-[10px] mt-0.5 mland:mt-0 ${tx.tw.open ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>{tx.tw.shortLabel}</div></div>
                 </div>
 
                 {/* List Filter & Sort Bar */}
@@ -2453,6 +1881,7 @@ export const SquadTacticsView = React.memo<{
                             <FormTrendBadge trend={formTrend} size="xs" />
                             <OvrBadge
                               ov={q.ov + favBoost}
+                              boost={favBoost}
                               size="sm"
                               title={favBoost > 0 ? `OVR พื้นฐาน ${q.ov} + ลูกรัก ${favBoost} = ${q.ov + favBoost}` : undefined}
                             />

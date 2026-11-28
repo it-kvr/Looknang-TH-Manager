@@ -600,7 +600,7 @@ export interface ActiveDilemma {
 
 export interface ScoutMission {
   id: string;
-  focus: 'wonderkid' | 'free' | 'gk' | 'striker' | 'defender' | 'midfielder';
+  focus: 'wonderkid' | 'free' | 'foreign' | 'gk' | 'striker' | 'defender' | 'midfielder';
   targetRole?: SubRole | '';
   label: string;
   turnsLeft: number;

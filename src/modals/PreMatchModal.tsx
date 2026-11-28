@@ -597,6 +597,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         <div className="flex items-center justify-end">
           <OvrBadge
             ov={pl.ov + rowFavBoost}
+            boost={rowFavBoost}
             size="2xs"
             title={rowFavBoost > 0 ? `OVR ${pl.ov} + ลูกรัก ${rowFavBoost} = ${pl.ov + rowFavBoost}` : undefined}
           />

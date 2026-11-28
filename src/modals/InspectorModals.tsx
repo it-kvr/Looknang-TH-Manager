@@ -425,7 +425,11 @@ export const PlayerInspectorModal: React.FC<{
                 {info.G.map(([grp, rows]) => (
                   <div
                     key={grp}
-                    className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                    className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border transition-colors ${
+                      favBoost > 0
+                        ? 'border-rose-400/80 dark:border-rose-400/65 ring-1 ring-inset ring-rose-400/20 shadow-[0_2px_10px_-2px_rgba(244,63,94,0.18)] dark:shadow-[0_2px_12px_-2px_rgba(244,63,94,0.28)]'
+                        : 'border-[var(--line)] shadow-xs'
+                    }`}
                   >
                     <div className="font-bold text-[11px] mland:text-[9px] text-[var(--ink)] pb-0.5 mb-1 border-b border-[var(--line)]/70">
                       {grp}
@@ -991,6 +995,7 @@ export const TeamInspectorModal: React.FC<{
                           <div className="flex items-center justify-end">
                             <OvrBadge
                               ov={q.ov + rBoost}
+                              boost={rBoost}
                               size="2xs"
                               title={rBoost > 0 ? `OVR พื้นฐาน ${q.ov} + ลูกรัก ${rBoost} = ${q.ov + rBoost}` : undefined}
                             />

@@ -1314,8 +1314,44 @@ export const LEAGUE_TRANSFER_RULES = {
   minSquad: 18,
   maxSquad: 28,
   maxLoans: 4,
+  maxForeign: 6,
   minPos: { GK: 2, DF: 4, MF: 4, FW: 2 } as Record<Position, number>
 };
+
+export function isForeignPlayer(q: Pick<Player, 'nat'> | null | undefined): boolean {
+  return Boolean(q?.nat && q.nat !== 'TH');
+}
+
+export function isDomesticThaiTeam(t: Pick<Team, 'tier' | 'foreign'> | null | undefined): boolean {
+  return Boolean(t && t.tier < 3 && !t.foreign);
+}
+
+export function getTeamForeignCount(t: Pick<Team, 'sq'> | null | undefined): number {
+  return (t?.sq || []).filter((q) => isForeignPlayer(q)).length;
+}
+
+export function canTeamSignForeignPlayer(
+  team: Pick<Team, 'name' | 'tier' | 'foreign' | 'sq'>,
+  incomingPlayer: Pick<Player, 'nat'>,
+  opts?: { outgoingPlayer?: Pick<Player, 'nat'> | null }
+): { ok: boolean; foreignCount: number; maxForeign: number; err?: string } {
+  const maxForeign = LEAGUE_TRANSFER_RULES.maxForeign;
+  const foreignCount = getTeamForeignCount(team);
+  if (!isDomesticThaiTeam(team) || !isForeignPlayer(incomingPlayer)) {
+    return { ok: true, foreignCount, maxForeign };
+  }
+  const outgoingRelievesSlot = Boolean(opts?.outgoingPlayer && isForeignPlayer(opts.outgoingPlayer));
+  const projectedForeign = foreignCount - (outgoingRelievesSlot ? 1 : 0) + 1;
+  if (projectedForeign > maxForeign) {
+    return {
+      ok: false,
+      foreignCount,
+      maxForeign,
+      err: `${team.name} มีนักเตะต่างชาติครบโควตาสูงสุด ${maxForeign} คนแล้ว (${foreignCount}/${maxForeign})`
+    };
+  }
+  return { ok: true, foreignCount, maxForeign };
+}
 
 export const MAX_FACILITY_LV = 10;
 export const MAX_STAFF_LV = 6;
@@ -1362,6 +1398,7 @@ export function getStaffWage(s: Pick<GameState, 'staff'>) {
 export function getLeagueTransferContext(s: GameState, me: Team) {
   const tw = getTransferWindowInfo(s);
   const loansCount = me.sq.filter((q) => !!q.loan).length;
+  const foreignCount = getTeamForeignCount(me);
   const curWage = squadWage(me);
   const baseCap = [26, 44, 70, 95][me.tier] ?? 44;
   const infraMult = 1 + Math.max(0, (s.st ?? 1) - 1) * 0.08 + Math.max(0, (s.merchLv ?? 1) - 1) * 0.04;
@@ -1377,6 +1414,8 @@ export function getLeagueTransferContext(s: GameState, me: Team) {
     tw,
     loansCount,
     maxLoans: LEAGUE_TRANSFER_RULES.maxLoans,
+    foreignCount,
+    maxForeign: LEAGUE_TRANSFER_RULES.maxForeign,
     minSquad: LEAGUE_TRANSFER_RULES.minSquad,
     maxSquad: LEAGUE_TRANSFER_RULES.maxSquad,
     minPos: LEAGUE_TRANSFER_RULES.minPos,
@@ -2934,6 +2973,76 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   };
 }
 
+const MARQUEE_FOREIGN_NATIONS = ['BR', 'AR', 'ES', 'GB', 'FR', 'DE', 'IT', 'PT', 'NL', 'JP', 'KR', 'UY', 'CO', 'HR'] as const;
+
+export function getVeteranDiscountedPrice(q: Pick<Player, 'ov' | 'age' | 'free'>): number {
+  if (q.free) return 0;
+  const raw = Math.round((q.ov * q.ov) / 40);
+  const age = q.age || 24;
+  const mult = age >= 35 ? 0.38 : age >= 33 ? 0.48 : age >= 31 ? 0.62 : age >= 30 ? 0.78 : 1;
+  return Math.max(4, Math.round(raw * mult));
+}
+
+export function ensureMarketTopForeigners(s: GameState): number {
+  if (!Array.isArray(s.mk)) s.mk = [];
+  const tier = s.teams?.[s.me]?.tier ?? 0;
+  const minStarOv = tier >= 2 ? 80 : tier === 1 ? 74 : 68;
+  const maxStarOv = tier >= 2 ? 89 : tier === 1 ? 82 : 76;
+
+  const existingTop = s.mk.filter((p) => p.nat && p.nat !== 'TH' && p.ov >= minStarOv).length;
+  if (existingTop >= 4) return 0;
+
+  const targetCount = 5;
+  const needed = Math.max(0, targetCount - existingTop);
+  const usedNames = new Set<string>([
+    ...s.mk.map((p) => p.n),
+    ...(s.teams?.[s.me]?.sq || []).map((p) => p.n)
+  ]);
+  const starRoles: SubRole[] = ['ST', 'CAM', 'CB', 'LW', 'GK', 'CDM'];
+  const veteranAges = [33, 35, 31, 34, 29, 32];
+  const nationPool = MARQUEE_FOREIGN_NATIONS
+    .map((code) => COUNTRY_META_BY_CODE[code])
+    .filter((m): m is NonNullable<typeof m> => Boolean(m));
+
+  const added: Player[] = [];
+  for (let i = 0; i < needed; i++) {
+    const slot = existingTop + i;
+    const ro = starRoles[slot % starRoles.length];
+    const pos: Position = LINE[ro] || 'MF';
+    const nat = P(nationPool);
+    const ov = clamp(minStarOv + R(1, Math.max(2, maxStarOv - minStarOv)), minStarOv, maxStarOv);
+    const p = mkPlayer(
+      pos,
+      ov,
+      false,
+      ro,
+      nat ? { foreignRegion: nat.region, natCode: nat.code, excludeNames: usedNames } : { excludeNames: usedNames }
+    );
+    p.ov = ov;
+    p.age = veteranAges[slot % veteranAges.length];
+    p.pot = clamp(Math.max(ov, p.pot || ov), ov, 95);
+    p.talent = clamp(R(78, 95), 75, 96);
+    p.traits = rollPlayerTraits(pos, ro, ov, p.talent);
+    const isFree = i === 0 || (p.age >= 34 && Math.random() < 0.55);
+    if (isFree) {
+      p.free = 1;
+      p.price = 0;
+    } else {
+      p.free = 0;
+      p.price = getVeteranDiscountedPrice(p);
+    }
+    p.askWg = +(((p.ov * p.ov) / 3000) * (p.age >= 33 ? 0.85 : 0.95)).toFixed(1);
+    p.tries = 0;
+    p.locked = 0;
+    usedNames.add(p.n);
+    added.push(p);
+  }
+
+  const posRank: Record<Position, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
+  s.mk = [...s.mk, ...added].sort((a, b) => posRank[a.pos] - posRank[b.pos] || b.ov - a.ov);
+  return added.length;
+}
+
 export function mkMarket(s: GameState) {
   const b0 = BASE[s.teams[s.me].tier];
   const worldCountries = Object.values(COUNTRY_META_BY_CODE);
@@ -2949,7 +3058,7 @@ export function mkMarket(s: GameState) {
       role,
       nat ? { foreignRegion: nat.region, natCode: nat.code } : undefined
     );
-    p.price = Math.round((p.ov * p.ov) / 40);
+    p.price = getVeteranDiscountedPrice(p);
     if (i === 0 || (i % 6 === 2 && Math.random() < 0.45)) {
       p.free = 1;
       p.price = 0;
@@ -2983,6 +3092,7 @@ export function mkMarket(s: GameState) {
   s.mk = [...rolePool, ...extraFreeAgents].sort(
     (a, b) => posRank[a.pos] - posRank[b.pos] || b.ov - a.ov
   );
+  ensureMarketTopForeigners(s);
 }
 
 export function teamStats(t: Team, s?: GameState | null) {
@@ -3491,8 +3601,54 @@ export function resolveEndOfSeasonLoans(s: GameState) {
   });
 }
 
+export function enforceSeasonForeignQuota(s: GameState): void {
+  const maxForeign = LEAGUE_TRANSFER_RULES.maxForeign;
+  s.teams.forEach((t) => {
+    if (!isDomesticThaiTeam(t)) return;
+    const foreignCount = getTeamForeignCount(t);
+    if (foreignCount <= maxForeign) return;
+
+    if (t.id === s.me) {
+      if (s.mode === 'm') {
+        pushFeed(
+          s,
+          'กฎโควตาต่างชาติ',
+          `⚠️ ทีมของคุณมีนักเตะต่างชาติ ${foreignCount}/${maxForeign} คน เกินโควตาลีกไทย (ยังใช้งานชุดเดิมได้ แต่จะเซ็นหรือยืมต่างชาติเพิ่มไม่ได้จนกว่าจะปล่อยออกให้ต่ำกว่า ${maxForeign} คน)`,
+          'urg'
+        );
+      }
+      return;
+    }
+
+    let excess = foreignCount - maxForeign;
+    const candidates = t.sq
+      .filter((q) => isForeignPlayer(q) && !q.me)
+      .sort((a, b) => a.ov - b.ov || b.age - a.age);
+
+    for (const q of candidates) {
+      if (excess <= 0) break;
+      const idx = t.sq.indexOf(q);
+      if (idx < 0) continue;
+      const posCount = t.sq.filter((z) => z.pos === q.pos).length;
+      const needDomesticReplacement =
+        t.sq.length <= LEAGUE_TRANSFER_RULES.minSquad || posCount <= LEAGUE_TRANSFER_RULES.minPos[q.pos];
+
+      t.sq.splice(idx, 1);
+      if (t.cap === q.n) t.cap = '';
+      if (needDomesticReplacement) {
+        const replacement = mkPlayer(q.pos, BASE[t.tier] + R(-3, 2), false, q.ro);
+        replacement.con = { yr: R(2, 3), wg: wagOf(replacement), role: 'rot' };
+        t.sq.push(replacement);
+      }
+      excess -= 1;
+    }
+    t.lu = null;
+  });
+}
+
 export function startSeason(s: GameState) {
   resolveEndOfSeasonLoans(s);
+  enforceSeasonForeignQuota(s);
   s.teams.forEach((t) => {
     Object.assign(t, { pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, p: 0, fm: '' });
     t.sq.forEach((q) => {
@@ -4455,6 +4611,7 @@ export function createScoutMission(focus: ScoutMission['focus'], targetRole?: Su
   const labels: Record<ScoutMission['focus'], string> = {
     wonderkid: 'ส่องดาวรุ่งพรสวรรค์สูง (U20)',
     free: 'ค้นหานักเตะฟรีเอเยนต์ฝีเท้าดี',
+    foreign: 'เฟ้นหาบิ๊กเนมต่างชาติ (สายเก๋า/OVR สูง)',
     gk: 'เฟ้นหาผู้รักษาประตู (GK)',
     striker: 'เฟ้นหากองหน้าตัวจบสกอร์',
     midfielder: 'เฟ้นหากองกลางจอมคุมเกม',
@@ -4474,9 +4631,13 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
   const scoutStaff = getStaffState(s).scout;
   const analyticsLv = clamp(s.analyticsLv ?? 1, 0, MAX_FACILITY_LV);
   const yaLv = clamp(s.ya ?? 1, 0, MAX_FACILITY_LV);
-  const b0 = BASE[s.teams[s.me].tier] + Math.round(yaLv * 1.2) + Math.round(scoutStaff * 1.4) + Math.floor(Math.max(0, analyticsLv - 1) / 3);
+  const tier = s.teams[s.me].tier;
+  const b0 = BASE[tier] + Math.round(yaLv * 1.2) + Math.round(scoutStaff * 1.4) + Math.floor(Math.max(0, analyticsLv - 1) / 3);
   const worldCountries = Object.values(COUNTRY_META_BY_CODE);
-  const foreignChance = m.focus === 'wonderkid' || m.focus === 'free' ? 0.45 : 0.35;
+  const marqueeCountries = MARQUEE_FOREIGN_NATIONS
+    .map((code) => COUNTRY_META_BY_CODE[code])
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
+  const foreignChance = m.focus === 'foreign' ? 1 : m.focus === 'wonderkid' || m.focus === 'free' ? 0.45 : 0.35;
 
   return Array.from({ length: 3 }, (_, idx) => {
     let pos: Position = P(POS);
@@ -4492,6 +4653,15 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
       boost = R(4, 10 + scoutStaff);
       forceRo = P(ALL_SUB_ROLES.filter((r) => r !== 'GK'));
       pos = LINE[forceRo] || 'MF';
+    } else if (m.focus === 'foreign') {
+      const roleChoices: SubRole[][] = [
+        ['ST', 'CF', 'LW', 'RW'],
+        ['CAM', 'CM', 'CDM'],
+        ['CB', 'LB', 'RB', 'GK']
+      ];
+      forceRo = P(roleChoices[idx % roleChoices.length]);
+      pos = LINE[forceRo] || 'MF';
+      boost = R(8, 14 + Math.min(4, scoutStaff));
     } else if (m.focus === 'gk') {
       pos = 'GK';
       forceRo = 'GK';
@@ -4506,7 +4676,11 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
       forceRo = SPW('DF');
     }
 
-    const nat = Math.random() < foreignChance ? P(worldCountries) : null;
+    const nat = m.focus === 'foreign'
+      ? P(marqueeCountries)
+      : Math.random() < foreignChance
+        ? P(worldCountries)
+        : null;
     const p = mkPlayer(
       pos,
       b0 + boost,
@@ -4514,17 +4688,25 @@ export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
       forceRo,
       nat ? { foreignRegion: nat.region, natCode: nat.code } : undefined
     );
-    if (m.focus === 'wonderkid') {
+    if (m.focus === 'foreign') {
+      const minOv = tier >= 2 ? 81 : tier === 1 ? 75 : 69;
+      const maxOv = tier >= 2 ? 91 : tier === 1 ? 84 : 78;
+      p.ov = clamp(Math.max(p.ov, minOv + R(0, 4)), minOv, maxOv);
+      p.age = idx < 2 ? R(30, 35) : R(27, 31);
+      p.pot = clamp(Math.max(p.pot, p.ov), p.ov, 95);
+      p.talent = clamp(R(78, 96) + scoutStaff, 75, 98);
+      p.traits = rollPlayerTraits(pos, p.ro, p.ov, p.talent);
+    } else if (m.focus === 'wonderkid') {
       p.pot = clamp(Math.max(p.pot, p.ov + R(12, 24)), p.ov, 96);
       p.talent = clamp(R(72, 95) + scoutStaff, 68, 98);
     }
-    if (m.focus === 'free') {
+    if (m.focus === 'free' || (m.focus === 'foreign' && (idx === 0 || (p.age >= 34 && Math.random() < 0.45)))) {
       p.free = 1;
       p.price = 0;
     } else {
-      p.price = Math.round((p.ov * p.ov) / 40);
+      p.price = getVeteranDiscountedPrice(p);
     }
-    p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
+    p.askWg = +(((p.ov * p.ov) / 3000) * (p.age >= 33 ? 0.85 : 1)).toFixed(1);
     p.scouted = true;
     p.tries = 0;
     p.locked = 0;
@@ -5234,6 +5416,12 @@ export function canAcceptTransferOffer(s: GameState, off: TransferOffer): { ok: 
   if (buyer && buyer.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) {
     return { ok: false, err: `${buyer.name} มีขนาดทีมเต็มแล้ว (${LEAGUE_TRANSFER_RULES.maxSquad} คน)` };
   }
+  if (buyer) {
+    const foreignChk = canTeamSignForeignPlayer(buyer, q);
+    if (!foreignChk.ok) {
+      return { ok: false, err: foreignChk.err };
+    }
+  }
   return { ok: true, buyerName: buyer?.name || off.t };
 }
 
@@ -5434,6 +5622,7 @@ export function resolvePitchPlayerOutcome(
       (tm) =>
         tm.id !== s.me &&
         tm.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
+        canTeamSignForeignPlayer(tm, q).ok &&
         !existingBuyerNames.has(tm.name) &&
         Math.abs(tm.tier - me.tier) <= 1
     )
@@ -5542,6 +5731,7 @@ export function resolvePitchLoanOutOutcome(
         tm.id !== s.me &&
         tm.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
         tm.sq.filter((z) => !!z.loan).length < 4 &&
+        canTeamSignForeignPlayer(tm, q).ok &&
         !existingClubNames.has(tm.name) &&
         Math.abs(tm.tier - me.tier) <= 1
     )
@@ -5665,6 +5855,13 @@ export function recallLoanedOutPlayer(
   }
   const idx = host.sq.findIndex((q) => q.n === playerName && q.loan && q.loanFromTeamId === d.me);
   if (idx < 0) return { ok: false, err: 'ไม่พบนักเตะในสัญญายืมตัวของทีมนี้' };
+  const foreignChk = canTeamSignForeignPlayer(me, host.sq[idx]);
+  if (!foreignChk.ok) {
+    return {
+      ok: false,
+      err: `โควตาต่างชาติเต็ม ${foreignChk.maxForeign} คนแล้ว (${foreignChk.foreignCount}/${foreignChk.maxForeign}) ไม่สามารถดึง ${host.sq[idx].n} กลับได้`
+    };
+  }
   if (host.sq.length <= 16) {
     return { ok: false, err: `${host.name} มีนักเตะขั้นต่ำ (${host.sq.length} คน) ไม่สามารถเรียกกลับกลางคันได้` };
   }
@@ -5748,7 +5945,11 @@ export function generateIncomingWindowOffers(
           const q = P(cands);
           const existingClubs = new Set(activeOffers.filter((o) => o.n === q.n && (!o.kind || o.kind === 'buy')).map((o) => o.t));
           const oppPool = s.teams.filter(
-            (x) => x.id !== s.me && x.sq.length < LEAGUE_TRANSFER_RULES.maxSquad && !existingClubs.has(x.name)
+            (x) =>
+              x.id !== s.me &&
+              x.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
+              canTeamSignForeignPlayer(x, q).ok &&
+              !existingClubs.has(x.name)
           );
           if (oppPool.length) {
             const opp = P(oppPool);
@@ -5811,6 +6012,7 @@ export function generateIncomingWindowOffers(
               x.id !== s.me &&
               x.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
               x.sq.filter((z) => !!z.loan).length < 4 &&
+              canTeamSignForeignPlayer(x, q).ok &&
               !existingClubs.has(x.name) &&
               Math.abs(x.tier - me.tier) <= 1
           );
@@ -5974,6 +6176,7 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
           ({ q }) =>
             !q.me &&
             !shortlistedNames.has(q.n) &&
+            canTeamSignForeignPlayer(buyer, q).ok &&
             (q.pos === targetPos || Math.random() < 0.35) &&
             q.ov >= BASE[buyer.tier] - 6 &&
             q.ov <= BASE[buyer.tier] + 10
@@ -6073,6 +6276,7 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
           !q.loan &&
           q.inj === 0 &&
           !(q.signedSeason === s.season && q.signedMd === s.md) &&
+          canTeamSignForeignPlayer(buyer, q).ok &&
           q.pos === targetPos &&
           q.ov >= BASE[buyer.tier] - 5 &&
           q.ov <= BASE[buyer.tier] + 9

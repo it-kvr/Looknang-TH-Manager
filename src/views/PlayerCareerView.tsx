@@ -716,7 +716,11 @@ export const PlayerCareerView = React.memo<{
                 {details.G.map(([grp, items]) => (
                   <div
                     key={grp}
-                    className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                    className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border transition-colors ${
+                      favBoost > 0
+                        ? 'border-rose-400/80 dark:border-rose-400/65 ring-1 ring-inset ring-rose-400/20 shadow-[0_2px_10px_-2px_rgba(244,63,94,0.18)] dark:shadow-[0_2px_12px_-2px_rgba(244,63,94,0.28)]'
+                        : 'border-[var(--line)] shadow-xs'
+                    }`}
                   >
                     <div className="font-bold text-[11px] mland:text-[9px] mb-1 pb-0.5 border-b border-[var(--line)]/70">{grp}</div>
                     <div className="space-y-0.5">

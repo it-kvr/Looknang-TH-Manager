@@ -959,10 +959,16 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
             <div className="font-bold truncate flex items-center gap-1">
               <span>{dragUi.player.n.split(' ')[0]}</span>
               <PositionBadge role={dragUi.role || dragUi.player.ro} size="xs" />
-              <OvrBadge
-                ov={dragUi.player.ov + getActiveFavBoost(dragUi.player, meTeamOrig, dragUi.player.me ? state.p : null)}
-                size="2xs"
-              />
+              {(() => {
+                const dragFavBoost = getActiveFavBoost(dragUi.player, meTeamOrig, dragUi.player.me ? state.p : null);
+                return (
+                  <OvrBadge
+                    ov={dragUi.player.ov + dragFavBoost}
+                    boost={dragFavBoost}
+                    size="2xs"
+                  />
+                );
+              })()}
             </div>
             <div className="text-[10px] font-semibold text-[var(--mut)] truncate">
               {dropTarget
@@ -1458,6 +1464,7 @@ export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
                       <div className="flex items-center justify-start">
                         <OvrBadge
                           ov={pl.ov + favBoost}
+                          boost={favBoost}
                           size="2xs"
                           title={favBoost > 0 ? `OVR ${pl.ov} + ลูกรัก ${favBoost} = ${pl.ov + favBoost}` : undefined}
                         />

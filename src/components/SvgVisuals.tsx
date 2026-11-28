@@ -1120,7 +1120,7 @@ export const PlayerFace: React.FC<{
 export const PITCH_SVG_BASE =
   '<rect width="300" height="380" fill="#25834f"/><path fill="#2d965c" d="M0 0h300v47.5H0zM0 95h300v47.5H0zM0 190h300v47.5H0zM0 285h300v47.5H0z"/><g fill="none" stroke="#eef2e6" stroke-width="1.6" opacity="0.85"><rect x="6" y="6" width="288" height="368"/><path d="M6 190h288M90 6v58h120V6M90 374v-58h120v58M118 6v20h64V6M118 374v-20h64v20M124.63 64A32 32 0 0 0 175.37 64M124.63 316A32 32 0 0 1 175.37 316M13 6A7 7 0 0 1 6 13M294 13A7 7 0 0 1 287 6M287 374A7 7 0 0 1 294 367M6 367A7 7 0 0 1 13 374"/><circle cx="150" cy="190" r="36"/></g><g fill="#eef2e6" opacity="0.88"><circle cx="150" cy="190" r="2.2"/><circle cx="150" cy="44.5" r="2"/><circle cx="150" cy="335.5" r="2"/></g>';
 
-export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }> = ({ team, state }) => {
+export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null; className?: string }> = ({ team, state, className }) => {
   const uid = React.useId().replace(/:/g, '');
   const col = tc(team, state);
   const trCol = tc(team, state, true);
@@ -1130,7 +1130,7 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
   const slots = getFormationSlots(team);
   const starters = xi(team);
   return (
-    <svg className="w-full max-w-[200px] mx-auto rounded-xl block" viewBox="0 0 300 380" role="img" aria-label={`ผังแผน ${team.form}`}>
+    <svg className={className || 'w-full max-w-[200px] mx-auto rounded-xl block'} viewBox="0 0 300 380" role="img" aria-label={`ผังแผน ${team.form}`}>
       <defs>
         <clipPath id={`mfc-${uid}`}>
           <circle cx="30" cy="31" r="27" />
@@ -1629,7 +1629,29 @@ export const FormationPitch: React.FC<{
             </text>
 
             {/* Bottom-Right: OVR or Match Rating */}
-            <rect x={cx + 3} y={cy + 5.5} width={useRating || dispOv >= 100 ? '21.5' : '19'} height="12.5" rx="4.5" fill={rtBg} stroke={rtStroke} strokeWidth="1.1" />
+            {!useRating && favBoost > 0 && (
+              <rect
+                x={cx + 2.1}
+                y={cy + 4.6}
+                width={dispOv >= 100 ? '23.3' : '20.8'}
+                height="14.3"
+                rx="5.2"
+                fill="none"
+                stroke="#fb7185"
+                strokeOpacity="0.55"
+                strokeWidth="1.2"
+              />
+            )}
+            <rect
+              x={cx + 3}
+              y={cy + 5.5}
+              width={useRating || dispOv >= 100 ? '21.5' : '19'}
+              height="12.5"
+              rx="4.5"
+              fill={rtBg}
+              stroke={!useRating && favBoost > 0 ? '#fb7185' : rtStroke}
+              strokeWidth={!useRating && favBoost > 0 ? '1.35' : '1.1'}
+            />
             <text x={cx + (useRating || dispOv >= 100 ? 13.8 : 12.5)} y={cy + 14.8} textAnchor="middle" fontSize="9" fontWeight="800" fontFamily="Sarabun" fill={rtFg}>
               {useRating ? ratingVal.toFixed(1) : dispOv}
             </text>

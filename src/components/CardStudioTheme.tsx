@@ -66,6 +66,7 @@ export interface AthleteCardPalette {
   metaText: string;
   statsWrap: string;
   statCell: string;
+  statCellBoosted: string;
   statLabel: string;
   statTrack: string;
   traitChip: string;
@@ -93,6 +94,8 @@ export function getAthleteCardPalette(tone: CardStudioTone): AthleteCardPalette 
       metaText: 'text-emerald-800/80',
       statsWrap: 'bg-white/82 border-t border-slate-300/75',
       statCell: 'bg-slate-900/[0.04] border border-slate-200/80',
+      statCellBoosted:
+        'bg-slate-900/[0.04] border border-rose-400/90 ring-1 ring-inset ring-rose-300/45 shadow-[0_2px_7px_-2px_rgba(244,63,94,0.26)]',
       statLabel: 'text-slate-500',
       statTrack: 'bg-slate-300/80',
       traitChip: 'bg-emerald-600/10 border-emerald-600/30 text-emerald-900',
@@ -119,6 +122,8 @@ export function getAthleteCardPalette(tone: CardStudioTone): AthleteCardPalette 
     metaText: 'text-emerald-100/80',
     statsWrap: 'bg-[#060c09]/92 border-t border-white/10',
     statCell: 'bg-white/[0.04] border border-white/[0.08]',
+    statCellBoosted:
+      'bg-white/[0.04] border border-rose-400/75 ring-1 ring-inset ring-rose-300/25 shadow-[0_2px_9px_-2px_rgba(244,63,94,0.34)]',
     statLabel: 'text-white/60',
     statTrack: 'bg-white/15',
     traitChip: 'bg-emerald-400/15 border-emerald-300/30 text-emerald-100',
