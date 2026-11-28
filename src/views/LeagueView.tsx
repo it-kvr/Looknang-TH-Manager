@@ -700,6 +700,9 @@ export const LeagueView = React.memo<{
 
     const pendingTasks = items.filter((it) => it.kind !== 'feed' && !!it.urgent);
     const pendingCount = pendingTasks.length;
+    const firstPendingTaskId = pendingTasks[0]?.id ?? null;
+    const hasCriticalTask = pendingTasks.some((it) => it.tone === 'urg');
+    const hasWarnTask = pendingTasks.some((it) => it.tone === 'warn');
     const reqCount = items.filter((it) => it.kind === 'req').length;
     const filteredItems = items.filter((it) => {
       if (newsFilter === 'all') return true;
@@ -708,18 +711,69 @@ export const LeagueView = React.memo<{
       return it.kind === 'feed';
     });
 
-    const toneCardCls: Record<NewsTone, string> = {
-      urg: 'bg-[var(--surface-2)]/65 hover:bg-[var(--surface-2)]/90 border-[var(--line)]',
-      warn: 'bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)]/85 border-[var(--line)]',
-      ok: 'bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)]/85 border-[var(--line)]',
-      info: 'bg-[var(--surface-2)]/35 hover:bg-[var(--surface-2)]/65 border-[var(--line)]/75'
-    };
-
-    const toneIconBoxCls: Record<NewsTone, string> = {
-      urg: 'bg-gradient-to-br from-[var(--surface)] to-[var(--surface-2)] border border-[var(--line)] shadow-2xs text-[var(--ink)]',
-      warn: 'bg-gradient-to-br from-[var(--surface)] to-[var(--surface-2)] border border-[var(--line)] shadow-2xs text-[var(--ink)]',
-      ok: 'bg-gradient-to-br from-[var(--surface)] to-[var(--surface-2)] border border-[var(--line)] shadow-2xs text-[var(--g)]',
-      info: 'bg-[var(--surface)] border border-[var(--line)]/75 text-[var(--mut)]'
+    const getCardStyle = (tone: NewsTone, isTask: boolean, isSpotlight: boolean) => {
+      if (!isTask) {
+        return {
+          card: 'bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/55 border-[var(--line)]/65',
+          iconBox: 'bg-[var(--surface)] border border-[var(--line)]/75 text-[var(--mut)]',
+          glow: '',
+          sweepBg: '',
+          dotPing: '',
+          dotCore: '',
+          kickerCls: 'text-[var(--mut)]',
+          kickerLabel: '',
+          btn: 'btn-surface group-hover:bg-[var(--g)] group-hover:text-white group-hover:border-[var(--g)]'
+        };
+      }
+      if (tone === 'urg') {
+        return {
+          card: 'bg-rose-500/[0.07] dark:bg-rose-500/[0.12] hover:bg-rose-500/[0.12] border-rose-500/50 dark:border-rose-400/50',
+          iconBox: 'bg-[var(--surface)] border border-rose-500/40 shadow-2xs text-rose-600 dark:text-rose-400',
+          glow: `${
+            isSpotlight
+              ? 'border-[1.5px] border-rose-500/90 dark:border-rose-400/90 shadow-[0_0_14px_rgba(244,63,94,0.28),inset_0_0_10px_rgba(244,63,94,0.14)] task-alert-glow-urg'
+              : 'border border-rose-500/65 dark:border-rose-400/65 shadow-[0_0_8px_rgba(244,63,94,0.16)] task-alert-glow-soft'
+          }`,
+          sweepBg: 'bg-gradient-to-r from-transparent via-rose-400/20 dark:via-rose-300/20 to-transparent',
+          dotPing: 'bg-rose-400',
+          dotCore: 'bg-rose-500',
+          kickerCls: 'text-rose-600 dark:text-rose-400 font-extrabold',
+          kickerLabel: isSpotlight ? 'ทำก่อน · ด่วน' : 'ด่วน',
+          btn: 'bg-rose-600 group-hover:bg-rose-700 text-white border border-rose-500/40 shadow-xs'
+        };
+      }
+      if (tone === 'ok') {
+        return {
+          card: 'bg-emerald-500/[0.06] dark:bg-emerald-500/[0.1] hover:bg-emerald-500/[0.11] border-emerald-500/45 dark:border-emerald-400/40',
+          iconBox: 'bg-[var(--surface)] border border-emerald-500/35 shadow-2xs text-[var(--g)]',
+          glow: `${
+            isSpotlight
+              ? 'border-[1.5px] border-emerald-500/85 dark:border-emerald-400/85 shadow-[0_0_12px_rgba(16,185,129,0.24),inset_0_0_8px_rgba(16,185,129,0.12)] task-alert-glow-soft'
+              : 'border border-emerald-500/55 dark:border-emerald-400/50'
+          }`,
+          sweepBg: 'bg-gradient-to-r from-transparent via-emerald-400/22 dark:via-emerald-300/20 to-transparent',
+          dotPing: 'bg-emerald-400',
+          dotCore: 'bg-emerald-500',
+          kickerCls: 'text-[var(--g)] font-extrabold',
+          kickerLabel: isSpotlight ? 'ทำก่อน · พร้อมตรวจ' : 'พร้อมตรวจ',
+          btn: 'bg-[var(--g)] group-hover:brightness-110 text-white border border-emerald-400/30 shadow-xs'
+        };
+      }
+      return {
+        card: 'bg-amber-500/[0.06] dark:bg-amber-400/[0.09] hover:bg-amber-500/[0.11] border-amber-500/45 dark:border-amber-400/40',
+        iconBox: 'bg-[var(--surface)] border border-amber-500/35 shadow-2xs text-amber-700 dark:text-amber-300',
+        glow: `${
+          isSpotlight
+            ? 'border-[1.5px] border-amber-500/85 dark:border-amber-400/85 shadow-[0_0_12px_rgba(245,158,11,0.24),inset_0_0_8px_rgba(245,158,11,0.12)] task-alert-glow-soft'
+            : 'border border-amber-500/55 dark:border-amber-400/50'
+        }`,
+        sweepBg: 'bg-gradient-to-r from-transparent via-amber-400/24 dark:via-amber-300/20 to-transparent',
+        dotPing: 'bg-amber-400',
+        dotCore: 'bg-amber-500',
+        kickerCls: 'text-amber-700 dark:text-amber-300 font-extrabold',
+        kickerLabel: isSpotlight ? 'ทำก่อน' : 'ต้องทำ',
+        btn: 'bg-amber-500 group-hover:bg-amber-600 text-[#261900] border border-amber-600/35 font-extrabold shadow-xs'
+      };
     };
 
     const filterTabs = isMgr
@@ -735,9 +789,80 @@ export const LeagueView = React.memo<{
           ['feed', 'ข่าวทีม', false]
         ] as const);
 
+    const outerGlowCls =
+      pendingCount === 0
+        ? ''
+        : hasCriticalTask
+          ? 'border-[1.5px] border-rose-500/60 dark:border-rose-400/55 shadow-[0_0_14px_rgba(244,63,94,0.16)] task-alert-glow-urg'
+          : hasWarnTask
+            ? 'border-[1.5px] border-amber-500/55 dark:border-amber-400/50 shadow-[0_0_12px_rgba(245,158,11,0.14)] task-alert-glow-soft'
+            : 'border-[1.5px] border-emerald-500/55 dark:border-emerald-400/50 shadow-[0_0_12px_rgba(16,185,129,0.14)] task-alert-glow-soft';
+
     return (
-      <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1.5">
-        <div className={`seg-bar w-full grid ${isMgr ? 'grid-cols-4' : 'grid-cols-3'}`}>
+      <div
+        className={`relative p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border shadow-xs space-y-2 mland:space-y-1.5 ${
+          pendingCount > 0
+            ? hasCriticalTask
+              ? 'border-rose-500/35 dark:border-rose-400/35'
+              : hasWarnTask
+                ? 'border-amber-500/35 dark:border-amber-400/35'
+                : 'border-emerald-500/35 dark:border-emerald-400/35'
+            : 'border-[var(--line)]'
+        }`}
+      >
+        {pendingCount > 0 && (
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute -inset-[1px] rounded-[inherit] ${outerGlowCls}`}
+          />
+        )}
+
+        <div className="relative flex items-center justify-between gap-2 px-0.5 text-[11px] mland:text-[9.5px]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {pendingCount > 0 ? (
+              <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    hasCriticalTask ? 'bg-rose-400' : hasWarnTask ? 'bg-amber-400' : 'bg-emerald-400'
+                  }`}
+                />
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    hasCriticalTask ? 'bg-rose-500' : hasWarnTask ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
+                />
+              </span>
+            ) : (
+              <span className="text-xs leading-none shrink-0" aria-hidden="true">✅</span>
+            )}
+            <span className="font-bold text-[var(--ink)] truncate">
+              {pendingCount > 0 ? 'สิ่งที่ต้องทำ' : 'ข่าวสาร & ความพร้อมทีม'}
+            </span>
+            <span className="text-[var(--mut)] font-medium truncate tabular">
+              · {pendingCount > 0 ? `${pendingCount} รายการรอจัดการ` : 'ไม่มีงานค้าง'}
+            </span>
+          </div>
+          {pendingCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setNewsFilter(newsFilter === 'urg' ? 'all' : 'urg');
+              }}
+              className={`text-[10px] mland:text-[8.5px] font-bold shrink-0 whitespace-nowrap cursor-pointer hover:underline ${
+                hasCriticalTask
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : hasWarnTask
+                    ? 'text-amber-700 dark:text-amber-300'
+                    : 'text-[var(--g)]'
+              }`}
+            >
+              {newsFilter === 'urg' ? 'ดูทั้งหมด' : 'ดูเฉพาะที่ต้องทำ ›'}
+            </button>
+          )}
+        </div>
+
+        <div className={`relative seg-bar w-full grid ${isMgr ? 'grid-cols-4' : 'grid-cols-3'}`}>
           {filterTabs.map(([fid, flbl, showRedDot]) => {
             const isActive = newsFilter === fid;
             return (
@@ -763,7 +888,7 @@ export const LeagueView = React.memo<{
           })}
         </div>
 
-        <div className="max-h-[300px] sm:max-h-[340px] mland:max-h-[210px] overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
+        <div className="relative max-h-[300px] sm:max-h-[340px] mland:max-h-[210px] overflow-y-auto space-y-1.5 mland:space-y-1 p-0.5">
           {filteredItems.length === 0 ? (
             <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-4 text-center bg-[var(--surface-2)]/35 rounded-xl border border-dashed border-[var(--line)]">
               {newsFilter === 'req'
@@ -771,50 +896,105 @@ export const LeagueView = React.memo<{
                 : 'ไม่มีเรื่องสำคัญค้าง ทีมพร้อมลุยนัดถัดไป!'}
             </div>
           ) : (
-            filteredItems.map((it) => {
+            filteredItems.map((it, idx) => {
               const isUnresolvedTask = it.kind !== 'feed' && !!it.urgent;
-              return (
-                <div
-                  key={it.id}
-                  className={`px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2.5 mland:gap-2 transition-colors ${toneCardCls[it.tone]}`}
-                >
-                  <div className={`relative w-7 h-7 mland:w-5.5 mland:h-5.5 rounded-xl mland:rounded-lg flex items-center justify-center text-xs mland:text-[10px] shrink-0 ${toneIconBoxCls[it.tone]}`}>
+              const isTopPriorityTask = isUnresolvedTask && it.id === firstPendingTaskId;
+              const isFirstFeedAfterTasks =
+                newsFilter === 'all' &&
+                it.kind === 'feed' &&
+                idx > 0 &&
+                filteredItems[idx - 1].kind !== 'feed';
+              const style = getCardStyle(it.tone, isUnresolvedTask, isTopPriorityTask);
+              const isInteractive = Boolean(it.actionLabel && it.onAction);
+
+              const cardInner = (
+                <>
+                  {isUnresolvedTask && style.glow && (
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute -inset-[1px] rounded-[inherit] ${style.glow}`}
+                    />
+                  )}
+                  {isTopPriorityTask && style.sweepBg && (
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden"
+                    >
+                      <span className={`absolute inset-y-0 w-1/2 task-sweep-beam ${style.sweepBg}`} />
+                    </span>
+                  )}
+                  <div className={`relative w-7 h-7 mland:w-5.5 mland:h-5.5 rounded-xl mland:rounded-lg flex items-center justify-center text-xs mland:text-[10px] shrink-0 ${style.iconBox}`}>
                     {it.icon}
                     {isUnresolvedTask && (
                       <span
                         title="ยังมีรายการที่ต้องจัดการให้เสร็จ"
                         className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 mland:h-2 mland:w-2"
                       >
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 mland:h-2 mland:w-2 bg-red-500 ring-2 ring-[var(--surface)]" />
+                        {(isTopPriorityTask || it.tone === 'urg') && (
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${style.dotPing}`} />
+                        )}
+                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 mland:h-2 mland:w-2 ring-2 ring-[var(--surface)] ${style.dotCore}`} />
                       </span>
                     )}
                   </div>
-                  <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="relative min-w-0 flex-1 space-y-0.5">
                     <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-snug break-words">
                       {it.title}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] mland:text-[8.5px] leading-snug text-[var(--mut)]">
-                      <span className="px-1.5 py-[0.5px] rounded-md bg-[var(--surface)] border border-[var(--line)]/70 font-semibold text-[var(--ink)]/75 shrink-0">
+                      {isUnresolvedTask && style.kickerLabel && (
+                        <>
+                          <span className={`shrink-0 ${style.kickerCls}`}>{style.kickerLabel}</span>
+                          <span aria-hidden="true" className="opacity-45">·</span>
+                        </>
+                      )}
+                      <span className="font-semibold text-[var(--ink)]/75 shrink-0">
                         {it.tag}
                       </span>
                       {it.detail && (
-                        <span className="break-words">
-                          {it.detail}
-                        </span>
+                        <>
+                          <span aria-hidden="true" className="opacity-45">·</span>
+                          <span className="break-words">
+                            {it.detail}
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
-                  {it.actionLabel && it.onAction && (
+                  {isInteractive && (
+                    <span className={`relative btn btn-xs shrink-0 whitespace-nowrap gap-1 ${style.btn}`}>
+                      <span>{it.actionLabel}</span>
+                      <ChevronRight className="w-3 h-3 mland:w-2.5 mland:h-2.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                    </span>
+                  )}
+                </>
+              );
+
+              return (
+                <React.Fragment key={it.id}>
+                  {isFirstFeedAfterTasks && (
+                    <div className="flex items-center gap-2 pt-1 pb-0.5 text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)]">
+                      <span className="h-px flex-1 bg-[var(--line)]/75" />
+                      <span>ข่าวสโมสรล่าสุด</span>
+                      <span className="h-px flex-1 bg-[var(--line)]/75" />
+                    </div>
+                  )}
+                  {isInteractive ? (
                     <button
                       type="button"
                       onClick={() => { SFX.tap(); it.onAction?.(); }}
-                      className="btn btn-xs btn-surface hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)] shrink-0 whitespace-nowrap"
+                      className={`group w-full text-left relative px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2.5 mland:gap-2 transition-all cursor-pointer ${style.card}`}
                     >
-                      {it.actionLabel}
+                      {cardInner}
                     </button>
+                  ) : (
+                    <div
+                      className={`relative px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2.5 mland:gap-2 transition-colors ${style.card}`}
+                    >
+                      {cardInner}
+                    </div>
                   )}
-                </div>
+                </React.Fragment>
               );
             })
           )}

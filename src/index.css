@@ -798,6 +798,47 @@ button:not(:disabled):active {
   animation: office-pin-shake 0.38s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
+@keyframes task-alert-breathe {
+  0%, 100% {
+    opacity: 0.38;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes task-sweep-beam {
+  0%, 40% {
+    transform: translate3d(-120%, 0, 0) skewX(-18deg);
+    opacity: 0;
+  }
+  52% {
+    opacity: 0.85;
+  }
+  82% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translate3d(260%, 0, 0) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+.task-alert-glow-urg {
+  will-change: opacity;
+  animation: task-alert-breathe 1.65s ease-in-out infinite;
+}
+
+.task-alert-glow-soft {
+  will-change: opacity;
+  animation: task-alert-breathe 2.45s ease-in-out infinite;
+}
+
+.task-sweep-beam {
+  will-change: transform, opacity;
+  animation: task-sweep-beam 3.1s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .confetti-piece,
   .celebrate-sparkle,
@@ -816,8 +857,18 @@ button:not(:disabled):active {
   .sub-ring-pulse,
   .sub-chip-in,
   .live-dot-ring,
-  .live-dot-core {
+  .live-dot-core,
+  .task-alert-glow-urg,
+  .task-alert-glow-soft,
+  .task-sweep-beam {
     animation: none !important;
+  }
+  .task-alert-glow-urg,
+  .task-alert-glow-soft {
+    opacity: 0.85 !important;
+  }
+  .task-sweep-beam {
+    display: none;
   }
   .confetti-piece {
     display: none;
