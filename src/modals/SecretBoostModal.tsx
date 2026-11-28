@@ -1,5 +1,25 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Delete, Eye, EyeOff, FastForward, Fingerprint, Lock, ScanLine, ShieldAlert, ShieldCheck, Unlock } from 'lucide-react';
+import {
+  Award,
+  ChevronRight,
+  Clock,
+  Crown,
+  Delete,
+  Eye,
+  EyeOff,
+  FastForward,
+  Flame,
+  HeartPulse,
+  Lock,
+  RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
+  TrendingUp,
+  Unlock,
+  UserCog,
+  X,
+  Zap
+} from 'lucide-react';
 import type { AppSettings, GameState } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { SFX, snd, vibrate } from '../utils/audioTheme';
@@ -60,9 +80,9 @@ const VipOfficeScannerGate: React.FC<{
           SFX.win();
           vibrate(35);
           timerRef.current = window.setTimeout(() => {
-            onToast('🔓 สแกนเข้าออฟฟิศ VIP สำเร็จ! ปลดล็อกสิทธิ์ผู้ดูแลแล้ว');
+            onToast('🔓 ปลดล็อกห้องควบคุม VIP สำเร็จ');
             onUnlock();
-          }, 420);
+          }, 380);
         } else {
           setStatus('denied');
           setAttempts((n) => n + 1);
@@ -74,7 +94,7 @@ const VipOfficeScannerGate: React.FC<{
             setStatus('idle');
           }, 680);
         }
-      }, 280);
+      }, 240);
     },
     [onToast, onUnlock, status]
   );
@@ -136,28 +156,20 @@ const VipOfficeScannerGate: React.FC<{
 
   const statusMeta = {
     idle: {
-      dotCls: 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]',
-      badgeCls: 'bg-amber-500/15 border-amber-400/40 text-amber-300',
-      label: 'LOCKED · รอสแกนรหัสพนักงาน VIP',
-      sub: 'กรอกรหัสผ่าน 4 หลักเพื่อเปิดประตูเข้าสู่ออฟฟิศปรับแต่งค่า'
+      tone: 'text-[var(--mut)]',
+      label: 'กรอกรหัสผ่าน 4 หลักเพื่อเข้าใช้งาน'
     },
     scanning: {
-      dotCls: 'bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,0.95)] animate-pulse',
-      badgeCls: 'bg-sky-500/20 border-sky-400/50 text-sky-300',
-      label: 'SCANNING · กำลังตรวจสอบสิทธิ์...',
-      sub: 'กำลังอ่านข้อมูลบัตรพนักงานและรหัสผ่าน...'
+      tone: 'text-[var(--g)]',
+      label: 'กำลังตรวจสอบรหัสผ่าน...'
     },
     denied: {
-      dotCls: 'bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.95)] animate-ping',
-      badgeCls: 'bg-rose-500/20 border-rose-500/60 text-rose-300',
-      label: `ACCESS DENIED · รหัสผ่านไม่ถูกต้อง${attempts > 1 ? ` (${attempts})` : ''}`,
-      sub: 'ไม่ได้รับอนุญาตเข้าสู่ออฟฟิศ กรุณาลองใหม่อีกครั้ง'
+      tone: 'text-[var(--red)]',
+      label: `รหัสผ่านไม่ถูกต้อง${attempts > 1 ? ` (ลองแล้ว ${attempts} ครั้ง)` : ''}`
     },
     granted: {
-      dotCls: 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.95)]',
-      badgeCls: 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300',
-      label: 'ACCESS GRANTED · อนุญาตเข้าออฟฟิศ VIP',
-      sub: 'ประตูออฟฟิศเปิดแล้ว กำลังเข้าสู่แผงควบคุม...'
+      tone: 'text-[var(--g)]',
+      label: 'ยืนยันสิทธิ์สำเร็จ กำลังเปิดแผงควบคุม...'
     }
   }[status];
 
@@ -168,24 +180,22 @@ const VipOfficeScannerGate: React.FC<{
   ];
 
   return (
-    <div className="fixed inset-0 z-[65] bg-black/80 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+    <div className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 mland:p-2 overflow-hidden">
       <div
-        className={`w-full max-w-[600px] mland:max-w-[580px] max-h-[calc(var(--app-dvh,1dvh)*94)] rounded-3xl mland:rounded-2xl bg-gradient-to-b from-slate-900 via-slate-950 to-[#050b08] text-slate-100 border border-slate-700/80 shadow-[0_24px_70px_rgba(0,0,0,0.65)] flex flex-col overflow-hidden ${
+        className={`w-full max-w-[520px] max-h-[calc(var(--app-dvh,1dvh)*92)] rounded-2xl bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden ${
           status === 'denied' ? 'office-pin-shake' : ''
         }`}
       >
-        {/* Terminal Top Bezel */}
-        <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-2">
+        {/* Header */}
+        <div className="shrink-0 px-4 py-3 mland:px-3.5 mland:py-2 border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusMeta.dotCls}`} />
+            <div className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)] flex items-center justify-center shrink-0">
+              <Crown className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+            </div>
             <div className="min-w-0">
-              <div className="text-[11px] mland:text-[10px] font-extrabold tracking-wider uppercase text-slate-200 flex items-center gap-1.5 truncate">
-                <ScanLine className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>OFFICE ACCESS TERMINAL · VIP GATE</span>
-              </div>
-              <div className="text-[9.5px] mland:text-[8.5px] text-slate-400 truncate">
-                เครื่องสแกนเข้าออฟฟิศทำงาน · ระบบรักษาความปลอดภัย
-              </div>
+              <h3 className="font-bold text-sm mland:text-xs font-display truncate">
+                เข้าสู่ห้องควบคุม VIP
+              </h3>
             </div>
           </div>
           <button
@@ -194,82 +204,49 @@ const VipOfficeScannerGate: React.FC<{
               SFX.tap();
               onClose();
             }}
-            aria-label="ปิดเครื่องสแกน"
-            className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold cursor-pointer shrink-0"
+            aria-label="ปิดหน้าต่าง"
+            className="btn-icon"
           >
-            ✕
+            <X className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
           </button>
         </div>
 
-        {/* Scanner Body: Dual-Panel Hardware Layout */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5 grid grid-cols-1 sm:grid-cols-[1fr_228px] mland:grid-cols-[1fr_214px] gap-3.5 mland:gap-2.5 items-stretch">
-          {/* Left Panel: RFID / Biometric Sensor & Digital PIN Display */}
-          <div className="flex flex-col justify-between gap-2.5 mland:gap-1.5 p-3 mland:p-2 rounded-2xl bg-slate-900/80 border border-slate-800">
-            {/* Status Pill */}
-            <div className={`px-2.5 py-1.5 mland:py-1 rounded-xl border text-[10.5px] mland:text-[9.5px] font-bold flex items-center gap-1.5 ${statusMeta.badgeCls}`}>
-              {status === 'granted' ? (
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-              ) : status === 'denied' ? (
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-              ) : (
-                <Lock className="w-3.5 h-3.5 shrink-0" />
-              )}
-              <span className="truncate">{statusMeta.label}</span>
-            </div>
-
-            {/* Scanner Optical Pad */}
-            <div className="relative h-24 mland:h-[72px] rounded-xl bg-gradient-to-b from-[#07130e] to-[#040a07] border border-emerald-500/30 overflow-hidden flex items-center justify-center">
-              {/* Subtle corner brackets like real optical door reader */}
-              <span className="absolute top-2 left-2 w-3 h-3 border-t-2 border-l-2 border-emerald-400/60 rounded-tl-sm" />
-              <span className="absolute top-2 right-2 w-3 h-3 border-t-2 border-r-2 border-emerald-400/60 rounded-tr-sm" />
-              <span className="absolute bottom-2 left-2 w-3 h-3 border-b-2 border-l-2 border-emerald-400/60 rounded-bl-sm" />
-              <span className="absolute bottom-2 right-2 w-3 h-3 border-b-2 border-r-2 border-emerald-400/60 rounded-br-sm" />
-
-              {/* Moving Laser Scan Beam */}
-              <div
-                className={`office-scan-beam absolute left-3 right-3 h-0.5 rounded-full pointer-events-none ${
-                  status === 'denied'
-                    ? 'bg-rose-400 shadow-[0_0_12px_2px_rgba(244,63,94,0.85)]'
-                    : status === 'granted'
-                      ? 'bg-emerald-300 shadow-[0_0_14px_3px_rgba(52,211,153,0.95)]'
-                      : 'bg-emerald-400/80 shadow-[0_0_10px_2px_rgba(16,185,129,0.7)]'
-                }`}
-              />
-
-              <div className="flex flex-col items-center gap-1 z-10">
-                <Fingerprint
-                  className={`w-10 h-10 mland:w-8 mland:h-8 transition-colors ${
-                    status === 'denied'
-                      ? 'text-rose-400'
-                      : status === 'granted'
-                        ? 'text-emerald-300'
-                        : status === 'scanning'
-                          ? 'text-sky-300'
-                          : 'text-emerald-400/80'
-                  }`}
-                />
-                <span className="text-[9.5px] mland:text-[8.5px] font-mono tracking-widest uppercase text-emerald-300/75">
-                  {status === 'granted' ? 'DOOR UNLOCKED' : status === 'scanning' ? 'VERIFYING...' : 'RFID / PIN READER'}
-                </span>
+        {/* Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-3 grid grid-cols-1 sm:grid-cols-[1fr_210px] mland:grid-cols-[1fr_196px] gap-4 mland:gap-3 items-center">
+          {/* Left: PIN Slots & Status */}
+          <div className="flex flex-col justify-between gap-3.5 mland:gap-2.5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-xs mland:text-[11px] font-bold text-[var(--ink)]">
+                {status === 'granted' ? (
+                  <ShieldCheck className="w-4 h-4 text-[var(--g)] shrink-0" />
+                ) : status === 'denied' ? (
+                  <ShieldAlert className="w-4 h-4 text-[var(--red)] shrink-0" />
+                ) : (
+                  <Lock className="w-4 h-4 text-[#9a6700] dark:text-[var(--lamp)] shrink-0" />
+                )}
+                <span>ยืนยันรหัสผู้ดูแล</span>
               </div>
+              <p className={`text-[11px] mland:text-[10px] font-medium leading-snug ${statusMeta.tone}`}>
+                {statusMeta.label}
+              </p>
             </div>
 
-            {/* 4-Digit Digital LCD Screen */}
-            <div className="space-y-1.5 mland:space-y-1">
-              <div className="flex items-center justify-between text-[10px] mland:text-[9px] text-slate-400">
-                <span className="font-semibold">รหัสพนักงานเข้าออฟฟิศ (4 หลัก)</span>
+            <div className="space-y-2 mland:space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] mland:text-[10px] text-[var(--mut)]">
+                <span>รหัสผ่าน 4 หลัก</span>
                 <button
                   type="button"
                   onClick={() => {
                     SFX.tap();
                     setShowDigits((v) => !v);
                   }}
-                  className="inline-flex items-center gap-1 text-slate-300 hover:text-white cursor-pointer"
+                  className="inline-flex items-center gap-1 font-semibold text-[var(--ink)] hover:text-[var(--g)] cursor-pointer"
                 >
-                  {showDigits ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  {showDigits ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   <span>{showDigits ? 'ซ่อน' : 'แสดง'}</span>
                 </button>
               </div>
+
               <div className="grid grid-cols-4 gap-2 mland:gap-1.5">
                 {[0, 1, 2, 3].map((idx) => {
                   const char = pin[idx] || '';
@@ -277,16 +254,16 @@ const VipOfficeScannerGate: React.FC<{
                   return (
                     <div
                       key={idx}
-                      className={`h-12 mland:h-9 rounded-xl border-2 flex items-center justify-center font-mono text-xl mland:text-base font-extrabold transition-all ${
+                      className={`h-12 mland:h-9.5 rounded-xl border flex items-center justify-center font-mono tabular text-lg mland:text-base font-bold transition-colors ${
                         status === 'denied'
-                          ? 'bg-rose-950/50 border-rose-500/80 text-rose-300'
+                          ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]'
                           : status === 'granted'
-                            ? 'bg-emerald-950/60 border-emerald-400 text-emerald-300'
+                            ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)]'
                             : char
-                              ? 'bg-slate-950 border-emerald-400/70 text-emerald-300 shadow-[inset_0_0_12px_rgba(16,185,129,0.12)]'
+                              ? 'bg-[var(--surface-2)] border-[var(--g)]/70 text-[var(--ink)]'
                               : isActive
-                                ? 'bg-slate-950 border-amber-400/75 text-amber-300'
-                                : 'bg-slate-950/70 border-slate-700/80 text-slate-600'
+                                ? 'bg-[var(--surface)] border-[var(--lamp)] text-[var(--ink)]'
+                                : 'bg-[var(--surface-2)]/60 border-[var(--line)] text-[var(--mut)]'
                       }`}
                     >
                       {char ? (showDigits ? char : '●') : isActive ? '_' : '·'}
@@ -294,22 +271,29 @@ const VipOfficeScannerGate: React.FC<{
                   );
                 })}
               </div>
-              <div className="text-[10px] mland:text-[8.5px] text-slate-400 leading-snug">
-                {statusMeta.sub}
-              </div>
             </div>
+
+            <button
+              type="button"
+              disabled={status === 'scanning' || status === 'granted'}
+              onClick={() => verifyCode(pin)}
+              className="btn btn-md btn-gold w-full"
+            >
+              <Unlock className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+              <span>{status === 'scanning' ? 'กำลังตรวจสอบ...' : 'ปลดล็อกเข้าใช้งาน'}</span>
+            </button>
           </div>
 
-          {/* Right Panel: Physical Stainless Keypad */}
-          <div className="flex flex-col justify-between gap-2 mland:gap-1.5 p-3 mland:p-2 rounded-2xl bg-slate-900/95 border border-slate-800">
-            <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
+          {/* Right: Compact Numeric Keypad */}
+          <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)]">
+            <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
               {keypadRows.flat().map((digit) => (
                 <button
                   key={digit}
                   type="button"
                   disabled={status === 'scanning' || status === 'granted'}
                   onClick={() => pushDigit(digit)}
-                  className="h-11 mland:h-8 rounded-xl bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 active:scale-95 border border-slate-700/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] text-base mland:text-sm font-extrabold font-mono text-slate-100 cursor-pointer disabled:opacity-50 transition-all"
+                  className="h-10 mland:h-8 rounded-lg bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--line)] text-sm mland:text-xs font-bold font-mono tabular text-[var(--ink)] cursor-pointer disabled:opacity-50"
                 >
                   {digit}
                 </button>
@@ -320,7 +304,7 @@ const VipOfficeScannerGate: React.FC<{
                 disabled={status === 'scanning' || status === 'granted'}
                 onClick={handleClear}
                 title="ล้างรหัส"
-                className="h-11 mland:h-8 rounded-xl bg-rose-950/50 hover:bg-rose-900/60 active:scale-95 border border-rose-500/40 text-xs mland:text-[11px] font-extrabold text-rose-300 cursor-pointer disabled:opacity-50 transition-all"
+                className="h-10 mland:h-8 rounded-lg bg-[var(--red-soft)] hover:brightness-95 border border-[var(--red)]/30 text-[11px] mland:text-[10px] font-bold text-[var(--red)] cursor-pointer disabled:opacity-50"
               >
                 ล้าง
               </button>
@@ -328,7 +312,7 @@ const VipOfficeScannerGate: React.FC<{
                 type="button"
                 disabled={status === 'scanning' || status === 'granted'}
                 onClick={() => pushDigit('0')}
-                className="h-11 mland:h-8 rounded-xl bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 active:scale-95 border border-slate-700/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] text-base mland:text-sm font-extrabold font-mono text-slate-100 cursor-pointer disabled:opacity-50 transition-all"
+                className="h-10 mland:h-8 rounded-lg bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--line)] text-sm mland:text-xs font-bold font-mono tabular text-[var(--ink)] cursor-pointer disabled:opacity-50"
               >
                 0
               </button>
@@ -338,27 +322,53 @@ const VipOfficeScannerGate: React.FC<{
                 onClick={handleBackspace}
                 aria-label="ลบตัวเลข"
                 title="ลบตัวเลขล่าสุด"
-                className="h-11 mland:h-8 rounded-xl bg-slate-800/80 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 flex items-center justify-center cursor-pointer disabled:opacity-50 transition-all"
+                className="h-10 mland:h-8 rounded-lg bg-[var(--surface)] hover:bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] flex items-center justify-center cursor-pointer disabled:opacity-50"
               >
                 <Delete className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
               </button>
             </div>
-
-            <button
-              type="button"
-              disabled={status === 'scanning' || status === 'granted'}
-              onClick={() => verifyCode(pin)}
-              className="w-full h-11 mland:h-8 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 active:scale-[0.98] text-slate-950 font-extrabold text-xs mland:text-[11px] flex items-center justify-center gap-1.5 shadow-[0_4px_16px_rgba(16,185,129,0.3)] cursor-pointer disabled:opacity-50 transition-all"
-            >
-              <Unlock className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
-              <span>{status === 'scanning' ? 'กำลังสแกน...' : 'สแกนเข้าออฟฟิศ'}</span>
-            </button>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+const SwitchRow: React.FC<{
+  title: string;
+  subtitle: string;
+  checked: boolean;
+  onToggle: () => void;
+}> = ({ title, subtitle, checked, onToggle }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    onClick={onToggle}
+    className="w-full flex items-center justify-between gap-2.5 px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)] border border-[var(--line)] text-left cursor-pointer"
+  >
+    <div className="min-w-0">
+      <div className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] truncate">{title}</div>
+      <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">{subtitle}</div>
+    </div>
+    <div className="flex items-center gap-1.5 shrink-0">
+      <span className={`text-[10px] mland:text-[9px] font-bold ${checked ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+        {checked ? 'เปิด' : 'ปิด'}
+      </span>
+      <span
+        className={`relative inline-flex h-5 w-9 mland:h-4 mland:w-7.5 items-center rounded-full transition-colors ${
+          checked ? 'bg-[var(--g)]' : 'bg-[var(--line)]'
+        }`}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 mland:h-3 mland:w-3 rounded-full bg-white shadow-xs transition-transform ${
+            checked ? 'translate-x-4.5 mland:translate-x-3.5' : 'translate-x-1'
+          }`}
+        />
+      </span>
+    </div>
+  </button>
+);
 
 export const SecretBoostModal: React.FC<{
   state: GameState;
@@ -494,330 +504,271 @@ export const SecretBoostModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-[65] bg-black/75 flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/50 flex flex-col overflow-hidden shadow-2xl">
-        <div className="shrink-0 px-5 py-3 mland:px-3 mland:py-1.5 bg-[var(--lamp-soft)]/50 border-b border-[var(--lamp)]/30 flex items-center justify-between gap-2">
-          <h3 className="font-bold text-base mland:text-xs font-display flex items-center gap-1.5 min-w-0">
-            <span>👑</span>
-            <span className="truncate">{isPlayerMode ? 'โหมดลับนักเตะอาชีพ (VIP Boost)' : 'โหมดลับผู้สนับสนุน (VIP Boost)'}</span>
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--g-soft)] border border-[var(--g)]/40 text-[10px] font-bold text-[var(--g)] shrink-0">
-              <ShieldCheck className="w-3 h-3" />
-              <span>ผ่านเครื่องสแกน</span>
-            </span>
-          </h3>
+    <div className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+        {/* Clean Header */}
+        <div className="shrink-0 px-4 py-3 mland:px-3.5 mland:py-2 border-b border-[var(--line)] flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-xl mland:rounded-lg bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)] flex items-center justify-center shrink-0">
+              <Crown className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-sm sm:text-base mland:text-xs font-display truncate">
+                แผงควบคุม VIP
+              </h3>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
+                {isPlayerMode ? 'โหมดนักเตะอาชีพ' : 'โหมดผู้จัดการทีม'} · ปรับแต่งงบ พลัง และข้ามแข่ง
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => {
                 SFX.tap();
                 onLockVip();
-                onToast('🔒 ล็อกประตูออฟฟิศ VIP แล้ว');
+                onToast('🔒 ล็อกห้องควบคุม VIP แล้ว');
               }}
-              title="ล็อกห้อง VIP (ต้องสแกนรหัสใหม่)"
-              className="px-2.5 h-8 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--red)]/50 text-[11px] mland:text-[9.5px] font-bold inline-flex items-center gap-1 cursor-pointer"
+              title="ล็อกห้อง VIP (ต้องกรอกรหัสใหม่)"
+              className="btn btn-sm btn-secondary"
             >
-              <Lock className="w-3 h-3 text-[var(--red)]" />
-              <span>ล็อก</span>
+              <Lock className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--red)]" />
+              <span>ล็อกสิทธิ์</span>
             </button>
-            <button type="button" onClick={onClose} className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] mland:text-xs font-bold cursor-pointer">✕</button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="ปิดหน้าต่าง"
+              className="btn-icon"
+            >
+              <X className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+            </button>
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-2.5 space-y-2.5 mland:space-y-1.5">
-          {/* VIP Match Skip Control Center (Moved from Settings & Match Controls) */}
-          <div className="p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/80 border border-[var(--lamp)]/40 space-y-2 mland:space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="text-xs mland:text-[10.5px] font-extrabold text-[#8a5b00] dark:text-[var(--lamp)] flex items-center gap-1.5">
-                <FastForward className="w-3.5 h-3.5 shrink-0" />
-                <span>ระบบข้ามการแข่งขัน (VIP Skip)</span>
-              </div>
-              {nextMatchLabel && onSkipNextMatch && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    onClose();
-                    onSkipNextMatch();
-                  }}
-                  className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] hover:brightness-105 text-[10.5px] mland:text-[9px] font-extrabold inline-flex items-center gap-1 cursor-pointer shrink-0"
-                >
-                  <span>⏭️ ข้ามนัดถัดไป ({nextMatchLabel})</span>
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  onUpdateSettings({ autoSkipMatch: !autoSkipOn });
-                  onToast(!autoSkipOn ? '⏭️ เปิดข้ามแข่งอัตโนมัติ (VIP) แล้ว' : 'ปิดข้ามแข่งอัตโนมัติแล้ว');
-                }}
-                className={`w-full flex items-center justify-between gap-2 p-2 mland:p-1.5 rounded-xl mland:rounded-lg border text-left cursor-pointer transition-colors ${
-                  autoSkipOn ? 'bg-[var(--g-soft)] border-[var(--g)]/50' : 'bg-[var(--surface)] border-[var(--line)]'
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="text-xs mland:text-[10px] font-bold truncate">⏭️ ข้ามแข่งอัตโนมัติ</div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                    จำลองผลทันทีโดยไม่เปิดสนาม 2D
-                  </div>
-                </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] mland:text-[8.5px] font-bold shrink-0 ${autoSkipOn ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                  {autoSkipOn ? 'เปิด' : 'ปิด'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  const nextVal = !matchSkipButtonsOn;
-                  onUpdateSettings({ vipMatchSkipEnabled: nextVal });
-                  onToast(nextVal ? '⏩ เปิดปุ่ม "ข้าม" ในหน้าก่อนแข่งและสนาม 2D แล้ว' : 'ซ่อนปุ่ม "ข้าม" ในหน้าก่อนแข่งและสนาม 2D แล้ว');
-                }}
-                className={`w-full flex items-center justify-between gap-2 p-2 mland:p-1.5 rounded-xl mland:rounded-lg border text-left cursor-pointer transition-colors ${
-                  matchSkipButtonsOn ? 'bg-[var(--g-soft)] border-[var(--g)]/50' : 'bg-[var(--surface)] border-[var(--line)]'
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="text-xs mland:text-[10px] font-bold truncate">⏩ ปุ่ม "ข้าม" ในสนาม</div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                    แสดงปุ่มข้ามหน้าก่อนแข่ง &amp; ในเกม 2D
-                  </div>
-                </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] mland:text-[8.5px] font-bold shrink-0 ${matchSkipButtonsOn ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                  {matchSkipButtonsOn ? 'เปิด' : 'ปิด'}
-                </span>
-              </button>
-            </div>
-          </div>
-
+        {/* Scrollable Content */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5 space-y-3 mland:space-y-2">
+          {/* Live Status Summary Strip */}
           {isPlayerMode && state.p ? (
-            <>
-              <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10.5px] tabular">
-                <span>
-                  นักเตะ: <b className="text-[var(--ink)]">{state.p.name}</b> · อายุ <b>{state.p.age}</b> ปี
+            <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10.5px] tabular">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-bold text-[var(--ink)] truncate">{state.p.name}</span>
+                <span className="text-[var(--mut)]">·</span>
+                <span className="text-[var(--mut)]">อายุ {state.p.age} ปี</span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-[var(--mut)]">
+                  ชื่อเสียง <b className="text-[#9a6700] dark:text-[var(--lamp)]">★ {state.p.rep ?? 10}</b>
                 </span>
-                <div className="flex items-center gap-3">
-                  <span>ชื่อเสียง: <b className="text-[#9a6700] dark:text-[var(--lamp)]">★ {state.p.rep ?? 10}</b></span>
-                  <span className="inline-flex items-center gap-1">
-                    พรสวรรค์: <TalentBadge talent={state.p.talent ?? 78} variant="default" size="xs" />
-                  </span>
-                  <span>OVR: <b className="text-[var(--lamp)]">{ovMe(state.p)}</b></span>
-                </div>
+                <span className="inline-flex items-center gap-1 text-[var(--mut)]">
+                  พรสวรรค์ <TalentBadge talent={state.p.talent ?? 78} variant="default" size="xs" />
+                </span>
+                <span className="text-[var(--mut)]">
+                  OVR <b className="text-[var(--ink)]">{ovMe(state.p)}</b>
+                </span>
               </div>
-
-              <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => runPlayerBoost('rep15')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-[var(--lamp)]">⭐ ชื่อเสียง +15 ★</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ใช้ปลดล็อกสกิลติดตัว &amp; ซ้อม</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runPlayerBoost('rep50')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-amber-500/15 border border-amber-500/45 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-amber-300">👑 ชื่อเสียง +50 ★</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ระดับซุปตาร์มหาชน</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runPlayerBoost('repSub10')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--red-soft)]/75 border border-[var(--red)]/40 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">📉 ลดชื่อเสียง -10 ★</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ปรับลดชื่อเสียงลง</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => runPlayerBoost('talent10')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[var(--g)]">🌟 พรสวรรค์ +10</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">เพิ่มโอกาสภารกิจ (ตัน 99)</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runPlayerBoost('ageSub2')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-teal-500/12 border border-teal-500/35 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-teal-700 dark:text-teal-300">⏳ ย้อนวัย -2 ปี</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ขยายช่วงพีค (ขั้นต่ำ 16)</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runPlayerBoost('unlockPerks')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-purple-500/12 border border-purple-500/35 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-purple-700 dark:text-purple-300">🔓 ปลดสกิลติดตัวครบ</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ได้สกิลติดตัวระดับอาชีพทั้งหมด</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => runBoost('healAll')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-sky-500/12 border border-sky-500/35 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-sky-700 dark:text-sky-300">🩺 ฟื้นฟูฟิต 100%</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ฟิตเต็ม · หายเจ็บ · ล้างแบน</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('stat5')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px]">⚡ เพิ่มพลัง +5</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ทุกค่าพลัง +5 &amp; ฟิต 100%</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('stat10')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-orange-500/12 border border-orange-500/40 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-orange-700 dark:text-orange-300">🔥 เพิ่มพลัง +10</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ซูเปอร์สตาร์ +10 &amp; ฟิตเต็ม</div>
-                </button>
-              </div>
-
-              <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 mland:gap-1.5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] whitespace-nowrap">กำหนดชื่อเสียง (★):</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={999}
-                    aria-label="จำนวนชื่อเสียงที่ต้องการปรับ"
-                    value={customRep}
-                    onChange={(e) => setCustomRep(e.target.value)}
-                    className="w-20 mland:w-16 px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold tabular text-right focus:outline-none focus:border-[var(--g)]"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => runCustomRep('sub')}
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--red-soft)] border border-[var(--red)]/45 text-[var(--red)] text-xs mland:text-[10px] font-bold cursor-pointer hover:brightness-95"
-                  >
-                    − ลด {parsedRep > 0 ? `${parsedRep} ★` : ''}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runCustomRep('add')}
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer hover:brightness-105"
-                  >
-                    + เพิ่ม
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => runCustomRep('set', 10)}
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--red)]/50 text-xs mland:text-[10px] font-bold cursor-pointer"
-                  >
-                    รีเซ็ต 10 ★
-                  </button>
-                </div>
-              </div>
-            </>
+            </div>
           ) : (
-            <>
-              <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between text-xs mland:text-[10.5px] tabular">
+            <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10.5px] tabular">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[var(--mut)]">งบสโมสรปัจจุบัน</span>
+                <b className={state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>
+                  <AnimatedMoney value={state.money} deltaPlacement="inline" />
+                </b>
+                {state.money < 0 && (
+                  <span className="text-[10.5px] text-[var(--red)] font-bold">(ติดลบ)</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[var(--mut)]">
                 <span>
-                  งบสโมสรปัจจุบัน:{' '}
-                  <b className={state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>
-                    <AnimatedMoney value={state.money} deltaPlacement="inline" />
-                  </b>
-                  {state.money < 0 && <span className="ml-1.5 text-[10px] text-[var(--red)] font-bold">(ติดลบ)</span>}
+                  OVR เฉลี่ย <b className="text-[var(--ink)]">{avgOv}</b>
                 </span>
-                <span>OVR เฉลี่ยทีม: <b className="text-[var(--lamp)]">{avgOv}</b></span>
+                <span>·</span>
+                <span>
+                  นักเตะ <b className="text-[var(--ink)]">{me?.sq.length || 0}</b> คน
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Section 1: Finance (Manager) or Career Reputation & Progression (Player) */}
+          {isPlayerMode && state.p ? (
+            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] overflow-hidden">
+              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/80 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                  ชื่อเสียงและพัฒนาการ
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => runPlayerBoost('rep15')}
+                    className="btn btn-xs bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/30 hover:bg-[var(--g)] hover:text-white"
+                  >
+                    +15 ★
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runPlayerBoost('rep50')}
+                    className="btn btn-xs bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)] border border-[var(--lamp)]/40 hover:brightness-95"
+                  >
+                    +50 ★
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runPlayerBoost('repSub10')}
+                    className="btn btn-xs btn-danger"
+                  >
+                    −10 ★
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => runBoost('money500')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[var(--g)]">💰 เติมเงิน +500k ฿</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">งบเสริมทัพ &amp; บริหารทีม</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('money2500')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-[var(--lamp)]">💎 เติมเงิน +2.5m ฿</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">งบมหาเศรษฐีทุ่มตลาด</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('money10000')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-amber-500/15 border border-amber-500/45 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-amber-300">🏦 เติมเงิน +10m ฿</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">เทคโอเวอร์ระดับลีกสูงสุด</div>
-                </button>
+              <div className="p-3 mland:p-2 space-y-2.5 mland:space-y-1.5">
+                <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => runPlayerBoost('talent10')}
+                    className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)]/50 text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                      <TrendingUp className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
+                      <span className="truncate">พรสวรรค์ +10</span>
+                    </div>
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] mt-0.5 truncate">
+                      เพิ่มเพดานพัฒนา (สูงสุด 99)
+                    </div>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => runBoost('sub500')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--red-soft)]/70 border border-[var(--red)]/35 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">💸 ลดเงิน -500k ฿</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">หักงบสโมสรลง 500k</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('sub2500')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--red-soft)]/85 border border-[var(--red)]/45 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">📉 ลดเงิน -2.5m ฿</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ปรับงบลดลง 2.5 ล้าน</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('sub10000')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/55 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">🔻 ลดเงิน -10m ฿</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ดึงงบออก 10 ล้าน</div>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => runPlayerBoost('ageSub2')}
+                    className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)]/50 text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                      <Clock className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
+                      <span className="truncate">ย้อนวัย −2 ปี</span>
+                    </div>
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] mt-0.5 truncate">
+                      ขยายช่วงพีค (ขั้นต่ำ 16 ปี)
+                    </div>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => runBoost('healAll')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-sky-500/12 border border-sky-500/35 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-sky-700 dark:text-sky-300">🩺 ฟื้นฟูทีม 100%</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ฟิตเต็ม · หายเจ็บ · ล้างโทษแบน</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('stat5')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px]">⚡ เพิ่มพลัง +5</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ทั้งทีม +5 OVR &amp; ฟิต 100%</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => runBoost('stat10')}
-                  className="p-2.5 mland:p-1.5 rounded-xl bg-orange-500/12 border border-orange-500/40 hover:brightness-105 text-left cursor-pointer"
-                >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-orange-700 dark:text-orange-300">🔥 เพิ่มพลัง +10</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ระดับแชมป์ +10 OVR &amp; หายเจ็บ</div>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => runPlayerBoost('unlockPerks')}
+                    className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--lamp)]/60 text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                      <Award className="w-3.5 h-3.5 text-[#9a6700] dark:text-[var(--lamp)] shrink-0" />
+                      <span className="truncate">ปลดสกิลครบ</span>
+                    </div>
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] mt-0.5 truncate">
+                      สกิลติดตัวระดับอาชีพทั้งหมด
+                    </div>
+                  </button>
+                </div>
+
+                <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] whitespace-nowrap">
+                      กำหนดชื่อเสียง:
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={999}
+                      aria-label="จำนวนชื่อเสียงที่ต้องการปรับ"
+                      value={customRep}
+                      onChange={(e) => setCustomRep(e.target.value)}
+                      className="w-20 mland:w-16 px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 border border-[var(--line)] text-xs mland:text-[10.5px] font-bold tabular text-right focus:outline-none focus:border-[var(--g)]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => runCustomRep('sub')}
+                      className="btn btn-xs btn-danger"
+                    >
+                      − ลด {parsedRep > 0 ? `${parsedRep} ★` : ''}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runCustomRep('add')}
+                      className="btn btn-xs btn-primary"
+                    >
+                      + เพิ่ม
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => runCustomRep('set', 10)}
+                      className="btn btn-xs btn-secondary"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>รีเซ็ต 10 ★</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] overflow-hidden">
+              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/80 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                  จัดการงบประมาณสโมสร
+                </span>
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => runBoost('money500')}
+                    className="btn btn-xs bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/30 hover:bg-[var(--g)] hover:text-white tabular"
+                  >
+                    +500k
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runBoost('money2500')}
+                    className="btn btn-xs bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/30 hover:bg-[var(--g)] hover:text-white tabular"
+                  >
+                    +2.5M
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runBoost('money10000')}
+                    className="btn btn-xs bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)] border border-[var(--lamp)]/45 hover:brightness-95 tabular"
+                  >
+                    +10M
+                  </button>
+                  <span className="mx-0.5 text-[var(--line)] select-none">|</span>
+                  <button
+                    type="button"
+                    onClick={() => runBoost('sub500')}
+                    className="btn btn-xs btn-danger tabular"
+                  >
+                    −500k
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runBoost('sub2500')}
+                    className="btn btn-xs btn-danger tabular"
+                  >
+                    −2.5M
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runBoost('sub10000')}
+                    className="btn btn-xs btn-danger tabular"
+                  >
+                    −10M
+                  </button>
+                </div>
               </div>
 
-              {/* Custom Money Adjust Bar */}
-              <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 mland:gap-1.5">
+              <div className="px-3 py-2.5 mland:px-2.5 mland:py-1.5 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] whitespace-nowrap">กำหนดยอดเอง:</span>
+                  <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] whitespace-nowrap">
+                    กำหนดยอดเอง:
+                  </span>
                   <input
                     type="number"
                     min={0}
@@ -825,16 +776,16 @@ export const SecretBoostModal: React.FC<{
                     aria-label="จำนวนเงินที่ต้องการปรับ"
                     value={customVal}
                     onChange={(e) => setCustomVal(e.target.value)}
-                    className="w-24 mland:w-20 px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold tabular text-right focus:outline-none focus:border-[var(--g)]"
+                    className="w-24 mland:w-20 px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 border border-[var(--line)] text-xs mland:text-[10.5px] font-bold tabular text-right focus:outline-none focus:border-[var(--g)]"
                   />
-                  <div className="flex items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
+                  <div className="seg-bar">
                     <button
                       type="button"
                       onClick={() => {
                         SFX.tap();
                         setUnit('k');
                       }}
-                      className={`px-2 py-0.5 rounded text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer ${unit === 'k' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
+                      className={`seg-btn ${unit === 'k' ? 'seg-btn-active' : ''}`}
                     >
                       พัน (k)
                     </button>
@@ -844,9 +795,9 @@ export const SecretBoostModal: React.FC<{
                         SFX.tap();
                         setUnit('m');
                       }}
-                      className={`px-2 py-0.5 rounded text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer ${unit === 'm' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
+                      className={`seg-btn ${unit === 'm' ? 'seg-btn-active' : ''}`}
                     >
-                      ล้าน (m)
+                      ล้าน (M)
                     </button>
                   </div>
                 </div>
@@ -855,14 +806,14 @@ export const SecretBoostModal: React.FC<{
                   <button
                     type="button"
                     onClick={() => runCustomMoney('sub')}
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--red-soft)] border border-[var(--red)]/45 text-[var(--red)] text-xs mland:text-[10px] font-bold cursor-pointer hover:brightness-95"
+                    className="btn btn-xs btn-danger tabular"
                   >
                     − ลด {parsedAmountK > 0 ? fmtMoney(parsedAmountK) : ''}
                   </button>
                   <button
                     type="button"
                     onClick={() => runCustomMoney('add')}
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer hover:brightness-105"
+                    className="btn btn-xs btn-primary"
                   >
                     + เพิ่ม
                   </button>
@@ -870,15 +821,114 @@ export const SecretBoostModal: React.FC<{
                     type="button"
                     onClick={() => runCustomMoney('set', 0)}
                     title="ตั้งงบสโมสรกลับเป็น 0 ฿"
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--red)]/50 text-xs mland:text-[10px] font-bold cursor-pointer"
+                    className="btn btn-xs btn-secondary"
                   >
-                    รีเซ็ต 0 ฿
+                    <RotateCcw className="w-3 h-3" />
+                    <span>รีเซ็ต 0 ฿</span>
                   </button>
                 </div>
               </div>
-            </>
+            </div>
           )}
 
+          {/* Section 2: Squad / Player Power & Fitness Boosts */}
+          <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
+            <button
+              type="button"
+              onClick={() => runBoost('healAll')}
+              className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-2)]/70 border border-[var(--line)] hover:border-[var(--g)]/60 text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-1.5 text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                <HeartPulse className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
+                <span className="truncate">{isPlayerMode ? 'ฟื้นฟูฟิต 100%' : 'ฟื้นฟูทีม 100%'}</span>
+              </div>
+              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] mt-0.5 truncate">
+                ฟิตเต็ม · หายเจ็บ · ล้างแบน
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => runBoost('stat5')}
+              className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-2)]/70 border border-[var(--line)] hover:border-[var(--g)]/60 text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-1.5 text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                <Zap className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
+                <span className="truncate">เพิ่มพลัง +5</span>
+              </div>
+              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] mt-0.5 truncate">
+                {isPlayerMode ? 'ทุกค่าพลัง +5 & ฟิต 100%' : 'ทั้งทีม +5 OVR & ฟิต 100%'}
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => runBoost('stat10')}
+              className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-2)]/70 border border-[var(--line)] hover:border-[var(--lamp)]/70 text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-1.5 text-xs mland:text-[10.5px] font-bold text-[#9a6700] dark:text-[var(--lamp)]">
+                <Flame className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">เพิ่มพลัง +10</span>
+              </div>
+              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] mt-0.5 truncate">
+                {isPlayerMode ? 'ซูเปอร์สตาร์ +10 & ฟิตเต็ม' : 'ระดับแชมป์ +10 OVR & หายเจ็บ'}
+              </div>
+            </button>
+          </div>
+
+          {/* Section 3: Match Skip Controls */}
+          <div className="p-3 mland:p-2 rounded-xl border border-[var(--line)] bg-[var(--surface)] space-y-2 mland:space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                <FastForward className="w-3.5 h-3.5 text-[#9a6700] dark:text-[var(--lamp)] shrink-0" />
+                <span>ระบบข้ามการแข่งขัน</span>
+              </div>
+              {nextMatchLabel && onSkipNextMatch && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onClose();
+                    onSkipNextMatch();
+                  }}
+                  className="btn btn-xs btn-gold max-w-full"
+                >
+                  <FastForward className="w-3 h-3 shrink-0" />
+                  <span className="truncate">ข้ามนัดถัดไป ({nextMatchLabel})</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
+              <SwitchRow
+                title="ข้ามแข่งอัตโนมัติ"
+                subtitle="จำลองผลทันทีโดยไม่เปิดสนาม 2D"
+                checked={autoSkipOn}
+                onToggle={() => {
+                  SFX.tap();
+                  onUpdateSettings({ autoSkipMatch: !autoSkipOn });
+                  onToast(!autoSkipOn ? '⏭️ เปิดข้ามแข่งอัตโนมัติ (VIP) แล้ว' : 'ปิดข้ามแข่งอัตโนมัติแล้ว');
+                }}
+              />
+              <SwitchRow
+                title='ปุ่ม "ข้าม" ในสนาม'
+                subtitle="แสดงปุ่มข้ามหน้าก่อนแข่ง & ในเกม 2D"
+                checked={matchSkipButtonsOn}
+                onToggle={() => {
+                  SFX.tap();
+                  const nextVal = !matchSkipButtonsOn;
+                  onUpdateSettings({ vipMatchSkipEnabled: nextVal });
+                  onToast(
+                    nextVal
+                      ? '⏩ เปิดปุ่ม "ข้าม" ในหน้าก่อนแข่งและสนาม 2D แล้ว'
+                      : 'ซ่อนปุ่ม "ข้าม" ในหน้าก่อนแข่งและสนาม 2D แล้ว'
+                  );
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Section 4: Individual Player VIP Editor */}
           <button
             type="button"
             onClick={() => {
@@ -886,18 +936,24 @@ export const SecretBoostModal: React.FC<{
               onClose();
               onOpenGodBlessing();
             }}
-            className="w-full p-2.5 mland:p-1.5 rounded-xl bg-gradient-to-r from-[var(--lamp-soft)] via-[var(--surface-2)] to-[var(--g-soft)] border border-[var(--lamp)]/50 hover:brightness-105 text-left flex items-center justify-between gap-2 cursor-pointer"
+            className="w-full px-3.5 py-2.5 mland:px-3 mland:py-2 rounded-xl bg-[var(--lamp-soft)]/55 hover:bg-[var(--lamp-soft)]/80 border border-[var(--lamp)]/45 text-left flex items-center justify-between gap-3 cursor-pointer"
           >
-            <div className="min-w-0">
-              <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-[var(--lamp)] flex items-center gap-1.5">
-                <span>🛠️ ปรับแต่งนักเตะรายบุคคล (VIP Editor)</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 mland:w-7 mland:h-7 rounded-lg bg-[var(--lamp)] text-[#261900] flex items-center justify-center shrink-0">
+                <UserCog className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
               </div>
-              <div className="text-[10px] mland:text-[9px] text-[var(--mut)] truncate">
-                แก้ไข OVR ค่าพลังย่อย เพดานพรสวรรค์ ตำแหน่งถนัด นิสัย สไตล์ และหน้าตาได้ทุกสโมสร
+              <div className="min-w-0">
+                <div className="font-bold text-xs mland:text-[11px] text-[var(--ink)] truncate">
+                  ปรับแต่งนักเตะรายบุคคล (VIP Editor)
+                </div>
+                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
+                  แก้ไข OVR ค่าพลังย่อย เพดานพรสวรรค์ ตำแหน่งถนัด นิสัย และหน้าตาได้ทุกสโมสร
+                </div>
               </div>
             </div>
-            <span className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9.5px] font-extrabold shrink-0">
-              เปิดปรับแต่ง →
+            <span className="inline-flex items-center gap-1 text-xs mland:text-[10.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] shrink-0 whitespace-nowrap">
+              <span>เปิดเครื่องมือ</span>
+              <ChevronRight className="w-4 h-4" />
             </span>
           </button>
         </div>
