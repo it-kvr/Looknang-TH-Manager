@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ClubAllTimePlayerRecord, GameState, Player, Team, TrophyRecord } from '../types/game';
-import { TN } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { getClubLegacySummary, resolveClubLegendProfile } from '../engine/history';
 import { sortTable, ensureTeamFans, fmtFans } from '../engine/simulation';
@@ -423,9 +423,9 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
               เกียรติประวัติตลอดกาล · {team.name}
             </h3>
             <p className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate">
-              {TN[team.tier] || 'สโมสรทวีป'} · แฟนบอล {fmtFans(ensureTeamFans(team))} คน
+              {getTeamLeagueName(team, { includeZone: true, withFlag: true })} · แฟนบอล {fmtFans(ensureTeamFans(team))} คน
               {legacy.bestLeagueFinish
-                ? ` · สถิติลีกดีสุด: อันดับ ${legacy.bestLeagueFinish.rank} ${TN[legacy.bestLeagueFinish.tier]} (S${legacy.bestLeagueFinish.season})`
+                ? ` · สถิติลีกดีสุด: อันดับ ${legacy.bestLeagueFinish.rank} ${getTeamLeagueName({ tier: legacy.bestLeagueFinish.tier, name: team.name, leagueCode: legacy.bestLeagueFinish.tier >= 3 ? team.leagueCode : undefined }, { short: true })} (S${legacy.bestLeagueFinish.season})`
                 : ''}
             </p>
           </div>
@@ -927,7 +927,9 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                           </span>
                         )}
                       </td>
-                      <td className="py-1.5 px-2 whitespace-nowrap">{TN[r.tier] || 'สโมสรทวีป'}</td>
+                      <td className="py-1.5 px-2 whitespace-nowrap">
+                        {getTeamLeagueName({ tier: r.tier, name: team.name, leagueCode: r.tier >= 3 ? team.leagueCode : undefined }, { short: true, withFlag: true })}
+                      </td>
                       <td className="py-1.5 px-1.5 text-center tabular font-bold">
                         {r.rank}/{r.totalTeams}
                       </td>

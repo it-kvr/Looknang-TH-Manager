@@ -10,6 +10,7 @@ import type {
   TrophyRecord
 } from '../types/game';
 import { TN } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { clamp } from '../utils/math';
 import { ovMe, DT } from './playerCore';
 
@@ -298,8 +299,9 @@ export function getPlayerCareerSummary(
       if (baseMap.has(arc.season)) return;
       const found = arc.players.find((pl) => pl.name === player.n || (isMe && pl.isMe));
       if (found && (found.sp > 0 || (found.cupSp || 0) > 0 || found.sg > 0 || (found.cupSg || 0) > 0 || found.sa > 0 || (found.cupSa || 0) > 0)) {
+        const arcTeam = state.teams[arc.teamId];
         const honor = arc.champion
-          ? `แชมป์ ${TN[arc.tier]}`
+          ? `แชมป์ ${arcTeam ? getTeamLeagueName(arcTeam) : TN[arc.tier] || 'ลีก'}`
           : arc.nextTier > arc.tier
             ? 'เลื่อนชั้น'
             : arc.cupStatus === 'แชมป์ถ้วย'

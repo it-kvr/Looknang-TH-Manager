@@ -16,7 +16,8 @@ import {
   X
 } from 'lucide-react';
 import type { GameState, MatchEnvironment, Mentality, Player, SubRole, Team } from '../types/game';
-import { AR_T, FSD, POS, RN, TN } from '../data/thaiFootballData';
+import { AR_T, FSD, POS, RN } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { computeTurfMatchModifiers, getStadiumStyleSpec, getTurfGradeSpec } from '../data/crestAndKitData';
 import { SFX } from '../utils/audioTheme';
 import { clamp, fmtMoneyNum } from '../utils/math';
@@ -349,7 +350,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
                 : kind === 'cup'
                   ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-                  : `⚽ ${TN[homeTeam.tier]} · นัดที่ ${state.md + 1}/${state.fx.length}`;
+                  : `⚽ ${getTeamLeagueName(homeTeam, { short: true, withFlag: true })} · นัดที่ ${state.md + 1}/${state.fx.length}`;
 
 
   const handleQuickSwap = (targetName: string) => {
@@ -667,7 +668,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           {/* Left: Competition Tier & Matchday */}
           <div className="order-1 min-w-0 shrink sm:max-w-[190px] mland:max-w-[145px]">
             <div className="font-extrabold text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--g)] truncate leading-tight">
-              {kind === 'league' ? `⚽ ${TN[homeTeam.tier]}` : compLabel.split(' · ')[0]}
+              {kind === 'league' ? `⚽ ${getTeamLeagueName(homeTeam, { short: true, withFlag: true })}` : compLabel.split(' · ')[0]}
             </div>
             <div className="mt-0.5 flex items-center gap-1 text-[10px] mland:text-[8px] text-[var(--mut)] truncate tabular leading-tight">
               <span>

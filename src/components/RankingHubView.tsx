@@ -15,8 +15,8 @@ import {
   Zap
 } from 'lucide-react';
 import type { GameState, Player, Position, StatKey, Team } from '../types/game';
-import { TN, BASE, CONFED_META, getCountryMetaByCode, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
-import { getT3ZoneLabel, getWorldLeagueSpec } from '../data/leagueStructures';
+import { TN, CONFED_META, getCountryMetaByCode, getForeignTeamCountryMeta, type ForeignConfed } from '../data/thaiFootballData';
+import { getT3ZoneLabel, getTeamBaseOvr, getTeamLeagueName, getWorldLeagueSpec } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { DT, vlu, wagOf } from '../engine/playerCore';
@@ -108,7 +108,7 @@ const readTeamFans = (t: Team): number => {
   const ovAvg = t.sq?.length
     ? t.sq.slice(0, 11).reduce((sum, q) => sum + q.ov, 0) / Math.min(11, t.sq.length)
     : 60;
-  const diffBonus = clamp((ovAvg - (BASE[t.tier ?? 0] ?? 60)) * 0.035, -0.32, 0.55);
+  const diffBonus = clamp((ovAvg - getTeamBaseOvr(t)) * 0.035, -0.32, 0.55);
   const seed = ((t.id + 1) * 7919) % 31;
   return Math.max(2500, Math.round(tierBase * (1 + diffBonus) + (seed - 15) * ((t.tier ?? 0) + 1) * 180));
 };
@@ -260,7 +260,14 @@ export const RankingHubView = React.memo<{
     const myZone = me.tier === 0 ? (me.zone ?? 0) : undefined;
     return state.teams.filter((t) => {
       if (scope === 'domestic' && t.tier >= 3) return false;
-      if (scope === 'my' && (t.tier !== me.tier || (me.tier === 0 && (t.zone ?? 0) !== myZone))) return false;
+      if (scope === 'my') {
+        if (me.tier >= 3) {
+          if (t.tier < 3) return false;
+          if (me.leagueCode && t.leagueCode !== me.leagueCode) return false;
+          return true;
+        }
+        if (t.tier !== me.tier || (me.tier === 0 && (t.zone ?? 0) !== myZone)) return false;
+      }
       if (scope !== 'all' && scope !== 'domestic' && scope !== 'my' && t.tier !== Number(scope)) return false;
       if (scope === '3' || scope === 'all') {
         if (confedFilter !== 'all' || countryFilter !== 'ALL') {
@@ -272,7 +279,7 @@ export const RankingHubView = React.memo<{
       }
       return true;
     });
-  }, [state.teams, scope, me.tier, me.zone, confedFilter, countryFilter]);
+  }, [state.teams, scope, me.tier, me.zone, me.leagueCode, confedFilter, countryFilter]);
 
   const clubRows = useMemo<ClubRowEntry[]>(() => {
     return scopedTeams.map((team) => {
@@ -398,8 +405,7 @@ export const RankingHubView = React.memo<{
         const wlSpec = entry.team.tier >= 3 ? getWorldLeagueSpec(entry.team.leagueCode) : null;
         return (
           entry.team.name.toLowerCase().includes(q) ||
-          (TN[entry.team.tier] || '').toLowerCase().includes(q) ||
-          (entry.team.tier === 0 ? getT3ZoneLabel(entry.team.zone).toLowerCase().includes(q) : false) ||
+          getTeamLeagueName(entry.team, { includeZone: true }).toLowerCase().includes(q) ||
           (meta?.country || '').toLowerCase().includes(q) ||
           (wlSpec?.name || '').toLowerCase().includes(q)
         );
@@ -760,9 +766,10 @@ export const RankingHubView = React.memo<{
   const scopeLabel = useMemo(() => {
     if (scope === 'all') return `ทั้งหมด (${scopedTeams.length} ทีม)`;
     if (scope === 'domestic') return `ไทยลีก 1-3 (${scopedTeams.length} ทีม)`;
-    if (scope === 'my') return `${TN[me.tier]}${me.tier === 0 ? ` (${getT3ZoneLabel(me.zone)})` : ''} (${scopedTeams.length} ทีม)`;
+    if (scope === 'my') return `${getTeamLeagueName(me, { includeZone: true, withFlag: true })} (${scopedTeams.length} ทีม)`;
+    if (scope === '3') return `สโมสรนานาชาติ (${scopedTeams.length} ทีม)`;
     return `${TN[Number(scope)] || 'ลีก'} (${scopedTeams.length} ทีม)`;
-  }, [scope, scopedTeams.length, me.tier, me.zone]);
+  }, [scope, scopedTeams.length, me]);
 
   const clubMinMax = useMemo(() => {
     if (!clubSortedAll.length) return { min: 0, max: 1 };

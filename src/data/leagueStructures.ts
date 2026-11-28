@@ -1,4 +1,5 @@
-import { COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, type ForeignConfed, type ForeignNameRegion } from './thaiFootballData';
+import type { Team } from '../types/game';
+import { BASE, COUNTRY_META_BY_CODE, FOREIGN_CLUB_CATALOG, TN, getForeignTeamCountryMeta, type ForeignConfed, type ForeignNameRegion } from './thaiFootballData';
 
 export const T3_ZONE_NAMES = ['โซนเหนือ-อีสาน', 'โซนกลาง-ใต้'] as const;
 
@@ -809,3 +810,40 @@ export function getRankZoneBadge(
   }
   return { tone: 'neutral', label: '', shortLabel: '', ...TONE_CLASSES.neutral };
 }
+
+export function getTeamBaseOvr(
+  team?: Pick<Team, 'tier' | 'leagueCode'> | null,
+  fallbackTier?: number
+): number {
+  const tier = team ? (team.tier ?? 0) : (fallbackTier ?? 0);
+  if (tier >= 3) {
+    const spec = getWorldLeagueSpec(team?.leagueCode);
+    return spec?.baseOvr ?? 74;
+  }
+  const idx = Math.max(0, Math.min(BASE.length - 1, tier));
+  return BASE[idx] ?? 60;
+}
+
+export function getTeamLeagueName(
+  team?: Pick<Team, 'name' | 'origName' | 'tier' | 'zone' | 'leagueCode' | 'modLeagueName'> | null,
+  opts?: { includeZone?: boolean; withFlag?: boolean; short?: boolean }
+): string {
+  if (!team) return TN[0];
+  if (team.modLeagueName) return team.modLeagueName;
+  const tier = team.tier ?? 0;
+  if (tier < 3) {
+    const base = TN[tier] || TN[0];
+    if (opts?.includeZone && tier === 0) {
+      return `${base} (${getT3ZoneLabel(team.zone)})`;
+    }
+    return base;
+  }
+  const meta = getForeignTeamCountryMeta(team.origName || team.name, team.leagueCode);
+  const spec = getWorldLeagueSpec(team.leagueCode || meta?.code);
+  const label = opts?.short
+    ? (spec?.shortName || spec?.name || meta?.country || TN[3])
+    : (spec?.name || meta?.country || TN[3]);
+  const flag = spec?.flag || meta?.flag;
+  return opts?.withFlag && flag ? `${flag} ${label}` : label;
+}
+

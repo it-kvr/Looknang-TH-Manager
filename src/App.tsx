@@ -11,7 +11,8 @@ import {
 } from './utils/fullscreen';
 import type { GameMode, MainTab, NavIntent, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
 import { P, clamp, capMoney, fmtMoney } from './utils/math';
-import { RN, TN, BASE, POS } from './data/thaiFootballData';
+import { RN, POS } from './data/thaiFootballData';
+import { getTeamBaseOvr, getTeamLeagueName, getWorldLeagueSpec } from './data/leagueStructures';
 import { getSettings, saveSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK, localizeForeignTeams, localizeDomesticThaiTeams } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, ensureAsia, ensureMarketTopForeigners, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable, ensureDomesticPyramidStructure, ensureWorldLeaguesFixtures, advanceOtherLeaguesOnMatchday, initDomesticPlayoffs, resolveUserPlayoffMatch, roundRobin } from './engine/simulation';
@@ -22,7 +23,7 @@ import { appendPlayerCareerLog } from './engine/history';
 import { formatPersonalityShiftFeed, getActiveFavBoost, getTeamFavoritePlayers, updateTeamWellbeingAfterMatchday, type MatchdayWellbeingCtx } from './engine/wellbeing';
 import { getCupConfig } from './engine/mods';
 import { AppEntrySplash, AppToast, AppTopHud, AppNavDock, PortraitRotateNotice, type NextMatchDescriptor } from './components/AppShellSections';
-import { MainMenu } from './views/MainMenuView';
+import { MainMenu, type StartManagerConfig } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
 import { SquadTacticsView } from './views/SquadTacticsView';
 import { TeamTrainingView } from './views/TeamTrainingView';
@@ -172,6 +173,19 @@ export default function App() {
   const pendingSaveRef = useRef<{ state: GameState; slot: number } | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const skipNextSaveRef = useRef(false);
+  const urgentSaveRef = useRef(false);
+
+  const commitSaveResult = useCallback((targetState: GameState, targetSlot: number) => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    pendingSaveRef.current = null;
+    const res = saveGameToSlot(targetState, targetSlot);
+    if (!res.ok) {
+      showToast('⚠️ พื้นที่จัดเก็บช่องเซฟเต็ม ลบช่องเซฟเก่าบางช่องในเมนูหลักเพื่อให้บันทึกได้ปกติ');
+    }
+  }, [showToast]);
 
   const flushPendingSave = useCallback(() => {
     if (saveTimerRef.current !== null) {
@@ -226,6 +240,7 @@ export default function App() {
     if (!state) {
       pendingSaveRef.current = null;
       skipNextSaveRef.current = false;
+      urgentSaveRef.current = false;
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
@@ -234,6 +249,12 @@ export default function App() {
     }
     if (skipNextSaveRef.current) {
       skipNextSaveRef.current = false;
+      urgentSaveRef.current = false;
+      return;
+    }
+    if (urgentSaveRef.current) {
+      urgentSaveRef.current = false;
+      commitSaveResult(state, slot);
       return;
     }
     pendingSaveRef.current = { state, slot };
@@ -251,7 +272,7 @@ export default function App() {
       if (typeof ric === 'function') ric(runSave, { timeout: 1200 });
       else runSave();
     }, 650);
-  }, [state, slot]);
+  }, [state, slot, commitSaveResult]);
 
   useEffect(() => {
     const onHide = () => flushPendingSave();
@@ -275,10 +296,28 @@ export default function App() {
     });
   }, []);
 
-  const handleStartManager = useCallback((targetSlot: number, names: string[][], t0: Team[], pick: number, diff: number) => {
+  const handleStartManager = useCallback((
+    targetSlot: number,
+    names: string[][],
+    t0: Team[],
+    pick: number,
+    diff: number,
+    config?: StartManagerConfig
+  ) => {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
-    const fresh = createNewGame('m', { names, t0, pick });
+    const fresh = createNewGame('m', {
+      names,
+      t0,
+      t1: config?.t1,
+      t2: config?.t2,
+      startTier: config?.startTier ?? 0,
+      startLeagueCode: config?.startLeagueCode,
+      worldPreviewTeams: config?.worldPreviewTeams,
+      pickTeamName: config?.pickTeamName,
+      pick,
+      diff
+    });
     fresh.diff = diff;
     fresh.v = 't';
     fresh.tv = 0;
@@ -292,10 +331,11 @@ export default function App() {
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
     const grant = fresh.initialBoardGrant;
+    const startLeagueLabel = getTeamLeagueName(fresh.teams[fresh.me], { includeZone: true, withFlag: true });
     showToast(
       grant
-        ? `รับตำแหน่งผู้จัดการ ${fresh.teams[fresh.me].name}! บอร์ดมอบโบนัสแรกเข้า +${fmtMoney(grant.amount)} (ระดับ${grant.levelLabel}) · งบรวม ${fmtMoney(fresh.money)}`
-        : `รับตำแหน่งผู้จัดการทีม ${fresh.teams[fresh.me].name} แล้ว!`
+        ? `รับตำแหน่งผู้จัดการ ${fresh.teams[fresh.me].name} (${startLeagueLabel})! บอร์ดมอบโบนัสแรกเข้า +${fmtMoney(grant.amount)} · งบรวม ${fmtMoney(fresh.money)}`
+        : `รับตำแหน่งผู้จัดการทีม ${fresh.teams[fresh.me].name} (${startLeagueLabel}) แล้ว!`
     );
   }, [showToast]);
 
@@ -328,6 +368,9 @@ export default function App() {
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
     const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier, money: capMoney(loaded.money) };
     ensureDomesticPyramidStructure(normalized, { topUpCounts: false, rebalanceZones: false });
+    if (!normalized.teams.some((t) => t.tier >= 3)) {
+      ensureAsia(normalized);
+    }
     ensureWorldLeaguesFixtures(normalized);
     if (!normalized.fxZones) {
       const mtLoaded = normalized.teams[normalized.me]?.tier ?? 0;
@@ -417,7 +460,14 @@ export default function App() {
     const meT = state.teams[state.me];
     const myTier = meT?.tier ?? 0;
     const myZone = myTier === 0 ? (meT?.zone ?? 0) : undefined;
-    const sorted = sortTable(state.teams.filter((t) => t.tier === myTier && (myTier !== 0 || (t.zone ?? 0) === myZone)));
+    const myCode = myTier >= 3 ? meT?.leagueCode : undefined;
+    const sorted = sortTable(
+      state.teams.filter((t) =>
+        myTier >= 3
+          ? t.tier >= 3 && (myCode ? t.leagueCode === myCode : true)
+          : t.tier === myTier && (myTier !== 0 || (t.zone ?? 0) === myZone)
+      )
+    );
     const idx = sorted.findIndex((t) => t.id === state.me);
     return idx >= 0 ? idx + 1 : 1;
   }, [state?.teams, state?.me]);
@@ -1336,7 +1386,8 @@ export default function App() {
     setNavIntent(null);
     if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
-    skipNextSaveRef.current = false;
+    skipNextSaveRef.current = true;
+    commitSaveResult(clone, slot);
     setState(clone);
     if (outcome.shouldConfetti) triggerConfetti();
     const newDilemmaIsPress = Boolean(
@@ -1352,7 +1403,7 @@ export default function App() {
     if (parts.length > 0) {
       showToast(parts.join(' · '));
     }
-  }, [showToast]);
+  }, [commitSaveResult, showToast, slot]);
 
   const runInstantNextMatch = useCallback((fixture: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'po'; homeId: number; awayId: number; isDerby: boolean }) => {
     const curState = stateRef.current;
@@ -1372,7 +1423,8 @@ export default function App() {
     setNavIntent(null);
     if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
-    skipNextSaveRef.current = false;
+    skipNextSaveRef.current = true;
+    commitSaveResult(clone, slot);
     setState(clone);
     if (outcome.shouldConfetti) triggerConfetti();
     if (myGf > myGa) SFX.win();
@@ -1389,7 +1441,7 @@ export default function App() {
       : null;
     const parts = [scoreMsg, outcome.talentToast, outcome.missionToast, outcome.personalityToast, newDilemmaNote].filter(Boolean);
     showToast(parts.join(' · '));
-  }, [showToast]);
+  }, [commitSaveResult, showToast, slot]);
 
   const launchNationalPreMatch = useCallback((fixture: NationalTeamMatchRecord) => {
     if (!stateRef.current?.natTeam?.active) return;
@@ -1409,6 +1461,7 @@ export default function App() {
       { allowDraw: !fixture.isKnockout }
     );
     let ntRes: { trophyWon?: string; wonMatch: boolean } = { wonMatch: false };
+    urgentSaveRef.current = true;
     updateState((d) => {
       ntRes = applyNationalMatchOutcomeToDraft(d, fixture.id, payload, fixture.home);
     });
@@ -1430,6 +1483,7 @@ export default function App() {
     const finishedNt = ntActiveMatchRef.current;
     if (!curState || !finishedNt) return;
     let ntRes: { trophyWon?: string; wonMatch: boolean } = { wonMatch: false };
+    urgentSaveRef.current = true;
     updateState((d) => {
       ntRes = applyNationalMatchOutcomeToDraft(d, finishedNt.fixture.id, payload, finishedNt.fixture.home);
     });
@@ -1475,10 +1529,12 @@ export default function App() {
           .filter((tr) => tr.season === clone.season && tr.type !== 'nt' && tr.type !== 'award')
           .forEach((tr) => syncActiveStintTrophy(clone, tr.title));
       }
+      skipNextSaveRef.current = true;
+      commitSaveResult(clone, slot);
       setState(clone);
       setSeasonSummary(summary);
     }
-  }, [runInstantNextMatch, showToast]);
+  }, [commitSaveResult, runInstantNextMatch, showToast, slot]);
 
   const handleStartNextSeason = useCallback((transferToTeamId?: number) => {
     const curState = stateRef.current;
@@ -1493,6 +1549,7 @@ export default function App() {
     const targetTeamName = transferToTeamId != null ? curState.teams[transferToTeamId]?.name : undefined;
     const nextSeasonNum = curState.season + 1;
     setSeasonSummary(null);
+    urgentSaveRef.current = true;
     updateState((d) => {
       growPlayers(d);
       if (d.mode === 'm' && transferToTeamId != null && d.teams[transferToTeamId]) {
@@ -1513,17 +1570,28 @@ export default function App() {
           assignTeamShirtNumbers(newT);
           d.p.no = mePlayer.no;
           d.me = transferToTeamId;
-          const trLog = `✍️ ย้ายซบ ${newT.name} (${TN[newT.tier]}) ในซีซั่น ${d.season + 1}`;
+          const trLog = `✍️ ย้ายซบ ${newT.name} (${getTeamLeagueName(newT, { includeZone: true, withFlag: true })}) ในซีซั่น ${d.season + 1}`;
           d.hist.push(trLog);
           appendPlayerCareerLog(mePlayer, trLog, d.p);
         }
       }
       d.season++;
-      d.yth = Array.from({ length: 4 }, () => mkPlayer(P(POS), BASE[d.teams[d.me].tier] - 2 + Math.round((d.ya ?? 1) * 1.2), true));
+      const meNow = d.teams[d.me];
+      const ythSpec = meNow?.tier >= 3 ? getWorldLeagueSpec(meNow.leagueCode) : undefined;
+      const ythBase = getTeamBaseOvr(meNow) - 2 + Math.round((d.ya ?? 1) * 1.2);
+      d.yth = Array.from({ length: 4 }, () =>
+        mkPlayer(
+          P(POS),
+          ythBase,
+          true,
+          undefined,
+          ythSpec ? { foreignRegion: ythSpec.region, natCode: ythSpec.code, allowImport: true } : undefined
+        )
+      );
       startSeason(d);
       refreshNationalCampaignOnNewSeason(d);
       d.lg = d.teams[d.me].tier;
-      pushFeed(d, 'ฤดูกาลใหม่', `🚀 เปิดฉากฤดูกาลที่ ${d.season} · ${TN[d.teams[d.me].tier]}`, 'ok');
+      pushFeed(d, 'ฤดูกาลใหม่', `🚀 เปิดฉากฤดูกาลที่ ${d.season} · ${getTeamLeagueName(d.teams[d.me], { includeZone: true, withFlag: true })}`, 'ok');
     });
     showToast(
       targetTeamName
@@ -2012,8 +2080,7 @@ export default function App() {
             setState(null);
           }}
           onSaveNow={() => {
-            flushPendingSave();
-            saveGameToSlot(state, slot);
+            commitSaveResult(state, slot);
           }}
           onUpdateState={updateState}
           onLoadSaveFile={(loaded, targetSlot) => {

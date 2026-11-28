@@ -24,6 +24,7 @@ import type {
   Position
 } from '../types/game';
 import { AR_T, FSD, TN } from '../data/thaiFootballData';
+import { WORLD_LEAGUE_SPECS, getTeamLeagueName } from '../data/leagueStructures';
 import { clamp, fmtMoney } from '../utils/math';
 import { SFX } from '../utils/audioTheme';
 import { xi } from '../engine/playerCore';
@@ -77,6 +78,7 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
   const [swapPickIdx, setSwapPickIdx] = useState<number | null>(null);
   const [replaceTargetIdx, setReplaceTargetIdx] = useState<number | null>(null);
   const [poolPosFilter, setPoolPosFilter] = useState<'ALL' | Position>('ALL');
+  const [jobLeagueFilter, setJobLeagueFilter] = useState<string>('ALL');
 
   const isSacked = mode === 'sacked';
   const curTeam = state.teams[state.me];
@@ -92,6 +94,8 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
     if (active && curTeam) {
       active.teamName = curTeam.name;
       active.tier = curTeam.tier;
+      active.leagueCode = curTeam.leagueCode;
+      active.leagueName = getTeamLeagueName(curTeam, { includeZone: true, withFlag: true });
     }
     return base.slice().reverse();
   }, [state, curTeam]);
@@ -110,8 +114,11 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
   }, [stints]);
 
   const offers = useMemo<ManagerJobOffer[]>(() => {
-    return generateManagerJobOffers(state, { mode: isSacked ? 'sacked' : 'market' });
-  }, [state, isSacked]);
+    return generateManagerJobOffers(state, {
+      mode: isSacked ? 'sacked' : 'market',
+      leagueCode: jobLeagueFilter
+    });
+  }, [state, isSacked, jobLeagueFilter]);
 
   const ntElig = useMemo(() => getNationalTeamEligibility(state), [state]);
   const ntState = state.natTeam;
@@ -357,37 +364,88 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                   <div className="font-extrabold text-xs sm:text-sm tabular text-[#b47b00] dark:text-[var(--lamp)]">
                     🏆 {state.trophies?.length || careerTotals.trophies} รายการ
                   </div>
-                  <div className="text-[10px] text-[var(--mut)]">
-                    {ntState?.active ? '🇹🇭 โค้ชทีมชาติไทย' : 'ระดับสโมสรไทย'}
+                  <div className="text-[10px] text-[var(--mut)] truncate">
+                    {ntState?.active ? '🇹🇭 โค้ชทีมชาติไทย' : curTeam ? getTeamLeagueName(curTeam, { withFlag: true }) : 'ระดับสโมสร'}
                   </div>
                 </div>
               </div>
 
               {/* Job Market Offers */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-bold text-xs sm:text-sm flex items-center gap-1.5 text-[var(--ink)]">
-                    <Briefcase className="w-4 h-4 text-[var(--g)]" />
+                    <Briefcase className="w-4 h-4 text-[var(--g)] shrink-0" />
                     <span>
-                      {isSacked ? 'ข้อเสนอรับงานกู้วิกฤตสโมสรใหม่ (เลือกเพื่อคุมทีมต่อ)' : 'ข้อเสนอทาบทามจากสโมสรอื่น (ย้ายทีมได้ทันที)'}
+                      {isSacked ? 'ข้อเสนอรับงานกู้วิกฤตสโมสรใหม่ (เลือกเพื่อคุมทีมต่อ)' : 'ตลาดงาน & ย้ายคุมทีมลีกอื่น'}
                     </span>
                   </div>
                   <span className="text-[10.5px] text-[var(--mut)] tabular">{offers.length} สโมสร</span>
                 </div>
 
+                {/* League Browser Bar (Browse Domestic + All 33 World Leagues) */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="seg-bar shrink-0">
+                    {(
+                      [
+                        ['ALL', 'ทั้งหมด'],
+                        ['DOMESTIC', '🇹🇭 ลีกไทย'],
+                        ['FOREIGN', '🌐 ลีกต่างประเทศ']
+                      ] as const
+                    ).map(([fk, fl]) => (
+                      <button
+                        key={fk}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setJobLeagueFilter(fk);
+                          setConfirmOfferTeamId(null);
+                        }}
+                        className={`seg-btn py-1 px-2 text-[10.5px] mland:text-[9px] ${
+                          jobLeagueFilter === fk ? 'seg-btn-active' : ''
+                        }`}
+                      >
+                        {fl}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    aria-label="เลือกลีกต่างประเทศเพื่อหางานคุมทีม"
+                    value={WORLD_LEAGUE_SPECS.some((w) => w.code === jobLeagueFilter) ? jobLeagueFilter : ''}
+                    onChange={(e) => {
+                      SFX.tap();
+                      setJobLeagueFilter(e.target.value || 'ALL');
+                      setConfirmOfferTeamId(null);
+                    }}
+                    className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)] max-w-[240px]"
+                  >
+                    <option value="">🌐 เจาะจง 33 ลีกทั่วโลก...</option>
+                    {WORLD_LEAGUE_SPECS.map((sp) => (
+                      <option key={sp.code} value={sp.code}>
+                        {sp.flag} {sp.name} ({sp.teamCount} ทีม · OVR {sp.baseOvr})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {offers.length === 0 ? (
                   <div className="p-4 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-xs text-[var(--mut)] text-center">
-                    ยังไม่มีข้อเสนอจากสโมสรอื่นในขณะนี้
+                    ยังไม่มีข้อเสนอจากสโมสรในหมวดนี้
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {offers.map((offer) => {
                       const targetTeam = state.teams[offer.teamId];
                       const isConfirming = confirmOfferTeamId === offer.teamId;
+                      const offerCode = offer.leagueCode || targetTeam?.leagueCode;
+                      const offerZone = targetTeam?.zone ?? 0;
                       const tierRank =
-                        sortTable(state.teams.filter((t) => t.tier === offer.tier)).findIndex(
-                          (t) => t.id === offer.teamId
-                        ) + 1;
+                        sortTable(
+                          state.teams.filter((t) =>
+                            offer.tier >= 3
+                              ? t.tier >= 3 && t.leagueCode === offerCode
+                              : t.tier === offer.tier && (offer.tier !== 0 || (t.zone ?? 0) === offerZone)
+                          )
+                        ).findIndex((t) => t.id === offer.teamId) + 1;
                       const starters = targetTeam ? xi(targetTeam) : [];
                       const avgOvr = starters.length
                         ? Math.round(starters.reduce((sum, p) => sum + p.ov, 0) / starters.length)
@@ -414,8 +472,8 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                                 <div className="font-bold text-xs sm:text-sm text-[var(--ink)] truncate">
                                   {offer.teamName}
                                 </div>
-                                <div className="text-[10.5px] text-[var(--mut)] tabular">
-                                  {TN[offer.tier]} · อันดับ #{tierRank || '-'} · OVR {avgOvr}
+                                <div className="text-[10.5px] text-[var(--mut)] tabular truncate">
+                                  {offer.leagueName || getTeamLeagueName(targetTeam, { includeZone: true, withFlag: true })} · อันดับ #{tierRank || '-'} · OVR {avgOvr}
                                 </div>
                               </div>
                             </div>
@@ -515,7 +573,7 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                             <div className="font-bold text-[var(--ink)] truncate">{st.teamName}</div>
                             <div className="text-[10.5px] text-[var(--mut)] tabular flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                               <span>
-                                {TN[st.tier]} · ซีซั่น {st.fromSeason}
+                                {st.leagueName || (tmObj ? getTeamLeagueName(tmObj, { includeZone: true, withFlag: true }) : TN[st.tier])} · ซีซั่น {st.fromSeason}
                                 {st.toSeason && st.toSeason !== st.fromSeason ? `–${st.toSeason}` : ''} · {st.matches} นัด
                               </span>
                               <WdlRecordBadges w={st.wins} d={st.draws} l={st.losses} size="2xs" />

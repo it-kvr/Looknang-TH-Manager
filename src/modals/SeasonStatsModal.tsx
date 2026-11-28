@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { GameState, SeasonArchiveRecord, SeasonPlayerStatRecord } from '../types/game';
-import { TN } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
@@ -199,7 +199,7 @@ export const SeasonStatsModal: React.FC<{
                 📊 สรุปสถิตินักเตะและสโมสร · ซีซั่น {rec.season}
               </h3>
               <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
-                {rec.teamName} · {TN[rec.tier]} · อันดับ {rec.rank}/{rec.totalTeams} ({rec.pts} แต้ม)
+                {rec.teamName} · {getTeamLeagueName(archiveTeam || { tier: rec.tier, name: rec.teamName }, { includeZone: true, withFlag: true })} · อันดับ {rec.rank}/{rec.totalTeams} ({rec.pts} แต้ม)
               </p>
             </div>
           </div>
@@ -286,7 +286,12 @@ export const SeasonStatsModal: React.FC<{
                   {rec.asiaStatus ? 'ถ้วยทวีป' : 'ลีกถัดไป'}
                 </div>
                 <b className="text-xs mland:text-[10.5px] truncate block">
-                  {rec.asiaStatus ? rec.asiaStatus : TN[rec.nextTier]}
+                  {rec.asiaStatus
+                    ? rec.asiaStatus
+                    : getTeamLeagueName(
+                        { tier: rec.nextTier, name: rec.teamName, leagueCode: rec.nextTier >= 3 ? archiveTeam?.leagueCode : undefined },
+                        { short: true, withFlag: true }
+                      )}
                 </b>
               </div>
             </div>

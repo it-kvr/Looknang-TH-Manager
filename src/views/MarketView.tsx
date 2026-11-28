@@ -3,7 +3,8 @@ import { Check, ChevronDown, ChevronUp, Globe, Lock, RefreshCw, Search, SlidersH
 import type { SubRole, MainTab, NavIntent, Player, Team, ScoutMission, GameState, TransferLogKind } from '../types/game';
 import { NavFocusBadge, useNavFocus } from '../components/NavFocusBanner';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { TN, BASE, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS, SIMP, PM, baseRoleOf, CONFED_META, COUNTRY_META_BY_CODE, getCountryMetaByCode, getForeignTeamCountryMeta, getCountriesOrderedByFootballPopularity, type ForeignConfed } from '../data/thaiFootballData';
+import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L, POS, SIMP, PM, baseRoleOf, CONFED_META, COUNTRY_META_BY_CODE, getCountryMetaByCode, getForeignTeamCountryMeta, getCountriesOrderedByFootballPopularity, type ForeignConfed } from '../data/thaiFootballData';
+import { getTeamBaseOvr, getTeamLeagueName } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, dtInfo, xi, pen, playerPen, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { appendPlayerCareerLog } from '../engine/history';
@@ -12,6 +13,7 @@ import {
   getLeagueTransferContext,
   getVeteranDiscountedPrice,
   getFreeAgentSigningFee,
+  isDomesticThaiTeam,
   canTeamSignForeignPlayer,
   mkMarket,
   createScoutMission,
@@ -165,27 +167,31 @@ export function evalOffer(q: Player, st: OfferDraft, me: Team) {
   const yrBonus = q.age >= 30 ? (yr >= 3 ? 8 : -4) : yr >= 3 ? 6 : 0;
   const addOnPlayerBonus = type === 'free' ? (addOnPct === 10 ? 10 : addOnPct === 5 ? 5 : 0) : (addOnPct === 10 ? 5 : addOnPct === 5 ? 2 : 0);
 
-  const myBenchmark = (BASE[me.tier] ?? 54) + 8;
+  const myBenchmark = getTeamBaseOvr(me) + 8;
   const ovGap = Math.max(0, q.ov - myBenchmark);
   const staturePenalty = Math.round(ovGap * 1.75);
-  const starTierPenalty = q.ov >= 86 ? 26 : q.ov >= 80 ? 16 : q.ov >= 74 ? 8 : 0;
+  const rawStarPen = q.ov >= 86 ? 26 : q.ov >= 80 ? 16 : q.ov >= 74 ? 8 : 0;
+  const starTierPenalty = me.tier >= 3 && getTeamBaseOvr(me) >= 76 ? Math.max(0, rawStarPen - 14) : rawStarPen;
   const isForeign = Boolean(q.nat && q.nat !== 'TH');
   const natMeta = getCountryMetaByCode(q.nat);
   const isAsean = ASEAN_NATIONAL_CODES.has(q.nat || '');
   const isAsia = natMeta?.confed === 'asia';
   const tierPullBonus = isForeign
-    ? Math.min(
-        4,
-        (me.tier === 0 ? -12 : me.tier === 1 ? -5 : 2) +
-          (isAsean ? 6 : isAsia ? 3 : 0) +
-          (q.age >= 33 ? 7 : q.age >= 30 ? 3 : 0)
-      )
+    ? me.tier >= 3
+      ? Math.min(6, Math.round((getTeamBaseOvr(me) - 70) * 0.45) + (q.age >= 30 ? 2 : 0))
+      : Math.min(
+          4,
+          (me.tier === 0 ? -12 : me.tier === 1 ? -5 : 2) +
+            (isAsean ? 6 : isAsia ? 3 : 0) +
+            (q.age >= 33 ? 7 : q.age >= 30 ? 3 : 0)
+        )
     : 0;
   const signFeePlayerDelta = type === 'free' && baseSignFee > 0
     ? (st.pct >= 100 ? (st.pct - 100) * 0.45 : (st.pct - 100) * 0.9)
     : 0;
+  const leagueStatureScore = me.tier >= 3 ? (getTeamBaseOvr(me) >= 78 ? 10 : getTeamBaseOvr(me) >= 72 ? 8 : 6) : me.tier * 3;
 
-  const plScore = 76 + (wf - 1) * 70 + roleBonus + yrBonus + addOnPlayerBonus + signFeePlayerDelta + me.tier * 3 - staturePenalty - starTierPenalty + tierPullBonus;
+  const plScore = 76 + (wf - 1) * 70 + roleBonus + yrBonus + addOnPlayerBonus + signFeePlayerDelta + leagueStatureScore - staturePenalty - starTierPenalty + tierPullBonus;
   const clubPct = clamp(Math.round(clubScore - 10), 5, 99);
   const playerPct = clamp(Math.round(plScore - 6), 5, 99);
   const rawChance = q.free
@@ -220,7 +226,15 @@ export function isPlayerOpenToDomesticMove(
   if (sellerTeam.sq.length <= 16) return false;
   if (q.pos === 'GK' && sellerTeam.sq.filter((z) => z.pos === 'GK').length <= 2) return false;
 
-  const myBase = BASE[me.tier] ?? 68;
+  const myBase = getTeamBaseOvr(me);
+  if (me.tier >= 3) {
+    if (sellerTeam.tier < 3) {
+      return !!q.listed || q.ov <= myBase + 14;
+    }
+    const worldCeiling = Math.max(76, myBase + 10) + (q.listed ? 5 : 0) + (q.age >= 30 ? 4 : 0);
+    return q.ov <= worldCeiling;
+  }
+
   if (sellerTeam.tier < 3) {
     // Already playing in a domestic league club
     if (sellerTeam.tier <= me.tier + 1) return true;
@@ -253,6 +267,7 @@ export const MarketView = React.memo<{
 }>(({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
   const { isFocused } = useNavFocus(navIntent, 'k');
   const me = state.teams[state.me];
+  const isThaiDomesticClub = isDomesticThaiTeam(me);
   const tx = getLeagueTransferContext(state, me);
   const clubK = ensureClubIdentity(state);
 
@@ -403,8 +418,12 @@ export const MarketView = React.memo<{
       state.teams.forEach((t) => {
         if (t.id === state.me) return;
         if (clubTierFilter === 'FOREIGN' && t.tier < 3) return;
-        const clubCode = t.tier >= 3 ? getForeignTeamCountryMeta(t.name)?.code || 'INTL' : 'TH';
-        const inMyTierRange = t.tier < 3 && Math.abs(t.tier - me.tier) <= 1;
+        const inMyTierRange =
+          me.tier >= 3
+            ? t.tier >= 3 && (!me.leagueCode || t.leagueCode === me.leagueCode)
+            : t.tier < 3 && Math.abs(t.tier - me.tier) <= 1;
+        if (clubTierFilter === 'MY_TIER' && !inMyTierRange) return;
+        const clubCode = t.tier >= 3 ? getForeignTeamCountryMeta(t.name, t.leagueCode)?.code || 'INTL' : 'TH';
         t.sq.forEach((q) => {
           if (q.me || q.loan) return;
           if (openDomesticOnly && !isPlayerOpenToDomesticMove(q, me, t)) return;
@@ -479,9 +498,14 @@ export const MarketView = React.memo<{
     const items: { q: Player; team: Team; idx: number; price: number }[] = [];
     state.teams.forEach((t) => {
       if (t.id === state.me) return;
-      if (clubTierFilter === 'MY_TIER' && (t.tier >= 3 || Math.abs(t.tier - me.tier) > 1)) return;
+      if (
+        clubTierFilter === 'MY_TIER' &&
+        (me.tier >= 3
+          ? t.tier < 3 || (me.leagueCode ? t.leagueCode !== me.leagueCode : false)
+          : t.tier >= 3 || Math.abs(t.tier - me.tier) > 1)
+      ) return;
       if (clubTierFilter === 'FOREIGN' && t.tier < 3) return;
-      const clubCode = t.tier >= 3 ? getForeignTeamCountryMeta(t.name)?.code || 'INTL' : 'TH';
+      const clubCode = t.tier >= 3 ? getForeignTeamCountryMeta(t.name, t.leagueCode)?.code || 'INTL' : 'TH';
       t.sq.forEach((q, idx) => {
         if (q.me || q.loan) return;
         if (openDomesticOnly && !isPlayerOpenToDomesticMove(q, me, t)) return;
@@ -951,7 +975,7 @@ export const MarketView = React.memo<{
         incoming.signedMd = d.md;
         delete incoming.listed;
         delete incoming.loanListed;
-        appendPlayerCareerLog(incoming, `✍️ ย้ายซบ ${t.name} (${TN[t.tier]}) ซีซั่น ${d.season}${incoming.loan ? ' (ยืมตัว)' : ''}`);
+        appendPlayerCareerLog(incoming, `✍️ ย้ายซบ ${t.name} (${getTeamLeagueName(t, { short: true })}) ซีซั่น ${d.season}${incoming.loan ? ' (ยืมตัว)' : ''}`);
         t.sq.push(incoming);
         assignTeamShirtNumbers(t);
         removeShortlistPlayer(d, incoming.n);
@@ -1163,21 +1187,6 @@ export const MarketView = React.memo<{
               ? fmtMoneyNum(E.baseSignFee)
               : 'ฟรี'
             : fmtMoneyNum(E.p0);
-    const thirdCardSub = E.dueLater > 0
-      ? E.addOnCash > 0 && offerDraft.type !== 'inst'
-        ? `เงื่อนไขผลงาน +${E.addOnPct}%`
-        : 'ชำระเมื่อจบฤดูกาล'
-      : E.loanOpt > 0
-        ? 'จ่ายเมื่อใช้สิทธิ์ซื้อ'
-        : offerDraft.type === 'swap' && E.swapQ
-          ? `${E.swapQ.ro} · ${E.swapQ.n}`
-          : q.free
-            ? E.baseSignFee > 0
-              ? `เสนอค่าเซ็น ${offerDraft.pct}%`
-              : 'ประหยัดค่าตัว 100%'
-            : isLoanType
-              ? 'มูลค่านักเตะ'
-              : `เสนอ ${offerDraft.pct}%`;
 
     const starterNames = new Set(xi(me).map((p) => p.n));
     const isSimpCompat = (a: string, b: string) => {
@@ -1290,10 +1299,38 @@ export const MarketView = React.memo<{
       ['กาย', info.a.ph]
     ];
 
+    const compactHeaderWarn = sellerTeam && sellerTeam.sq.length <= 16
+      ? `⚠️ ${sellerTeam.name} มี ${sellerTeam.sq.length} คน (แลกตัวเท่านั้น)`
+      : windowBlocked
+        ? `🔒 ตลาดปิด (${tx.tw.rangeText})`
+        : loanCapHit
+          ? `⚠️ โควตายืมเต็ม ${tx.loansCount}/${tx.maxLoans}`
+          : foreignCapHit
+            ? `⚠️ โควตาต่างชาติเต็ม`
+            : fullSq
+              ? `⚠️ ทีมเต็ม ${me.sq.length}/${tx.maxSquad}`
+              : null;
+
+    const dealChanceWarn = !q.locked && !offerDraft.msg
+      ? !q.free && E.chance < 20
+        ? {
+            tone: 'danger' as const,
+            badge: '⚠️ เสี่ยงล่ม (<20%)',
+            note: 'โอกาสต่ำกว่า 20% หากถูกปฏิเสธ อีกฝ่ายจะปิดโต๊ะทันที'
+          }
+        : E.chance < 45
+          ? {
+              tone: 'warn' as const,
+              badge: '💡 ดีลนี้เซ็นยาก',
+              note: `ระดับทีม/ชื่อเสียงต่างกัน ลองเพิ่ม${q.free ? (E.baseSignFee > 0 ? 'ค่าเซ็น, ' : '') : 'ค่าตัว, '}ค่าเหนื่อย +20%, ตัวหลัก หรือโบนัส`
+            }
+          : null
+      : null;
+
     return (
       <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center stage-viewport overflow-hidden">
         <div
-          className="w-full max-w-[900px] mland:max-w-[min(95vw,860px)] h-[min(calc(var(--app-dvh,1dvh)*90),620px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] max-h-full rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+          className="w-full max-w-[920px] mland:max-w-[min(95vw,880px)] h-[min(calc(var(--app-dvh,1dvh)*91),635px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] max-h-full rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
         >
           {/* Deal Room Header */}
           <div className="shrink-0 flex items-center justify-between gap-2.5 px-3.5 sm:px-4 py-2.5 mland:px-3 mland:py-1.5 border-b border-[var(--line)] bg-gradient-to-r from-[var(--surface-2)] via-[var(--surface-2)] to-[var(--surface)]">
@@ -1323,7 +1360,7 @@ export const MarketView = React.memo<{
                   {sellerTeam ? (
                     <span className="inline-flex items-center gap-1 font-semibold text-[var(--ink)]/85">
                       <ClubCrest name={sellerTeam.name} size={12} team={sellerTeam} club={state.club} />
-                      <span>{sellerTeam.name} ({TN[sellerTeam.tier]})</span>
+                      <span>{sellerTeam.name} ({getTeamLeagueName(sellerTeam, { short: true, withFlag: true })})</span>
                     </span>
                   ) : (
                     <span className={q.free ? 'text-[var(--g)] font-bold' : 'font-semibold'}>
@@ -1393,13 +1430,22 @@ export const MarketView = React.memo<{
           <div className="flex-1 min-h-0 overflow-y-auto sm:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 sm:grid-cols-[1.06fr_0.94fr] mland:grid-cols-[1.06fr_0.94fr] gap-2.5 sm:gap-3 mland:gap-2 items-stretch">
             {/* LEFT PANE: Proposal Controls */}
             <div className="min-h-0 flex flex-col gap-2 mland:gap-1.5 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
-              {/* Deal Type & Fee Selector */}
-              <div className="shrink-0 p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2 mland:space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">
-                  <span>1. รูปแบบข้อเสนอ</span>
-                  <span className="tabular font-semibold">โควตายืม {tx.loansCount}/{tx.maxLoans}</span>
+              {/* 1. Deal Type & Fee Selector */}
+              <div className="shrink-0 p-2.5 sm:p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)]/90 space-y-2 mland:space-y-1.5">
+                <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-4 h-4 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-extrabold text-[10px] mland:text-[8.5px] inline-flex items-center justify-center shrink-0">
+                      1
+                    </span>
+                    <span className="font-extrabold text-[var(--ink)] truncate">รูปแบบข้อเสนอ</span>
+                  </div>
+                  <span className="tabular text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] shrink-0">
+                    โควตายืม {tx.loansCount}/{tx.maxLoans}
+                  </span>
                 </div>
-                <div className={`grid gap-1 ${q.free ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3 mland:grid-cols-3'}`}>
+
+                {/* Offer Type Grid: Uses empty 6th cell (or 2nd cell for free agents) for warnings so zero extra rows appear */}
+                <div className={`grid gap-1.5 mland:gap-1 ${q.free ? 'grid-cols-1 sm:grid-cols-2 mland:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3 mland:grid-cols-3'}`}>
                   {types.map(([k, l]) => {
                     const isLoanBtn = k === 'loan' || k === 'loanopt';
                     const disabledLoan = isLoanBtn && tx.loansCount >= tx.maxLoans;
@@ -1410,7 +1456,7 @@ export const MarketView = React.memo<{
                         type="button"
                         disabled={disabledLoan || disabledMinSeller}
                         onClick={() => setOfferDraft({ ...offerDraft, type: k, counter: null, msg: '' })}
-                        className={`btn h-7 sm:h-8 mland:h-6 px-1.5 sm:px-2 mland:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 truncate ${
+                        className={`btn h-7.5 sm:h-8 mland:h-6 px-1.5 sm:px-2 mland:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 truncate ${
                           offerDraft.type === k ? 'btn-primary' : 'btn-surface'
                         }`}
                       >
@@ -1418,32 +1464,46 @@ export const MarketView = React.memo<{
                       </button>
                     );
                   })}
+
+                  {/* Empty grid slot used cleanly for status/warning without creating a new row */}
+                  <div
+                    className={`h-7.5 sm:h-8 mland:h-6 px-2 rounded-lg border flex items-center justify-center text-center text-[10px] mland:text-[8.5px] font-bold truncate tabular ${
+                      compactHeaderWarn
+                        ? 'bg-[var(--lamp-soft)]/70 border-[var(--lamp)]/50 text-[#9a6700] dark:text-[var(--lamp)]'
+                        : 'bg-[var(--surface)]/55 border-dashed border-[var(--line)]/80 text-[var(--mut)]'
+                    }`}
+                    title={compactHeaderWarn || 'เงื่อนไขพร้อมสำหรับการยื่นข้อเสนอ'}
+                  >
+                    <span className="truncate">
+                      {compactHeaderWarn || (q.free ? '✓ เซ็นได้ตลอดฤดูกาล' : '✓ ตลาดเปิดพร้อมดีล')}
+                    </span>
+                  </div>
                 </div>
-                {sellerTeam && sellerTeam.sq.length <= 16 && (
-                  <p className="text-[10px] mland:text-[8.5px] text-[#9a6700] dark:text-[var(--lamp)] font-medium">
-                    ⚠️ {sellerTeam.name} มีนักเตะขั้นต่ำ {sellerTeam.sq.length} คน รับเฉพาะข้อเสนอแลกตัว
-                  </p>
-                )}
 
                 {/* Fee / Swap / Loan Breakdown */}
-                <div className="pt-1.5 border-t border-[var(--line)]/70 space-y-1.5 mland:space-y-1">
+                <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)]/70 space-y-1.5 mland:space-y-1">
                   {isBuyFeeType ? (
                     <>
                       <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px] tabular">
-                        <span className="font-bold text-[var(--mut)]">
-                          ค่าตัวที่เสนอ ({offerDraft.pct}%)
+                        <span className="font-bold text-[var(--mut)] truncate">
+                          ค่าตัว ({offerDraft.pct}%)
                           <span className={`ml-1.5 font-semibold ${offerDraft.pct < 92 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : offerDraft.pct > 105 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                             · {bidAssessLabel}
                           </span>
+                          {offerDraft.type === 'inst' && (
+                            <span className="ml-1.5 text-[9.5px] mland:text-[8px] font-normal text-[var(--mut)]">
+                              (สด 55% · ผ่อน 50%)
+                            </span>
+                          )}
                         </span>
-                        <b className="text-[var(--ink)]">{fmtMoneyNum(Math.round((E.p0 * offerDraft.pct) / 100))}</b>
+                        <b className="text-[var(--ink)] shrink-0">{fmtMoneyNum(Math.round((E.p0 * offerDraft.pct) / 100))}</b>
                       </div>
                       <div className="grid grid-cols-6 gap-1">
                         <button
                           type="button"
                           disabled={offerDraft.pct <= 75}
                           onClick={() => setOfferDraft({ ...offerDraft, pct: Math.max(75, offerDraft.pct - 5), counter: null, msg: '' })}
-                          className="btn h-7 sm:h-8 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
+                          className="btn h-7 sm:h-7.5 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
                           title="ลดข้อเสนอ -5% (ต่ำสุด 75%)"
                         >
                           -5%
@@ -1453,7 +1513,7 @@ export const MarketView = React.memo<{
                             key={p}
                             type="button"
                             onClick={() => setOfferDraft({ ...offerDraft, pct: p, counter: null, msg: '' })}
-                            className={`btn h-7 sm:h-8 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 tabular ${
+                            className={`btn h-7 sm:h-7.5 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 tabular ${
                               offerDraft.pct === p ? 'btn-primary' : 'btn-surface'
                             }`}
                           >
@@ -1464,48 +1524,45 @@ export const MarketView = React.memo<{
                           type="button"
                           disabled={offerDraft.pct >= 130}
                           onClick={() => setOfferDraft({ ...offerDraft, pct: Math.min(130, offerDraft.pct + 5), counter: null, msg: '' })}
-                          className="btn h-7 sm:h-8 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
+                          className="btn h-7 sm:h-7.5 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
                           title="เพิ่มข้อเสนอ +5% (สูงสุด 130%)"
                         >
                           +5%
                         </button>
                       </div>
-                      {offerDraft.type === 'inst' && (
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                          จ่ายทันที 55% ({fmtMoneyNum(Math.round(((E.p0 * offerDraft.pct) / 100) * 0.55))}) · ผ่อนปลายปี 50% ({fmtMoneyNum(Math.round(((E.p0 * offerDraft.pct) / 100) * 0.5))})
-                        </div>
-                      )}
                       {offerDraft.type === 'swap' && (
-                        <div className="pt-1 space-y-1">
+                        <div className="pt-0.5">
                           {swCands.length > 0 ? (
-                            <>
+                            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-1.5">
                               <select
                                 aria-label="เลือกนักเตะที่ใช้แลก"
                                 value={offerDraft.swapIdx ?? ''}
                                 onChange={(e) => setOfferDraft({ ...offerDraft, swapIdx: e.target.value ? Number(e.target.value) : null, counter: null, msg: '' })}
-                                className="w-full px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold"
+                                className="w-full h-7.5 mland:h-6 px-2 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-semibold"
                               >
                                 {swCands.map(({ z, i }) => (
                                   <option key={z.n} value={i}>
-                                    แลก: {z.ro} · {z.n} (OVR {z.ov} · หัก {fmtMoneyNum(Math.round(vlu(z) * 0.8))})
+                                    แลก: {z.ro} · {z.n} (OVR {z.ov} · -{fmtMoneyNum(Math.round(vlu(z) * 0.8))})
                                   </option>
                                 ))}
                               </select>
                               {E.swapQ && (
-                                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                                  หักค่าตัว -{fmtMoneyNum(E.swapVal)} · คืนเพดานค่าเหนื่อย {fmtMoneyNum(freedWage)}/นัด
-                                </div>
+                                <span className="text-[10px] mland:text-[8.5px] text-[var(--g)] font-bold tabular shrink-0 px-2 py-1 rounded-lg bg-[var(--g-soft)]/50 border border-[var(--g)]/25">
+                                  หัก -{fmtMoneyNum(E.swapVal)} · คืนค่าเหนื่อย {fmtMoneyNum(freedWage)}
+                                </span>
                               )}
-                            </>
+                            </div>
                           ) : (
-                            <p className="text-[10.5px] text-[var(--red)] font-semibold">ไม่มีนักเตะเกินโควตาตำแหน่งให้แลก</p>
+                            <div className="h-7.5 mland:h-6 px-2.5 rounded-lg bg-[var(--red-soft)]/60 border border-[var(--red)]/35 flex items-center text-[10px] mland:text-[8.5px] text-[var(--red)] font-semibold">
+                              ⚠️ ไม่มีนักเตะเกินโควตาตำแหน่งให้แลกตัว
+                            </div>
                           )}
                         </div>
                       )}
                     </>
                   ) : isLoanType ? (
-                    <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
-                      <span className="text-[var(--mut)]">
+                    <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/65">
+                      <span className="text-[var(--mut)] truncate">
                         {offerDraft.type === 'loanopt'
                           ? `ยืม 1 ฤดูกาล + ออปชันซื้อขาด ${fmtMoneyNum(E.loanOpt)}`
                           : 'ยืมใช้งาน 1 ฤดูกาล (ส่งกลับต้นสังกัดหลังจบซีซั่น)'}
@@ -1515,20 +1572,23 @@ export const MarketView = React.memo<{
                   ) : E.baseSignFee > 0 ? (
                     <>
                       <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px] tabular">
-                        <span className="font-bold text-[var(--mut)]">
-                          ค่าเซ็นสัญญาที่เสนอ ({offerDraft.pct}%)
+                        <span className="font-bold text-[var(--mut)] truncate">
+                          ค่าเซ็น ({offerDraft.pct}%)
                           <span className={`ml-1.5 font-semibold ${offerDraft.pct < 92 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : offerDraft.pct > 105 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                             · {bidAssessLabel}
                           </span>
+                          <span className="ml-1.5 text-[9.5px] mland:text-[8px] font-normal text-[var(--mut)]">
+                            (มาตรฐาน ~{fmtMoneyNum(E.baseSignFee)})
+                          </span>
                         </span>
-                        <b className="text-[var(--ink)]">{fmtMoneyNum(E.signFeeCash)}</b>
+                        <b className="text-[var(--ink)] shrink-0">{fmtMoneyNum(E.signFeeCash)}</b>
                       </div>
                       <div className="grid grid-cols-6 gap-1">
                         <button
                           type="button"
                           disabled={offerDraft.pct <= 75}
                           onClick={() => setOfferDraft({ ...offerDraft, pct: Math.max(75, offerDraft.pct - 5), counter: null, msg: '' })}
-                          className="btn h-7 sm:h-8 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
+                          className="btn h-7 sm:h-7.5 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
                           title="ลดค่าเซ็น -5% (ต่ำสุด 75%)"
                         >
                           -5%
@@ -1538,7 +1598,7 @@ export const MarketView = React.memo<{
                             key={p}
                             type="button"
                             onClick={() => setOfferDraft({ ...offerDraft, pct: p, counter: null, msg: '' })}
-                            className={`btn h-7 sm:h-8 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 tabular ${
+                            className={`btn h-7 sm:h-7.5 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 tabular ${
                               offerDraft.pct === p ? 'btn-primary' : 'btn-surface'
                             }`}
                           >
@@ -1549,18 +1609,15 @@ export const MarketView = React.memo<{
                           type="button"
                           disabled={offerDraft.pct >= 130}
                           onClick={() => setOfferDraft({ ...offerDraft, pct: Math.min(130, offerDraft.pct + 5), counter: null, msg: '' })}
-                          className="btn h-7 sm:h-8 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
+                          className="btn h-7 sm:h-7.5 mland:h-6 px-0.5 sm:px-1.5 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 btn-surface tabular"
                           title="เพิ่มค่าเซ็น +5% (สูงสุด 130%)"
                         >
                           +5%
                         </button>
                       </div>
-                      <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                        ไร้ค่าตัวสโมสร แต่ต้องจ่ายค่าเซ็นสัญญา/เอเยนต์ (มาตรฐาน ~{fmtMoneyNum(E.baseSignFee)})
-                      </div>
                     </>
                   ) : (
-                    <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
+                    <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/65">
                       <span className="text-[var(--mut)]">เซ็นสัญญาไร้ค่าตัว ตกลงเฉพาะสัญญาส่วนตัว</span>
                       <b className="text-[var(--g)] shrink-0">ค่าตัว 0</b>
                     </div>
@@ -1568,11 +1625,24 @@ export const MarketView = React.memo<{
                 </div>
               </div>
 
-              {/* Personal Contract Terms + Performance Add-on */}
-              <div className="shrink-0 p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-1.5 mland:space-y-1">
-                <div className="flex items-center justify-between text-[11px] mland:text-[9.5px] tabular">
-                  <span className="font-bold text-[var(--mut)]">2. สัญญาส่วนตัว &amp; เงื่อนไขโบนัส</span>
-                  <span className="font-bold text-[var(--ink)]">
+              {/* 2. Personal Contract Terms + Performance Add-on */}
+              <div className="shrink-0 p-2.5 sm:p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)]/90 space-y-1.5 mland:space-y-1">
+                <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px] tabular">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-4 h-4 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-extrabold text-[10px] mland:text-[8.5px] inline-flex items-center justify-center shrink-0">
+                      2
+                    </span>
+                    <span className="font-extrabold text-[var(--ink)] shrink-0">สัญญาส่วนตัว</span>
+                    {roleMismatchWarn && (
+                      <span
+                        className="px-1.5 py-[1px] rounded bg-[var(--lamp-soft)]/80 border border-[var(--lamp)]/50 text-[9.5px] mland:text-[8px] font-bold text-[#9a6700] dark:text-[var(--lamp)] truncate"
+                        title={`OVR ${q.ov} สูงเกินบทบาทดาวรุ่ง ทำให้นักเตะไม่พอใจ`}
+                      >
+                        ⚠️ OVR {q.ov} สูงเกินบทบาทดาวรุ่ง
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-extrabold text-[var(--ink)] shrink-0">
                     {fmtMoneyNum(E.wg)}/นัด{E.sgBonus > 0 ? ` · เซ็น +${fmtMoneyNum(E.sgBonus)}` : ''}
                   </span>
                 </div>
@@ -1596,9 +1666,12 @@ export const MarketView = React.memo<{
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-[10.5px] mland:text-[9px] px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)]/70">
-                    <span className="text-[var(--mut)] font-semibold">ระยะสัญญายืม</span>
-                    <b className="text-[var(--ink)]">1 ฤดูกาล</b>
+                  <div className="grid grid-cols-[68px_1fr] sm:grid-cols-[74px_1fr] items-center gap-1.5">
+                    <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)]">ระยะสัญญายืม</span>
+                    <div className="h-7 sm:h-7.5 mland:h-6 px-2.5 rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 flex items-center justify-between text-[10.5px] mland:text-[9px]">
+                      <span className="text-[var(--mut)]">สัญญายืมตัวชั่วคราว</span>
+                      <b className="text-[var(--ink)]">1 ฤดูกาล</b>
+                    </div>
                   </div>
                 )}
 
@@ -1611,7 +1684,11 @@ export const MarketView = React.memo<{
                         type="button"
                         onClick={() => setOfferDraft({ ...offerDraft, role: k, counter: null, msg: '' })}
                         className={`btn h-7 sm:h-7.5 mland:h-6 px-1 text-[10.5px] sm:text-[11px] mland:text-[9px] min-w-0 truncate ${
-                          offerDraft.role === k ? 'btn-primary' : 'btn-surface'
+                          offerDraft.role === k
+                            ? k === 'pro' && roleMismatchWarn
+                              ? 'btn-primary ring-1 ring-[var(--lamp)]'
+                              : 'btn-primary'
+                            : 'btn-surface'
                         }`}
                       >
                         {l}
@@ -1619,11 +1696,6 @@ export const MarketView = React.memo<{
                     ))}
                   </div>
                 </div>
-                {roleMismatchWarn && (
-                  <p className="text-[10px] mland:text-[8.5px] text-[#9a6700] dark:text-[var(--lamp)] font-medium pl-[74px] sm:pl-[80px]">
-                    ⚠️ OVR {q.ov} สูงเกินบทบาทดาวรุ่ง ทำให้นักเตะไม่พอใจ
-                  </p>
-                )}
 
                 <div className="grid grid-cols-[68px_1fr] sm:grid-cols-[74px_1fr] items-center gap-1.5">
                   <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)]">ค่าเหนื่อย</span>
@@ -1664,8 +1736,8 @@ export const MarketView = React.memo<{
                 </div>
               </div>
 
-              {/* Compact Position Comparison Launcher */}
-              <div className="shrink-0 p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] flex items-center justify-between gap-2.5">
+              {/* 3. Compact Position Comparison Launcher */}
+              <div className="shrink-0 p-2.5 sm:p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)]/90 flex items-center justify-between gap-2.5">
                 <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <Users className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
@@ -1704,12 +1776,12 @@ export const MarketView = React.memo<{
             <div className="min-h-0 flex flex-col gap-2 mland:gap-1.5 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
               {/* Negotiation Table Dialogue & Dual Sentiment */}
               <div
-                className={`shrink-0 p-2.5 mland:p-2 rounded-xl border space-y-2 mland:space-y-1.5 ${
+                className={`shrink-0 p-2.5 sm:p-3 mland:p-2 rounded-xl border space-y-2 mland:space-y-1.5 ${
                   q.locked
                     ? 'bg-[var(--red-soft)]/55 border-[var(--red)]/40'
                     : offerDraft.msg
                       ? 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/50'
-                      : 'bg-[var(--surface-2)]/65 border-[var(--line)]'
+                      : 'bg-[var(--surface-2)]/65 border-[var(--line)]/90'
                 }`}
               >
                 {/* Counterparty Header + Patience Pips */}
@@ -1760,30 +1832,23 @@ export const MarketView = React.memo<{
                     <div className="h-full rounded-full transition-all duration-200" style={{ width: `${E.chance}%`, background: chCol }} />
                   </div>
                   <div className="grid grid-cols-2 gap-1.5 text-[9.5px] mland:text-[8px] tabular pt-0.5">
-                    <div className="px-2 py-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60 flex items-center justify-between gap-1">
+                    <div className="px-2 py-1 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/60 flex items-center justify-between gap-1">
                       <span className="text-[var(--mut)] truncate">{q.free ? (E.baseSignFee > 0 ? 'พอใจค่าเซ็น' : 'ค่าตัว/เซ็นฟรี') : 'ใจต้นสังกัด'}</span>
                       <b className={E.clubPct >= 75 ? 'text-[var(--g)]' : E.clubPct >= 50 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--red)]'}>
                         {E.clubPct}%
                       </b>
                     </div>
-                    <div className="px-2 py-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60 flex items-center justify-between gap-1">
+                    <div className="px-2 py-1 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/60 flex items-center justify-between gap-1">
                       <span className="text-[var(--mut)] truncate">ใจนักเตะ</span>
                       <b className={E.playerPct >= 75 ? 'text-[var(--g)]' : E.playerPct >= 50 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--red)]'}>
                         {E.playerPct}%
                       </b>
                     </div>
                   </div>
-                  {E.chance < 45 && !q.locked && !offerDraft.msg && (
-                    <div className={`text-[10px] mland:text-[8.5px] font-semibold leading-tight ${E.chance < 20 && !q.free ? 'text-[var(--red)]' : 'text-[#9a6700] dark:text-[var(--lamp)]'}`}>
-                      {!q.free && E.chance < 20
-                        ? '⚠️ โอกาสต่ำกว่า 20% หากถูกปฏิเสธ การเจรจาจะล่มทันที'
-                        : `💡 ดีลนี้เซ็นยาก (ระดับทีม/ชื่อเสียงต่างกัน) ลองเพิ่ม${q.free ? (E.baseSignFee > 0 ? 'ค่าเซ็น, ' : '') : 'ค่าตัว, '}ค่าเหนื่อย +20%, บทบาทตัวหลัก และโบนัสผลงาน`}
-                    </div>
-                  )}
                 </div>
 
-                {/* Speech Bubble / Counter-Offer + Round Log */}
-                <div className="p-2 mland:p-1.5 rounded-lg bg-[var(--surface)]/90 border border-[var(--line)]/75 text-[11px] mland:text-[9.5px] space-y-1.5">
+                {/* Unified Speech Bubble / Counter-Offer + Inline Warning (no layout shift) */}
+                <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)]/92 border border-[var(--line)]/75 text-[11px] mland:text-[9.5px] space-y-1.5">
                   {q.locked ? (
                     <div className="text-[var(--red)] font-semibold leading-snug">
                       🚫 การเจรจายุติลงแล้ว อีกฝ่ายปิดโต๊ะเจรจาในรอบนี้
@@ -1833,9 +1898,25 @@ export const MarketView = React.memo<{
                       )}
                     </>
                   ) : (
-                    <p className="text-[var(--mut)] leading-snug">
-                      &ldquo;{stanceSummary}&rdquo;
-                    </p>
+                    <>
+                      <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px]">
+                        <span className="font-bold text-[var(--mut)]">ท่าทีเริ่มต้น</span>
+                        {dealChanceWarn && (
+                          <span
+                            className={`font-bold truncate ${
+                              dealChanceWarn.tone === 'danger'
+                                ? 'text-[var(--red)]'
+                                : 'text-[#9a6700] dark:text-[var(--lamp)]'
+                            }`}
+                          >
+                            {dealChanceWarn.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[var(--ink)]/85 leading-snug">
+                        &ldquo;{dealChanceWarn ? `${stanceSummary} · ${dealChanceWarn.note}` : stanceSummary}&rdquo;
+                      </p>
+                    </>
                   )}
 
                   {offerDraft.roundLog && offerDraft.roundLog.length > 0 && (
@@ -1849,63 +1930,64 @@ export const MarketView = React.memo<{
               </div>
 
               {/* Financial Impact Receipt */}
-              <div className="shrink-0 p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-1.5 mland:space-y-1 text-[11px] mland:text-[9.5px] tabular">
+              <div className="shrink-0 p-2.5 sm:p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)]/90 space-y-1.5 mland:space-y-1 text-[11px] mland:text-[9.5px] tabular">
                 <div className="font-bold text-[var(--mut)] flex items-center justify-between">
-                  <span>สรุปผลกระทบงบสโมสร</span>
-                  <span className={tx.ffpLocked ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                  <span className="text-[var(--ink)]">สรุปผลกระทบงบสโมสร</span>
+                  <span className={tx.ffpLocked ? 'text-[var(--red)] font-bold' : 'text-[var(--ink)] font-bold'}>
                     คลัง {fmtMoneyNum(state.money)}
                   </span>
                 </div>
 
-                <div className="divide-y divide-[var(--line)]/55 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2.5">
+                <div className="divide-y divide-[var(--line)]/55 rounded-xl bg-[var(--surface)]/85 border border-[var(--line)]/70 px-2.5">
                   <div className="py-1.5 mland:py-1 flex items-center justify-between gap-2">
-                    <span className="text-[var(--mut)]">จ่ายทันที ({cashSubNote})</span>
-                    <b className={!canAfford || E.cashNow > 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>
+                    <span className="text-[var(--mut)] truncate">
+                      จ่ายทันที ({cashSubNote})
+                      {(E.dueLater > 0 || E.loanOpt > 0) && (
+                        <span className="ml-1 text-[9.5px] mland:text-[8px] text-[var(--ink)]/75">
+                          · {thirdCardLabel} {thirdCardVal}
+                        </span>
+                      )}
+                    </span>
+                    <b className={!canAfford || E.cashNow > 0 ? 'text-[var(--red)] shrink-0' : 'text-[var(--g)] shrink-0'}>
                       {E.cashNow > 0 ? `-${fmtMoneyNum(E.cashNow)}` : fmtMoneyNum(E.cashNow)}
                     </b>
                   </div>
-                  {(E.dueLater > 0 || E.loanOpt > 0 || (offerDraft.type === 'swap' && E.swapQ)) && (
-                    <div className="py-1.5 mland:py-1 flex items-center justify-between gap-2">
-                      <span className="text-[var(--mut)]">{thirdCardLabel} ({thirdCardSub})</span>
-                      <b className="text-[var(--ink)]">{thirdCardVal}</b>
-                    </div>
-                  )}
                   <div className="py-1.5 mland:py-1 flex items-center justify-between gap-2">
                     <span className="text-[var(--mut)]">ค่าเหนื่อย (ขอ ~{fmtMoneyNum(askWage)})</span>
-                    <b className="text-[var(--red)]">-{fmtMoneyNum(E.wg)}/นัด</b>
+                    <b className="text-[var(--red)] shrink-0">-{fmtMoneyNum(E.wg)}/นัด</b>
                   </div>
                   <div className="py-1.5 mland:py-1 flex items-center justify-between gap-2">
                     <span className="text-[var(--mut)]">งบคงเหลือหลังดีล</span>
-                    <b className={moneyAfterDeal < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>
+                    <b className={`${moneyAfterDeal < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'} shrink-0`}>
                       {fmtMoneyNum(moneyAfterDeal)}
                     </b>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] mland:text-[8.5px] pt-0.5">
-                  <span>
-                    เพดานค่าเหนื่อย:{' '}
-                    <b className={wageOverCap ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                <div className="grid grid-cols-3 gap-1.5 text-[9.5px] mland:text-[8px] pt-0.5">
+                  <div className="px-2 py-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60 truncate">
+                    <div className="text-[var(--mut)] leading-none">เพดานค่าเหนื่อย</div>
+                    <div className={`font-bold mt-0.5 truncate ${wageOverCap ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
                       {fmtMoneyNum(projectedWage)}/{fmtMoneyNum(tx.wageCap)}
-                    </b>
-                  </span>
-                  <span>
-                    ต่างชาติ:{' '}
-                    <b className={foreignCapHit ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
-                      {tx.foreignCount}/{tx.maxForeign} คน
-                    </b>
-                  </span>
-                  <span>
-                    ขนาดทีม:{' '}
-                    <b className={fullSq ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                    </div>
+                  </div>
+                  <div className="px-2 py-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60 truncate">
+                    <div className="text-[var(--mut)] leading-none">ต่างชาติ</div>
+                    <div className={`font-bold mt-0.5 truncate ${foreignCapHit ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                      {isThaiDomesticClub ? `${tx.foreignCount}/${tx.maxForeign} คน` : `${tx.foreignCount} (ไม่จำกัด)`}
+                    </div>
+                  </div>
+                  <div className="px-2 py-1 rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/60 truncate">
+                    <div className="text-[var(--mut)] leading-none">ขนาดทีม</div>
+                    <div className={`font-bold mt-0.5 truncate ${fullSq ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
                       {me.sq.length}/{tx.maxSquad} คน
-                    </b>
-                  </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Compact 5-Attr Scout Snapshot */}
-              <div className="shrink-0 p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)]/80 space-y-1.5 mland:space-y-1">
+              <div className="shrink-0 p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)]/80 space-y-1.5 mland:space-y-1">
                 <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] mland:text-[8.5px]">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <PotentialBadge pot={q.pot || q.ov} size="xs" showLabel />
@@ -1930,7 +2012,7 @@ export const MarketView = React.memo<{
           </div>
 
           {/* Deal Room Footer */}
-          <div className="shrink-0 px-3.5 py-2 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
+          <div className="shrink-0 px-3.5 py-2.5 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
             <button
               type="button"
               onClick={() => setOfferDraft(null)}
@@ -2477,9 +2559,11 @@ export const MarketView = React.memo<{
               </div>
             </div>
             <div className="px-2.5 mland:px-2">
-              <div className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)] leading-none">โควตาต่างชาติ</div>
-              <div className={`text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold mt-0.5 leading-tight whitespace-nowrap ${tx.foreignCount >= tx.maxForeign ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
-                {tx.foreignCount}/{tx.maxForeign}
+              <div className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)] leading-none">
+                {isThaiDomesticClub ? 'โควตาต่างชาติ' : 'ต่างชาติ'}
+              </div>
+              <div className={`text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold mt-0.5 leading-tight whitespace-nowrap ${isThaiDomesticClub && tx.foreignCount >= tx.maxForeign ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                {isThaiDomesticClub ? `${tx.foreignCount}/${tx.maxForeign}` : `${tx.foreignCount} (ไม่จำกัด)`}
               </div>
             </div>
             <div className="pl-2.5 mland:pl-2">
@@ -3000,7 +3084,7 @@ export const MarketView = React.memo<{
                           : 'text-[var(--mut)] hover:text-[var(--ink)] border border-transparent'
                       }`}
                     >
-                      ลีกใกล้เคียง
+                      {me.tier >= 3 ? 'ลีกเดียวกัน' : 'ลีกใกล้เคียง'}
                     </button>
                     <button
                       type="button"
@@ -3197,7 +3281,7 @@ export const MarketView = React.memo<{
                     const blockedByWindow = !tx.tw.open && !q.free;
                     const askWage = q.askWg || wagOf(q);
                     const signFee = q.free ? getFreeAgentSigningFee(q) : 0;
-                    const isHardDeal = q.ov > (BASE[me.tier] ?? 54) + 14;
+                    const isHardDeal = q.ov > getTeamBaseOvr(me) + 14;
                     const shortlisted = isPlayerShortlisted(state, q.n);
                     const canLoanQuick = !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
                     const bio = getPlayerBio(q);
@@ -3388,7 +3472,7 @@ export const MarketView = React.memo<{
                                 ) : null;
                               })()}
                               <span className="truncate group-hover:text-[var(--g)] group-hover:underline transition-colors">{q.n}</span>
-                              {(q.ov > (BASE[me.tier] ?? 54) + 14 || (team.tier >= 3 && !q.listed && q.ov >= 74)) && (
+                              {(q.ov > getTeamBaseOvr(me) + 14 || (team.tier >= 3 && !q.listed && q.ov >= 74)) && (
                                 <span
                                   title="ต้นสังกัดไม่ปล่อยง่าย / ระดับสูงกว่าลีกปัจจุบัน"
                                   className="hidden sm:inline text-[9px] mland:text-[7.5px] px-1 py-[0.5px] rounded bg-rose-500/12 border border-rose-500/35 text-rose-600 dark:text-rose-300 font-bold shrink-0"
@@ -3402,13 +3486,7 @@ export const MarketView = React.memo<{
                             </div>
                             <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
                               <span className="truncate">
-                                {(() => {
-                                  if (team.tier >= 3) {
-                                    const cm = getForeignTeamCountryMeta(team.name);
-                                    return cm ? `${cm.flag} ${cm.country}` : '🌍 ต่างแดน';
-                                  }
-                                  return TN[team.tier];
-                                })()}
+                                {getTeamLeagueName(team, { short: true, withFlag: true })}
                                 <span className="md:hidden mland:hidden"> · {q.age} ปี</span>
                               </span>
                               <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
@@ -3588,7 +3666,7 @@ export const MarketView = React.memo<{
                       appendPlayerCareerLog(
                         incoming,
                         fee > 0
-                          ? `💰 ซื้อตัวเข้า ${t.name} (${TN[t.tier]}) ซีซั่น ${d.season} [🌱 เด็กปั้นสร้างเอง]`
+                          ? `💰 ซื้อตัวเข้า ${t.name} (${getTeamLeagueName(t, { short: true })}) ซีซั่น ${d.season} [🌱 เด็กปั้นสร้างเอง]`
                           : `🌱 ดึงตัวสู่ทีมชุดใหญ่ ${t.name} ในฐานะเด็กปั้นสโมสร ซีซั่น ${d.season}`
                       );
                       t.sq.push(incoming);
@@ -3895,7 +3973,7 @@ export const MarketView = React.memo<{
                       : status === 'scout'
                         ? '🔍 รายงานแมวมอง'
                         : status === 'club' && curTeam
-                          ? `🏟️ ${curTeam.name} (${TN[curTeam.tier]})`
+                          ? `🏟️ ${curTeam.name} (${getTeamLeagueName(curTeam, { short: true, withFlag: true })})`
                           : status === 'created'
                             ? '🌱 นักเตะสร้างเอง'
                             : '⏳ ย้ายออกนอกลีก/รอตลาดใหม่';
@@ -4128,7 +4206,7 @@ export const MarketView = React.memo<{
                             <span className="truncate group-hover:underline">{off.t}</span>
                             {buyerTeam && (
                               <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] shrink-0">
-                                ({TN[buyerTeam.tier] || ''})
+                                ({getTeamLeagueName(buyerTeam, { short: true, withFlag: true })})
                               </span>
                             )}
                             <span
@@ -4461,7 +4539,7 @@ export const MarketView = React.memo<{
                           </span>
                         </div>
                         <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5 flex flex-wrap items-center gap-x-1.5">
-                          <span>{TN[hostTeam.tier]} · ลง {q.sp || 0} นัด · {q.sg || 0} ยิง · {q.sa || 0} จ่าย</span>
+                          <span>{getTeamLeagueName(hostTeam, { short: true, withFlag: true })} · ลง {q.sp || 0} นัด · {q.sg || 0} ยิง · {q.sa || 0} จ่าย</span>
                           <span>· ช่วยค่าเหนื่อย {q.loanWageShare ?? 80}%</span>
                           {q.loanOpt ? (
                             <span className="text-[#8a5b00] dark:text-[var(--lamp)] font-semibold">
@@ -4850,7 +4928,7 @@ export const MarketView = React.memo<{
                 sortedScoutResults.map(({ q, i }) => {
                   const blockedByWindow = !tx.tw.open && !q.free;
                   const signFee = q.free ? getFreeAgentSigningFee(q) : 0;
-                  const isHardDeal = q.ov > (BASE[me.tier] ?? 54) + 14;
+                  const isHardDeal = q.ov > getTeamBaseOvr(me) + 14;
                   const shortlisted = isPlayerShortlisted(state, q.n);
                   const canLoanScout = !q.free && !q.locked && !blockedByWindow && tx.loansCount < tx.maxLoans;
                   const bio = getPlayerBio(q);
@@ -5559,7 +5637,7 @@ export const MarketView = React.memo<{
                           <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1">
                             <span className={`truncate ${isMine ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>{cs.teamName}</span>
                             <span className="text-[10px] mland:text-[8.5px] font-normal text-[var(--mut)] shrink-0">
-                              · {TN[cs.tier] || ''}
+                              · {tm ? getTeamLeagueName(tm, { short: true, withFlag: true }) : (TN[cs.tier] || '')}
                             </span>
                           </div>
                           <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5">

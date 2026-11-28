@@ -1211,6 +1211,8 @@ export interface ManagerClubStint {
   teamId: number;
   teamName: string;
   tier: number;
+  leagueCode?: string;
+  leagueName?: string;
   fromSeason: number;
   toSeason: number;
   matches: number;
@@ -1226,6 +1228,8 @@ export interface ManagerJobOffer {
   teamId: number;
   teamName: string;
   tier: number;
+  leagueCode?: string;
+  leagueName?: string;
   reason: 'poach' | 'rescue' | 'open';
   targetRank: number;
   budgetK: number;

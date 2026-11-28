@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { GameState, Player, TrophyRecord } from '../types/game';
 import { TN } from '../data/thaiFootballData';
-import { getT3ZoneLabel } from '../data/leagueStructures';
+import { getT3ZoneLabel, getTeamLeagueName } from '../data/leagueStructures';
 import { SFX, triggerConfetti } from '../utils/audioTheme';
 import { finishSeasonComputation, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { xi } from '../engine/playerCore';
@@ -36,6 +36,10 @@ export const SeasonEndModal: React.FC<{
   onStartNextSeason: (transferToTeamId?: number) => void;
 }> = ({ state, summary, onOpenSeasonStats, onStartNextSeason }) => {
   const me = state.teams[state.me];
+  const curLeagueLabel = getTeamLeagueName(me, { withFlag: true });
+  const curLeagueShort = getTeamLeagueName(me);
+  const nextLeagueLabel =
+    summary.nt >= 3 ? getTeamLeagueName(me, { withFlag: true }) : TN[summary.nt] || curLeagueLabel;
 
   const arc = summary.archive;
   const trophiesWon: TrophyRecord[] = useMemo(() => {
@@ -113,13 +117,13 @@ export const SeasonEndModal: React.FC<{
     if (majorTrophyCount === 3) return 'ทริปเปิลแชมป์ประวัติศาสตร์!';
     if (majorTrophyCount === 2) return 'ดับเบิลแชมป์สุดยิ่งใหญ่!';
     if (wonAsia) return 'เจ้ายุทธจักรลูกหนังทวีป!';
-    if (summary.ch && isPromoted) return `แชมป์ ${TN[summary.mt]} & เลื่อนชั้น!`;
-    if (summary.ch) return `แชมป์ ${TN[summary.mt]} อย่างยิ่งใหญ่!`;
+    if (summary.ch && isPromoted) return `แชมป์ ${curLeagueShort} & เลื่อนชั้น!`;
+    if (summary.ch) return `แชมป์ ${curLeagueShort} อย่างยิ่งใหญ่!`;
     if (wonCup) return 'คว้าแชมป์ถ้วยประชาชน!';
     if (wonLc) return 'คว้าแชมป์ไทยลีก คัพ!';
     if (wonDc) return 'คว้าแชมป์ถ้วยดิวิชั่น & ภูมิภาค!';
     if (wonSc) return 'คว้าแชมป์ไทยแลนด์ แชมเปี้ยนส์ คัพ!';
-    if (isPromoted) return `เลื่อนชั้นสู่ ${TN[summary.nt]} สำเร็จ!`;
+    if (isPromoted) return `เลื่อนชั้นสู่ ${nextLeagueLabel} สำเร็จ!`;
     if (summary.pos <= 3) return `จบอันดับ ${summary.pos} บนโพเดียมลีก!`;
     if (metBoardGoal) return 'บรรลุเป้าหมายบอร์ดบริหาร!';
     if (wonNtCallup) return 'ก้าวสู่ทัพช้างศึกทีมชาติไทย!';
@@ -169,10 +173,10 @@ export const SeasonEndModal: React.FC<{
     if (celebrationLevel === 'promotion') {
       return {
         kicker: 'งานฉลองเลื่อนชั้นสู่ดิวิชั่นใหม่',
-        title: `คว้าตั๋วเลื่อนชั้นสู่ ${TN[summary.nt]} สำเร็จ`,
+        title: `คว้าตั๋วเลื่อนชั้นสู่ ${nextLeagueLabel} สำเร็จ`,
         desc: `จบอันดับ ${summary.pos} (${me.pts} แต้ม) พาสโมสรก้าวขึ้นสู่เวทีที่สูงกว่าในฤดูกาลหน้า`,
         highlights: [
-          `🚀 ${TN[summary.mt]} → ${TN[summary.nt]}`,
+          `🚀 ${curLeagueShort} → ${nextLeagueLabel}`,
           ...(prizeLine ? [`💰 ${prizeLine}`] : [`👏 แฟนบอลร่วมฉลองเต็มสนาม`]),
           `💼 บอร์ดพร้อมหนุนงบฤดูกาลหน้า`
         ]
@@ -290,8 +294,7 @@ export const SeasonEndModal: React.FC<{
                   <Award className="w-3.5 h-3.5 shrink-0" />
                 )}
                 <span>
-                  สรุปปิดฤดูกาลที่ {state.season} · {TN[summary.mt]}
-                  {summary.mt === 0 ? ` (${getT3ZoneLabel(me.zone)})` : ''}
+                  สรุปปิดฤดูกาลที่ {state.season} · {getTeamLeagueName(me, { includeZone: true, withFlag: true })}
                 </span>
               </div>
 
@@ -373,7 +376,7 @@ export const SeasonEndModal: React.FC<{
                   <TrendingUp className="w-5 h-5 text-amber-300" />
                   <div className="leading-tight">
                     <div className="text-[10px] text-emerald-200 font-semibold">เลื่อนชั้นสู่</div>
-                    <div className="text-xs font-extrabold text-white">{TN[summary.nt]}</div>
+                    <div className="text-xs font-extrabold text-white">{nextLeagueLabel}</div>
                   </div>
                 </div>
               ) : null}
@@ -446,7 +449,7 @@ export const SeasonEndModal: React.FC<{
                 {isPromoted && <TrendingUp className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />}
                 {isRelegated && <TrendingDown className="w-3.5 h-3.5 text-[var(--red)] shrink-0" />}
                 <span className="truncate">
-                  {TN[summary.nt]}
+                  {nextLeagueLabel}
                   {summary.nt === 0 ? ` (${getT3ZoneLabel(me.zone)})` : ''}
                 </span>
               </div>
@@ -574,7 +577,7 @@ export const SeasonEndModal: React.FC<{
               {(summary.bestScorer || summary.bestAssist) && (
                 <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-1">
                   <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--mut)]">
-                    🏅 รางวัลดาวเด่นประจำลีก ({TN[summary.mt]})
+                    🏅 รางวัลดาวเด่นประจำลีก ({curLeagueLabel})
                   </div>
                   {summary.bestScorer && (
                     <div className="truncate text-[var(--ink)] flex items-center gap-1">
@@ -673,7 +676,7 @@ export const SeasonEndModal: React.FC<{
                             {offer.teamName}
                           </div>
                           <div className="text-[10.5px] mland:text-[9px] text-[var(--g)] font-semibold truncate">
-                            {TN[offer.tier]} · OVR {avgOvr} · งบ {fmtMoney(offer.budgetK)}
+                            {offer.leagueName || getTeamLeagueName(club, { includeZone: true, withFlag: true })} · OVR {avgOvr} · งบ {fmtMoney(offer.budgetK)}
                           </div>
                         </div>
                       </div>
@@ -705,7 +708,7 @@ export const SeasonEndModal: React.FC<{
                     <div className="min-w-0">
                       <div className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">{club.name}</div>
                       <div className="text-[11px] mland:text-[9.5px] text-[var(--g)] font-semibold">
-                        ย้ายร่วมทีม ({TN[club.tier]}) ›
+                        ย้ายร่วมทีม ({getTeamLeagueName(club, { includeZone: true, withFlag: true })}) ›
                       </div>
                     </div>
                   </button>

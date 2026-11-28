@@ -13,9 +13,9 @@ import {
   COACH_STYLES,
   PLAYER_PERSONALITIES,
   POS,
-  TN,
   getCountryMetaByCode
 } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { ef, getDefaultCoachVis, getShirtNo, xi } from '../engine/playerCore';
 import { getStaffState } from '../engine/simulation';
@@ -521,7 +521,7 @@ export const TeamOfficeView: React.FC<{
                 {isFocused?.(`room:${me.id}`) && <NavFocusBadge />}
               </div>
               <div className="text-[10px] mland:text-[8px] text-[var(--mut)] tabular truncate">
-                {TN[me.tier]} · แผน {me.form} ({AR_T[me.tac]}) · {me.sq.length} นักเตะในทีม
+                {getTeamLeagueName(me, { includeZone: true, withFlag: true })} · แผน {me.form} ({AR_T[me.tac]}) · {me.sq.length} นักเตะในทีม
               </div>
             </div>
           </div>

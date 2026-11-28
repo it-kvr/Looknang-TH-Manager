@@ -14,10 +14,12 @@ import type {
   Team
 } from '../types/game';
 import { clamp, P, R } from '../utils/math';
-import { BASE, FSD, LINE, POS, TN, type ForeignNameRegion } from '../data/thaiFootballData';
+import { BASE, FSD, LINE, POS, TN, getForeignTeamCountryMeta, type ForeignNameRegion } from '../data/thaiFootballData';
+import { WORLD_LEAGUE_SPECS, getTeamBaseOvr, getTeamLeagueName, getWorldLeagueSpec } from '../data/leagueStructures';
 import {
   assignTeamShirtNumbers,
   ensureClubIdentity,
+  ensurePlayableWorldClubSquad,
   genForeignPlayerName,
   getDefaultCoachVis,
   getTeamClubIdentity,
@@ -27,7 +29,7 @@ import {
   pushFeed,
   xi
 } from './playerCore';
-import { getTeamSeasonObjectiveInfo, issueBoardDirective, mkMarket, rate, setBoardObjective, sortTable, syncAndEvaluateClubDemands } from './simulation';
+import { ensureAsia, ensureWorldLeaguesFixtures, getTeamSeasonObjectiveInfo, issueBoardDirective, mkMarket, rate, setBoardObjective, sortTable, syncAndEvaluateClubDemands } from './simulation';
 import { pickUniqueSponsorBrandIds } from '../data/sponsorBrands';
 
 export interface NationalOpponentTemplate {
@@ -446,6 +448,8 @@ export function ensureManagerHistoryInitialized(s: GameState): ManagerClubStint[
       teamId: meTeam.id,
       teamName: s.club?.name || meTeam.name,
       tier: meTeam.tier,
+      ...(meTeam.leagueCode ? { leagueCode: meTeam.leagueCode } : {}),
+      leagueName: getTeamLeagueName(meTeam, { withFlag: true }),
       fromSeason: 1,
       toSeason: s.season ?? 1,
       matches: meTeam.p || 0,
@@ -488,7 +492,13 @@ export function syncActiveStintTrophy(s: GameState, title: string) {
   }
 }
 
-export function estimateClubBudgetForTier(tier: number): number {
+export function estimateClubBudgetForTier(tier: number, team?: Pick<Team, 'tier' | 'leagueCode'> | null): number {
+  if (tier >= 3) {
+    const baseOv = getTeamBaseOvr(team, tier);
+    if (baseOv >= 78) return R(2600, 4400);
+    if (baseOv >= 72) return R(1650, 2850);
+    return R(950, 1750);
+  }
   if (tier >= 2) return R(1350, 2350);
   if (tier === 1) return R(580, 980);
   return R(240, 440);
@@ -496,14 +506,18 @@ export function estimateClubBudgetForTier(tier: number): number {
 
 export function generateManagerJobOffers(
   s: GameState,
-  opts?: { mode?: 'sacked' | 'season_end' | 'market' }
+  opts?: { mode?: 'sacked' | 'season_end' | 'market'; leagueCode?: string }
 ): ManagerJobOffer[] {
+  if (!s.teams.some((t) => t.tier >= 3)) {
+    ensureAsia(s);
+  }
   const mode = opts?.mode || (s.sack === 1 ? 'sacked' : 'market');
   const meTeam = s.teams[s.me];
   const curTier = meTeam?.tier ?? 0;
   const rep = s.mgrRep ?? 50;
 
   const domesticTeams = s.teams.filter((t) => t.tier < 3 && t.id !== s.me);
+  const worldTeams = s.teams.filter((t) => t.tier >= 3 && t.id !== s.me);
   const tableByTier = new Map<number, Team[]>();
   [0, 1, 2].forEach((tier) => {
     tableByTier.set(tier, sortTable(s.teams.filter((t) => t.tier === tier)));
@@ -521,13 +535,55 @@ export function generateManagerJobOffers(
       teamId: tm.id,
       teamName: tm.name,
       tier: tm.tier,
+      ...(tm.leagueCode ? { leagueCode: tm.leagueCode } : {}),
+      leagueName: getTeamLeagueName(tm, { withFlag: true }),
       reason,
       targetRank: obj.targetRank,
-      budgetK: estimateClubBudgetForTier(tm.tier),
+      budgetK: estimateClubBudgetForTier(tm.tier, tm),
       minRep,
       note
     };
   };
+
+  // Specific World League browser/filter mode
+  if (opts?.leagueCode && opts.leagueCode !== 'ALL' && opts.leagueCode !== 'DOMESTIC') {
+    const code = opts.leagueCode.trim().toUpperCase();
+    const spec = getWorldLeagueSpec(code);
+    const leaguePool = worldTeams
+      .filter((t) => t.leagueCode === code)
+      .map((t) => {
+        const r = rate(t, s);
+        return { tm: t, pow: r.at + r.df };
+      })
+      .sort((a, b) => b.pow - a.pow)
+      .map((x) => x.tm);
+    if (!leaguePool.length) return [];
+    const baseOv = spec?.baseOvr ?? 72;
+    const picked: ManagerJobOffer[] = [];
+    const pickIdxSet = new Set<number>();
+    const candIndices = [
+      Math.min(leaguePool.length - 1, Math.floor(leaguePool.length * 0.15)),
+      Math.min(leaguePool.length - 1, Math.floor(leaguePool.length * 0.45)),
+      Math.min(leaguePool.length - 1, Math.floor(leaguePool.length * 0.72)),
+      leaguePool.length - 1
+    ];
+    candIndices.forEach((idx, slot) => {
+      if (pickIdxSet.has(idx) || !leaguePool[idx]) return;
+      pickIdxSet.add(idx);
+      const tm = leaguePool[idx];
+      const gateBase = baseOv >= 78 ? 75 : baseOv >= 72 ? 55 : 35;
+      const minRep = slot === 0 ? gateBase + 25 : slot === 1 ? gateBase + 10 : slot === 2 ? Math.max(20, gateBase - 5) : 0;
+      const reason: ManagerJobOffer['reason'] = slot === 0 ? 'poach' : slot === 3 ? 'rescue' : 'open';
+      const note =
+        slot === 0
+          ? `ทีมชั้นนำ ${spec?.name || code} มองหากุนซือลุ้นแชมป์`
+          : slot === 3
+            ? `ทีมท้ายตาราง ${spec?.name || code} เปิดโอกาสกู้วิกฤตทันที`
+            : `สโมสรใน ${spec?.name || code} เปิดรับผู้จัดการทีมคนใหม่`;
+      picked.push(makeOffer(tm, reason, minRep, note));
+    });
+    return picked;
+  }
 
   if (mode === 'sacked') {
     const picks: ManagerJobOffer[] = [];
@@ -538,93 +594,146 @@ export function generateManagerJobOffers(
       picks.push(makeOffer(tm, 'rescue', 0, note));
     };
 
-    // 1. Club from a lower tier (or provincial) eager to rebuild
     const lowerPool = domesticTeams
-      .filter((t) => t.tier <= Math.max(0, curTier - 1))
+      .filter((t) => t.tier <= Math.max(0, Math.min(2, curTier) - 1))
       .sort(() => Math.random() - 0.5);
-    if (lowerPool[0]) addPick(lowerPool[0], 'สโมสรระดับล่างต้องการโค้ชมีประสบการณ์มาช่วยยกระดับทีม');
+    if (lowerPool[0]) addPick(lowerPool[0], 'สโมสรระดับล่างในไทยต้องการโค้ชมีประสบการณ์มาช่วยยกระดับทีม');
 
-    // 2. Struggling club in same tier looking for emergency rescue
-    const sameTierList = (tableByTier.get(curTier) || []).filter((t) => t.id !== s.me);
-    const strugglingSame = sameTierList.slice(-6).sort(() => Math.random() - 0.5);
-    if (strugglingSame[0]) addPick(strugglingSame[0], 'ทีมกำลังหนีโซนอันตราย ยื่นสัญญากอบกู้สถานการณ์ทันที');
+    if (curTier < 3) {
+      const sameTierList = (tableByTier.get(curTier) || []).filter((t) => t.id !== s.me);
+      const strugglingSame = sameTierList.slice(-6).sort(() => Math.random() - 0.5);
+      if (strugglingSame[0]) addPick(strugglingSame[0], 'ทีมร่วมลีกกำลังหนีโซนอันตราย ยื่นสัญญากอบกู้สถานการณ์ทันที');
+    } else if (meTeam?.leagueCode) {
+      const sameWorldTable = sortTable(s.teams.filter((t) => t.tier >= 3 && t.leagueCode === meTeam.leagueCode)).filter(
+        (t) => t.id !== s.me
+      );
+      const strugglingWorld = sameWorldTable.slice(-5).sort(() => Math.random() - 0.5);
+      if (strugglingWorld[0]) addPick(strugglingWorld[0], `สโมสรใน ${getTeamLeagueName(strugglingWorld[0])} เปิดโอกาสกู้วิกฤตทันที`);
+    }
 
-    // 3. Another club from provincial/tier 1 (guaranteed option)
-    const fallbackPool = domesticTeams
-      .filter((t) => t.tier <= Math.max(1, curTier))
-      .sort((a, b) => a.tier - b.tier || Math.random() - 0.5);
-    for (const cand of fallbackPool) {
-      if (picks.length >= 3) break;
-      addPick(cand, 'เปิดรับตำแหน่งหัวหน้าผู้ฝึกสอนพร้อมงบทำทีมตั้งต้นใหม่');
+    const fallbackDomestic = domesticTeams
+      .filter((t) => t.tier <= Math.max(1, Math.min(2, curTier)))
+      .sort((a, b) => a.tier - b.tier || Math.random() - 0.5)[0];
+    if (fallbackDomestic) addPick(fallbackDomestic, 'เปิดรับตำแหน่งหัวหน้าผู้ฝึกสอนพร้อมงบทำทีมตั้งต้นใหม่');
+
+    // Foreign rescue option in Asia or mid-level league
+    const accessibleWorld = worldTeams
+      .filter((t) => (getWorldLeagueSpec(t.leagueCode)?.baseOvr ?? 72) <= 74)
+      .sort(() => Math.random() - 0.5);
+    if (accessibleWorld[0]) {
+      addPick(accessibleWorld[0], `ข้อเสนอข้ามประเทศจาก ${getTeamLeagueName(accessibleWorld[0], { withFlag: true })}`);
     }
     return picks;
   }
 
   if (mode === 'season_end') {
-    const curRank = (tableByTier.get(curTier) || []).findIndex((t) => t.id === s.me) + 1;
-    const upperTier = Math.min(2, curTier + 1);
+    const curRank =
+      curTier >= 3
+        ? sortTable(s.teams.filter((t) => t.tier >= 3 && t.leagueCode === meTeam?.leagueCode)).findIndex((t) => t.id === s.me) + 1
+        : (tableByTier.get(curTier) || []).findIndex((t) => t.id === s.me) + 1;
+    const upperTier = curTier < 3 ? Math.min(2, curTier + 1) : 2;
     const offers: ManagerJobOffer[] = [];
     const seen = new Set<number>();
 
-    const upperPool = domesticTeams
-      .filter((t) => t.tier === upperTier)
-      .sort(() => Math.random() - 0.5);
-    const samePool = domesticTeams
-      .filter((t) => t.tier === curTier)
-      .sort((a, b) => {
+    const upperPool = domesticTeams.filter((t) => t.tier === upperTier).sort(() => Math.random() - 0.5);
+    const samePool = (curTier >= 3 ? worldTeams.filter((t) => t.leagueCode === meTeam?.leagueCode) : domesticTeams.filter((t) => t.tier === curTier)).sort(
+      (a, b) => {
         const ra = rate(a, s);
         const rb = rate(b, s);
         return rb.at + rb.df - (ra.at + ra.df);
-      });
+      }
+    );
 
     const strongPerf = curRank <= 4 || rep >= 75;
-    if (upperTier > curTier && strongPerf && upperPool.length > 0) {
+    if (curTier < 2 && upperTier > curTier && strongPerf && upperPool.length > 0) {
       const c = upperPool[0];
       seen.add(c.id);
-      offers.push(makeOffer(c, 'poach', 0, `ดึงตัวข้ามลีกสู่ ${TN[c.tier]} หลังสร้างผลงานเข้าตา`));
+      offers.push(makeOffer(c, 'poach', 0, `ดึงตัวข้ามลีกสู่ ${getTeamLeagueName(c)} หลังสร้างผลงานเข้าตา`));
     }
-    if (rep >= 90) {
+    if (rep >= 85) {
       const t1Top = domesticTeams.filter((t) => t.tier === 2 && !seen.has(t.id)).sort(() => Math.random() - 0.5)[0];
       if (t1Top) {
         seen.add(t1Top.id);
         offers.push(makeOffer(t1Top, 'poach', 0, 'ทีมใหญ่ไทยลีก 1 ยื่นข้อเสนอคุมทีมลุ้นแชมป์ฤดูกาลหน้า'));
       }
     }
+    // Foreign league offers at season end (Europe/Asia/Americas matching rep)
+    const maxForeignOv = rep >= 110 ? 90 : rep >= 80 ? 79 : 73;
+    const foreignCands = worldTeams
+      .filter((t) => !seen.has(t.id) && (getWorldLeagueSpec(t.leagueCode)?.baseOvr ?? 72) <= maxForeignOv)
+      .sort(() => Math.random() - 0.5);
+    if (foreignCands[0]) {
+      const f1 = foreignCands[0];
+      seen.add(f1.id);
+      offers.push(makeOffer(f1, 'poach', 0, `ทาบทามไปคุมลีกต่างแดน: ${getTeamLeagueName(f1, { withFlag: true })}`));
+    }
+    if (foreignCands[1]) {
+      const f2 = foreignCands.find((t) => t.leagueCode !== foreignCands[0].leagueCode && !seen.has(t.id));
+      if (f2) {
+        seen.add(f2.id);
+        offers.push(makeOffer(f2, 'open', 0, `ข้อเสนอคุมทัพต่างแดนใน ${getTeamLeagueName(f2, { withFlag: true })}`));
+      }
+    }
     for (const c of samePool) {
-      if (offers.length >= 3) break;
+      if (offers.length >= 4) break;
       if (seen.has(c.id)) continue;
       seen.add(c.id);
-      offers.push(makeOffer(c, 'open', 0, `ชวนย้ายคุมทัพลุย ${TN[c.tier]} พร้อมเป้าหมายติดอันดับต้นๆ`));
+      offers.push(makeOffer(c, 'open', 0, `ชวนย้ายคุมทัพลุย ${getTeamLeagueName(c)} พร้อมเป้าหมายติดอันดับต้นๆ`));
     }
-    if (offers.length < 3) {
+    if (offers.length < 4) {
       const rest = domesticTeams.filter((t) => !seen.has(t.id)).sort(() => Math.random() - 0.5);
       for (const c of rest) {
-        if (offers.length >= 3) break;
+        if (offers.length >= 4) break;
         seen.add(c.id);
-        offers.push(makeOffer(c, 'open', 0, `ข้อเสนอคุมทีม ${TN[c.tier]} ฤดูกาลใหม่`));
+        offers.push(makeOffer(c, 'open', 0, `ข้อเสนอคุมทีม ${getTeamLeagueName(c)} ฤดูกาลใหม่`));
       }
     }
     return offers;
   }
 
-  // 'market' mode: show 4 open opportunities across tiers with realistic reputation gates
+  // 'market' mode: show balanced domestic opportunities + world league offers across confederations
   const result: ManagerJobOffer[] = [];
   const picked = new Set<number>();
 
   const pickByTier = (tier: number, minRep: number, reason: ManagerJobOffer['reason'], note: string) => {
     const candidates = domesticTeams.filter((t) => t.tier === tier && !picked.has(t.id));
     if (!candidates.length) return;
-    // Deterministic-friendly variety per season/md
     const idx = Math.abs((s.season * 17 + s.md * 7 + tier * 13) % candidates.length);
     const tm = candidates[idx];
     picked.add(tm.id);
     result.push(makeOffer(tm, reason, minRep, note));
   };
 
-  pickByTier(2, 95, 'poach', 'ต้องการกุนซือระดับสูง (เครดิต 95+) ลุยศึกดิวิชั่น 1');
-  pickByTier(2, 75, 'open', 'สโมสรดิวิชั่น 1 กำลังมองหาเฮดโค้ชคนใหม่ (เครดิต 75+)');
-  pickByTier(1, 55, 'open', 'ทีมระดับดิวิชั่น 2 เปิดรับผู้จัดการทีมร่วมสร้างโปรเจกต์ (เครดิต 55+)');
-  pickByTier(0, 20, 'open', 'สโมสรระดับจังหวัดเปิดประตูต้อนรับกุนซือไฟแรง');
+  if (opts?.leagueCode !== 'FOREIGN') {
+    pickByTier(2, 95, 'poach', 'ต้องการกุนซือระดับสูง (เครดิต 95+) ลุยศึกไทยลีก 1');
+    pickByTier(2, 75, 'open', 'สโมสรไทยลีก 1 กำลังมองหาเฮดโค้ชคนใหม่ (เครดิต 75+)');
+    pickByTier(1, 55, 'open', 'ทีมระดับไทยลีก 2 เปิดรับผู้จัดการทีมร่วมสร้างโปรเจกต์ (เครดิต 55+)');
+    pickByTier(0, 20, 'open', 'สโมสรไทยลีก 3 เปิดประตูต้อนรับกุนซือไฟแรง');
+  }
+
+  if (opts?.leagueCode !== 'DOMESTIC') {
+    const pickWorldOffer = (
+      pred: (spec: (typeof WORLD_LEAGUE_SPECS)[number]) => boolean,
+      minRep: number,
+      reason: ManagerJobOffer['reason'],
+      notePrefix: string,
+      salt: number
+    ) => {
+      const specs = WORLD_LEAGUE_SPECS.filter(pred);
+      if (!specs.length) return;
+      const spec = specs[Math.abs((s.season * 13 + s.md * 5 + salt) % specs.length)];
+      const candidates = worldTeams.filter((t) => t.leagueCode === spec.code && !picked.has(t.id));
+      if (!candidates.length) return;
+      const tm = candidates[Math.abs((s.season * 19 + s.md * 3 + salt) % candidates.length)];
+      picked.add(tm.id);
+      result.push(makeOffer(tm, reason, minRep, `${notePrefix} (${spec.flag} ${spec.name})`));
+    };
+
+    pickWorldOffer((sp) => sp.confed === 'europe' && sp.baseOvr >= 77, 105, 'poach', 'สโมสรลีกใหญ่ยุโรปยื่นข้อเสนอ', 1);
+    pickWorldOffer((sp) => sp.confed === 'asia' && sp.baseOvr >= 67, 70, 'open', 'สโมสรชั้นนำเอเชียเปิดรับกุนซือ', 2);
+    pickWorldOffer((sp) => sp.confed === 'asia' && sp.baseOvr < 67, 30, 'open', 'ลีกเพื่อนบ้านอาเซียน/เอเชียเปิดรับโค้ช', 3);
+    pickWorldOffer((sp) => sp.confed === 'americas' || sp.confed === 'africa', 65, 'open', 'ข้อเสนอท้าทายข้ามทวีป', 4);
+  }
 
   return result;
 }
@@ -634,10 +743,19 @@ export function switchManagerClub(
   newTeamId: number,
   opts: { reason: 'sacked' | 'transfer' | 'resigned'; timing: 'midseason' | 'offseason' }
 ): string {
+  if (!s.teams.some((t) => t.tier >= 3)) {
+    ensureAsia(s);
+  }
+  ensureWorldLeaguesFixtures(s);
+
   const oldTeamId = s.me;
   const oldTeam = s.teams[oldTeamId];
   const newTeam = s.teams[newTeamId];
   if (!newTeam || newTeamId === oldTeamId) return '';
+
+  if (newTeam.tier >= 3) {
+    ensurePlayableWorldClubSquad(newTeam, s);
+  }
 
   const hist = ensureManagerHistoryInitialized(s);
   const activeStint = hist.find((h) => h.endReason === 'active');
@@ -664,6 +782,7 @@ export function switchManagerClub(
   s.records = s.clubRecordsByTeam[newTeam.id] ? { ...s.clubRecordsByTeam[newTeam.id] } : {};
 
   const oldTier = oldTeam?.tier ?? 0;
+  const oldLeagueCode = oldTeam?.leagueCode;
   s.me = newTeamId;
   s.lg = newTeam.tier;
 
@@ -673,26 +792,31 @@ export function switchManagerClub(
     ...aiIdentity,
     name: newTeam.name,
     nick: '',
-    std: `สนาม${newTeam.name}`,
+    std: aiIdentity.std || `สนาม${newTeam.name}`,
     builtStadiumStyles: [aiIdentity.stadiumStyle || 'open_track'],
     ...preservedMgr
   };
   s.club = nextClub;
   newTeam.kc = [nextClub.c1, nextClub.c2];
 
-  // Re-calibrate club economy & facilities for the new club tier
+  // Re-calibrate club economy & facilities for the new club tier & league level
   const ntTier = newTeam.tier;
-  s.money = estimateClubBudgetForTier(ntTier);
-  s.st = ntTier >= 2 ? R(5, 7) : ntTier === 1 ? R(3, 5) : R(1, 2);
-  s.tr = ntTier >= 2 ? R(5, 7) : ntTier === 1 ? R(3, 5) : R(1, 2);
-  s.ya = ntTier >= 2 ? R(4, 6) : ntTier === 1 ? R(2, 4) : 1;
-  s.med = ntTier >= 2 ? R(4, 6) : ntTier === 1 ? R(2, 4) : 1;
-  s.merchLv = ntTier >= 2 ? R(4, 6) : ntTier === 1 ? R(2, 4) : 1;
-  s.turfLv = ntTier >= 2 ? R(5, 7) : ntTier === 1 ? R(3, 5) : R(1, 2);
-  s.analyticsLv = ntTier >= 2 ? R(4, 6) : ntTier === 1 ? R(2, 4) : 1;
-  s.travelLv = ntTier >= 2 ? R(4, 6) : ntTier === 1 ? R(2, 4) : 1;
+  const newBaseOv = getTeamBaseOvr(newTeam);
+  const isTopWorld = ntTier >= 3 && newBaseOv >= 78;
+  const isMidWorld = ntTier >= 3 && newBaseOv >= 71;
+  s.money = estimateClubBudgetForTier(ntTier, newTeam);
+  const facHi = isTopWorld ? 7 : isMidWorld || ntTier === 2 ? 6 : ntTier >= 3 ? 4 : ntTier === 1 ? 4 : 2;
+  const facLo = Math.max(1, facHi - 2);
+  s.st = R(facLo, facHi);
+  s.tr = R(facLo, facHi);
+  s.ya = R(Math.max(1, facLo - 1), facHi);
+  s.med = R(Math.max(1, facLo - 1), facHi);
+  s.merchLv = R(Math.max(1, facLo - 1), facHi);
+  s.turfLv = R(facLo, facHi);
+  s.analyticsLv = R(Math.max(1, facLo - 1), facHi);
+  s.travelLv = R(Math.max(1, facLo - 1), facHi);
   s.facCond = { st: 100, tr: 100, ya: 100, med: 100, merchLv: 100, turfLv: 100, analyticsLv: 100, travelLv: 100 };
-  const baseStaff = ntTier >= 2 ? 2 : ntTier === 1 ? 1 : 0;
+  const baseStaff = isTopWorld || ntTier === 2 ? 2 : ntTier >= 3 || ntTier === 1 ? 1 : 0;
   s.staff = {
     asst: baseStaff,
     fit: baseStaff,
@@ -724,7 +848,7 @@ export function switchManagerClub(
   s.promo = 0;
   s.winBonus = 0;
   s.derby = 0;
-  s.fan = ntTier >= 2 ? R(62, 78) : ntTier === 1 ? R(50, 66) : R(44, 58);
+  s.fan = ntTier >= 3 ? R(64, 82) : ntTier === 2 ? R(62, 78) : ntTier === 1 ? R(50, 66) : R(44, 58);
   s.mor = 65;
   s.bd = opts.reason === 'sacked' ? 62 : 72;
   s.sack = 0;
@@ -739,6 +863,8 @@ export function switchManagerClub(
     teamId: newTeam.id,
     teamName: newTeam.name,
     tier: newTeam.tier,
+    ...(newTeam.leagueCode ? { leagueCode: newTeam.leagueCode } : {}),
+    leagueName: getTeamLeagueName(newTeam, { withFlag: true }),
     fromSeason: startSeasonNum,
     toSeason: startSeasonNum,
     matches: 0,
@@ -752,19 +878,40 @@ export function switchManagerClub(
   if (opts.timing === 'midseason') {
     const oldZone = oldTeam?.zone ?? 0;
     const newZone = newTeam.zone ?? 0;
-    if (oldTier === 0) {
-      s.fxZones = s.fxZones || {};
-      s.fxZones[oldZone] = s.fx;
-    } else if (ntTier !== oldTier) {
-      s.fxo = s.fxo || {};
-      s.fxo[oldTier] = s.fx;
+    const oldFxLen = Math.max(1, s.fx?.length || 30);
+    const oldMd = s.md ?? 0;
+    const switchingLeague =
+      oldTier !== ntTier ||
+      (oldTier === 0 && oldZone !== newZone) ||
+      (oldTier >= 3 && oldLeagueCode !== newTeam.leagueCode);
+
+    if (switchingLeague) {
+      if (oldTier === 0) {
+        s.fxZones = s.fxZones || {};
+        s.fxZones[oldZone] = s.fx;
+      } else if (oldTier === 1 || oldTier === 2) {
+        s.fxo = s.fxo || {};
+        s.fxo[oldTier] = s.fx;
+      } else if (oldTier >= 3 && oldLeagueCode) {
+        s.fxWorld = s.fxWorld || {};
+        s.fxWorld[oldLeagueCode] = s.fx;
+      }
+
+      if (ntTier === 0 && s.fxZones?.[newZone]) {
+        s.fx = s.fxZones[newZone];
+      } else if ((ntTier === 1 || ntTier === 2) && s.fxo?.[ntTier]) {
+        s.fx = s.fxo[ntTier];
+        delete s.fxo[ntTier];
+      } else if (ntTier >= 3 && newTeam.leagueCode && s.fxWorld?.[newTeam.leagueCode]) {
+        s.fx = s.fxWorld[newTeam.leagueCode];
+      }
+
+      // Sync s.md proportionally to match the already-simulated rounds of the new league
+      const newFxLen = Math.max(1, s.fx?.length || 30);
+      const syncedMd = clamp(Math.floor((oldMd * newFxLen) / oldFxLen), 0, s.fx.length);
+      s.md = syncedMd;
     }
-    if (ntTier === 0 && s.fxZones?.[newZone]) {
-      s.fx = s.fxZones[newZone];
-    } else if (ntTier !== oldTier && s.fxo?.[ntTier]) {
-      s.fx = s.fxo[ntTier];
-      delete s.fxo[ntTier];
-    }
+
     // Reconcile cup participation flags with the new club's survival status
     if (s.cup && (!s.cup.alive || !s.cup.ids.includes(newTeamId))) s.pc = false;
     if (s.lc && (!s.lc.alive || !s.lc.ids.includes(newTeamId))) s.plc = false;
@@ -772,8 +919,15 @@ export function switchManagerClub(
     if (s.sc && (!s.sc.alive || !s.sc.ids.includes(newTeamId))) s.psc = false;
     if (s.ac && (!s.ac.alive || !s.ac.ids.includes(newTeamId))) s.pa = false;
 
+    const meSpec = ntTier >= 3 ? getWorldLeagueSpec(newTeam.leagueCode) : null;
     s.yth = Array.from({ length: 4 }, () =>
-      mkPlayer(P(POS), BASE[ntTier] - 2 + Math.round((s.ya ?? 1) * 1.2), true)
+      mkPlayer(
+        P(POS),
+        newBaseOv - 2 + Math.round((s.ya ?? 1) * 1.2),
+        true,
+        undefined,
+        meSpec ? { foreignRegion: meSpec.region, natCode: meSpec.code } : undefined
+      )
     );
     s.schedRes = {};
     s.schedRoundRes = {};
@@ -783,7 +937,7 @@ export function switchManagerClub(
 
   logFin(s, `เข้ารับตำแหน่งผู้จัดการทีม ${newTeam.name} (งบตั้งต้นสโมสร)`, 0);
   const actionVerb = opts.reason === 'sacked' ? 'รับงานกอบกู้ทีม' : 'ย้ายไปคุมทัพ';
-  const msg = `✍️ ${actionVerb} ${newTeam.name} (${TN[newTeam.tier]})`;
+  const msg = `✍️ ${actionVerb} ${newTeam.name} (${getTeamLeagueName(newTeam, { withFlag: true })})`;
   s.hist.push(`ซ.${startSeasonNum}: ${msg}`);
   pushFeed(s, 'เส้นทางโค้ช', msg, 'ok');
   return msg;

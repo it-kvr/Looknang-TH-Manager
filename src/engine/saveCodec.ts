@@ -1,4 +1,4 @@
-import type { Position, SubRole, Mentality, CoreAttrs, CupCompKey, PlayerCupStatRecord, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState, ClubIdentity, PlayerCareerProfile, TransferLogEntry, TransferLogKind } from '../types/game';
+import type { Position, SubRole, Mentality, PreferredFoot, CoreAttrs, CupCompKey, PlayerCupStatRecord, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState, ClubIdentity, PlayerCareerProfile, TransferLogEntry, TransferLogKind } from '../types/game';
 import { ALL_SUB_ROLES } from '../data/thaiFootballData';
 import { ensureAiTeamPhilosophies, assignTeamShirtNumbers, OVF } from './playerCore';
 
@@ -121,6 +121,19 @@ export const packSavePlayer = (q: Player): unknown[] => {
       q.seasonProg.pts.map((pt) => [pt.md, pt.ov, pt.a.sh, pt.a.ps, pt.a.dr, pt.a.tk, pt.a.ph])
     ];
   }
+  if (q.ht !== undefined) ex.ht = q.ht;
+  if (q.wt !== undefined) ex.wt = q.wt;
+  if (q.foot) ex.ft = q.foot;
+  if (q.mental !== undefined) ex.mn = Math.round(q.mental * 10) / 10;
+  if (q.phys !== undefined) ex.ph = Math.round(q.phys * 10) / 10;
+  if (q.favBoost !== undefined) ex.fb = q.favBoost;
+  if (q.careTalkMd !== undefined) ex.ctm = q.careTalkMd;
+  if (q.carePhysMd !== undefined) ex.cpm = q.carePhysMd;
+  if (q.visCustom !== undefined) ex.vc = q.visCustom;
+  if (q.retired) ex.ret = 1;
+  if (q.retiredSeason !== undefined) ex.rts = q.retiredSeason;
+  if (q.origName) ex.on = q.origName;
+  if (q.origModSnap) ex.oms = q.origModSnap;
 
   const base: unknown[] = [
     q.n,
@@ -305,6 +318,19 @@ export const unpackSavePlayer = (raw: unknown): Player => {
       })
     };
   }
+  if (ex.ht !== undefined) p.ht = Number(ex.ht);
+  if (ex.wt !== undefined) p.wt = Number(ex.wt);
+  if (ex.ft === 'L' || ex.ft === 'R' || ex.ft === 'B') p.foot = ex.ft as PreferredFoot;
+  if (ex.mn !== undefined) p.mental = Number(ex.mn);
+  if (ex.ph !== undefined) p.phys = Number(ex.ph);
+  if (ex.fb !== undefined) p.favBoost = Number(ex.fb);
+  if (ex.ctm !== undefined) p.careTalkMd = Number(ex.ctm);
+  if (ex.cpm !== undefined) p.carePhysMd = Number(ex.cpm);
+  if (ex.vc !== undefined) p.visCustom = Number(ex.vc);
+  if (ex.ret) p.retired = true;
+  if (ex.rts !== undefined) p.retiredSeason = Number(ex.rts);
+  if (ex.on) p.origName = String(ex.on);
+  if (ex.oms && typeof ex.oms === 'object') p.origModSnap = ex.oms as Player['origModSnap'];
   return p;
 };
 
@@ -356,6 +382,20 @@ export const packSaveTeam = (t: Team): unknown[] => {
   if (t.leagueCode) tex.lc = t.leagueCode;
   if (t.fans != null) tex.fn = t.fans;
   if (t.seasonObj != null) tex.so = t.seasonObj;
+  if (t.budget != null) tex.bg = t.budget;
+  if (t.boardBonus != null) tex.bb = t.boardBonus;
+  if (t.bd != null) tex.bd = t.bd;
+  if (t.aiTraining) tex.ait = t.aiTraining;
+  if (t.aiTalkNote) tex.atn = t.aiTalkNote;
+  if (t.origName) tex.on = t.origName;
+  if (t.origKc) tex.okc = t.origKc;
+  if (t.origStadium) tex.ost = t.origStadium;
+  if (t.stadiumName) tex.snm = t.stadiumName;
+  if (t.logoUrl) tex.lg = t.logoUrl;
+  if (t.shortName) tex.shn = t.shortName;
+  if (t.modLeagueName) tex.mln = t.modLeagueName;
+  if (t.origFans != null) tex.ofn = t.origFans;
+  if (t.origBudget != null) tex.obg = t.origBudget;
   const arr: unknown[] = [
     t.id, t.name, t.tier, t.kc, t.sq.map(packSavePlayer),
     t.form, t.tac, t.pts, t.gf, t.ga, t.w, t.d, t.l, t.p
@@ -433,6 +473,20 @@ export const unpackSaveTeam = (raw: unknown): Team => {
   if (tex.lc !== undefined) tm.leagueCode = String(tex.lc);
   if (tex.fn !== undefined) tm.fans = Number(tex.fn);
   if (tex.so !== undefined) tm.seasonObj = Number(tex.so);
+  if (tex.bg !== undefined) tm.budget = Number(tex.bg);
+  if (tex.bb !== undefined) tm.boardBonus = Number(tex.bb);
+  if (tex.bd !== undefined) tm.bd = Number(tex.bd);
+  if (tex.ait && typeof tex.ait === 'object') tm.aiTraining = tex.ait as Team['aiTraining'];
+  if (tex.atn !== undefined) tm.aiTalkNote = String(tex.atn);
+  if (tex.on !== undefined) tm.origName = String(tex.on);
+  if (Array.isArray(tex.okc)) tm.origKc = tex.okc as [string, string];
+  if (tex.ost !== undefined) tm.origStadium = String(tex.ost);
+  if (tex.snm !== undefined) tm.stadiumName = String(tex.snm);
+  if (tex.lg !== undefined) tm.logoUrl = String(tex.lg);
+  if (tex.shn !== undefined) tm.shortName = String(tex.shn);
+  if (tex.mln !== undefined) tm.modLeagueName = String(tex.mln);
+  if (tex.ofn !== undefined) tm.origFans = Number(tex.ofn);
+  if (tex.obg !== undefined) tm.origBudget = Number(tex.obg);
   return tm;
 };
 

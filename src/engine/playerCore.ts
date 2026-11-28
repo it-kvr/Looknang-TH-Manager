@@ -3,7 +3,9 @@ import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp, capMoney } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, AWAY_KIT_PAIRINGS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
 import { A1, A2, S1, S2, FN, SN, NG, TIER_STANDALONE_CLUBS, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, HS_N, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES, FOREIGN_NAME_POOLS, COUNTRY_META_BY_CODE, LEGACY_FOREIGN_CLUB_RENAMES, LEGACY_THAI_CLUB_PREFIX_RENAMES, LEGACY_THAI_STANDALONE_RENAMES, getForeignClubStadiumName, getForeignTeamCountryMeta, inferForeignTeamRegion, type ForeignNameRegion } from '../data/thaiFootballData';
+import { getTeamBaseOvr, getTeamLeagueName, getWorldLeagueSpec } from '../data/leagueStructures';
 import { ensureTeamWellbeing, getActiveFavBoost, getWellbeingOvrAdjustment, initPlayerWellbeing } from './wellbeing';
+import { cleanImportJson, exportSaveCode, unpackSaveState } from './saveCodec';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -356,26 +358,124 @@ export function setSlotCount(m: GameMode, nextCount: number): number {
   return finalCount;
 }
 
-export function saveGameToSlot(s: GameState, slot: number) {
+export interface SaveSlotResult {
+  ok: boolean;
+  bytes?: number;
+  error?: string;
+}
+
+function buildTrimmedReplayStateCopy(s: GameState): GameState {
+  const copy: GameState = { ...s };
+  if (s.schedRes) {
+    const keys = Object.keys(s.schedRes)
+      .map((k) => Number(k))
+      .filter((k) => Number.isFinite(k))
+      .sort((a, b) => a - b);
+    const keepFrom = Math.max(0, keys.length - 6);
+    const keepSet = new Set(keys.slice(keepFrom));
+    const trimmedSched: Record<number, NonNullable<GameState['schedRes']>[number]> = {};
+    for (const k of keys) {
+      const rep = s.schedRes[k];
+      if (!rep) continue;
+      if (keepSet.has(k)) {
+        trimmedSched[k] = rep;
+      } else {
+        const { highlightClips: _hc, varReplays: _vr, ...lightRep } = rep;
+        trimmedSched[k] = lightRep;
+      }
+    }
+    copy.schedRes = trimmedSched;
+  }
+  if (s.schedRoundRes) {
+    const rKeys = Object.keys(s.schedRoundRes)
+      .map((k) => Number(k))
+      .filter((k) => Number.isFinite(k))
+      .sort((a, b) => a - b);
+    const keepR = new Set(rKeys.slice(Math.max(0, rKeys.length - 3)));
+    const trimmedRound: NonNullable<GameState['schedRoundRes']> = {};
+    for (const k of rKeys) {
+      if (keepR.has(k)) trimmedRound[k] = s.schedRoundRes[k];
+    }
+    copy.schedRoundRes = trimmedRound;
+  }
+  return copy;
+}
+
+function compactLegacyLocalStorageSlots(exceptKey: string) {
   try {
-    localStorage.setItem(slotKey(s.mode, slot), JSON.stringify(s));
-    if (slot > getSlotCount(s.mode)) {
+    (['m', 'p'] as GameMode[]).forEach((mode) => {
+      for (let k = 1; k <= MAX_SLOTS; k++) {
+        const key = slotKey(mode, k);
+        if (key === exceptKey) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw || raw.startsWith('LK2:')) continue;
+        const loaded = loadGameFromSlot(mode, k);
+        if (loaded) {
+          const packed = exportSaveCode(loaded);
+          if (packed.length < raw.length) {
+            localStorage.setItem(key, packed);
+          }
+        }
+      }
+    });
+  } catch {
+    // ignore cleanup failures
+  }
+}
+
+export function saveGameToSlot(s: GameState, slot: number): SaveSlotResult {
+  const key = slotKey(s.mode, slot);
+  let result: SaveSlotResult = { ok: false };
+  try {
+    const encoded = exportSaveCode(s);
+    try {
+      localStorage.setItem(key, encoded);
+      result = { ok: true, bytes: encoded.length };
+    } catch {
+      compactLegacyLocalStorageSlots(key);
+      try {
+        localStorage.setItem(key, encoded);
+        result = { ok: true, bytes: encoded.length };
+      } catch {
+        const trimmedEncoded = exportSaveCode(buildTrimmedReplayStateCopy(s));
+        try {
+          localStorage.setItem(key, trimmedEncoded);
+          result = { ok: true, bytes: trimmedEncoded.length };
+        } catch (finalErr) {
+          result = {
+            ok: false,
+            error: finalErr instanceof Error ? finalErr.message : 'localStorage quota exceeded'
+          };
+        }
+      }
+    }
+    if (result.ok && slot > getSlotCount(s.mode)) {
       setSlotCount(s.mode, slot);
     }
-  } catch {
-    // ignore quota errors
+  } catch (err) {
+    result = {
+      ok: false,
+      error: err instanceof Error ? err.message : 'save failed'
+    };
   }
   void import('./saveFolder')
     .then((mod) => mod.syncSlotToAutoFolder(s, slot))
     .catch(() => undefined);
+  return result;
 }
 
 export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
   try {
     const raw = localStorage.getItem(slotKey(m, slot));
     if (!raw) return null;
-    const d = JSON.parse(raw) as GameState;
-    if (!Array.isArray(d?.teams) || typeof d.me !== 'number' || d.me < 0 || d.me >= d.teams.length || !d.teams[d.me]) {
+    let d: GameState | null = null;
+    if (raw.startsWith('LK2:')) {
+      d = cleanImportJson(raw);
+    } else {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      d = parsed && parsed._lk === 2 ? unpackSaveState(parsed) : (parsed as unknown as GameState);
+    }
+    if (!d || !Array.isArray(d.teams) || typeof d.me !== 'number' || d.me < 0 || d.me >= d.teams.length || !d.teams[d.me]) {
       return null;
     }
     d.teams.forEach((tm) => {
@@ -1567,8 +1667,9 @@ export function ensureAiTeamPhilosophies(s: GameState, allowSeasonRefresh = fals
         (t.line ?? 1) === 1 &&
         (t.pass ?? 1) === 1;
       if (isLegacyUniform || (allowSeasonRefresh && Math.random() < 0.55)) {
-        const avgOv = t.sq.length ? t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length : BASE[t.tier] || 55;
-        const relDiff = Math.round(avgOv - (BASE[Math.min(t.tier, BASE.length - 1)] || 55));
+        const tierBase = getTeamBaseOvr(t);
+        const avgOv = t.sq.length ? t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length : tierBase;
+        const relDiff = Math.round(avgOv - tierBase);
         const ph = pickClubPhilosophy(t.id, t.tier, relDiff, true);
         applyClubPhilosophy(t, ph);
       } else if (!t.philosophy) {
@@ -1735,7 +1836,7 @@ export function mkTeam(
   const natCode = opts?.natCode || (opts?.foreign ? meta?.code : undefined);
   const allowImport = opts?.allowImport ?? Boolean(opts?.foreign);
 
-  const baseOv = BASE[tier] + diff;
+  const baseOv = getTeamBaseOvr({ tier, leagueCode: opts?.leagueCode || natCode }) + diff;
   const squadLayout: [Position, number][] =
     opts?.squadSize === 14
       ? [
@@ -1801,6 +1902,68 @@ export function mkTeam(
   autoAssignTeamRoles(team, { forceAll: true });
   return team;
 }
+
+export function ensurePlayableWorldClubSquad(t: Team, s?: GameState | null): Team {
+  if (!t || (t.tier ?? 0) < 3) return t;
+  const spec = getWorldLeagueSpec(t.leagueCode);
+  const meta = getForeignTeamCountryMeta(t.origName || t.name, t.leagueCode);
+  const foreignRegion = spec?.region || meta?.region || inferForeignTeamRegion(t.name) || 'intl';
+  const natCode = spec?.code || meta?.code || t.leagueCode;
+  const targetBase = getTeamBaseOvr(t);
+  const curAvg = t.sq.length
+    ? Math.round(t.sq.reduce((sum, q) => sum + (q.ov || targetBase), 0) / t.sq.length)
+    : targetBase;
+  const baseOv = clamp(curAvg, targetBase - 4, targetBase + 4);
+  const usedNames = new Set(t.sq.map((q) => q.n));
+
+  const minPos: Record<Position, number> = { GK: 2, DF: 6, MF: 6, FW: 4 };
+  (['GK', 'DF', 'MF', 'FW'] as Position[]).forEach((pos) => {
+    let cnt = t.sq.filter((q) => q.pos === pos).length;
+    while (cnt < minPos[pos]) {
+      const p = mkPlayer(pos, clamp(baseOv + R(-4, 2), 45, 92), cnt === minPos[pos] - 1 && pos !== 'GK', undefined, {
+        foreignRegion,
+        natCode,
+        allowImport: true,
+        excludeNames: usedNames
+      });
+      p.con = { yr: R(2, 4), wg: wagOf(p), role: p.ov >= baseOv ? 'key' : 'rot' };
+      usedNames.add(p.n);
+      t.sq.push(p);
+      cnt += 1;
+    }
+  });
+
+  const extraPool: Position[] = ['DF', 'MF', 'FW', 'MF'];
+  let extraIdx = 0;
+  while (t.sq.length < 20) {
+    const pos = extraPool[extraIdx % extraPool.length];
+    const p = mkPlayer(pos, clamp(baseOv + R(-5, 2), 45, 92), extraIdx % 2 === 1, undefined, {
+      foreignRegion,
+      natCode,
+      allowImport: true,
+      excludeNames: usedNames
+    });
+    p.con = { yr: R(2, 4), wg: wagOf(p), role: p.ov >= baseOv ? 'key' : 'rot' };
+    usedNames.add(p.n);
+    t.sq.push(p);
+    extraIdx += 1;
+  }
+
+  t.sq.forEach((q) => {
+    if (!q.con) {
+      q.con = { yr: R(2, 4), wg: wagOf(q), role: q.ov >= baseOv ? 'key' : 'rot' };
+    }
+    if (q.mental == null || q.phys == null) {
+      initPlayerWellbeing(q, { team: t, careerP: s && t.id === s.me ? s.p : null, force: true });
+    }
+  });
+
+  t.lu = null;
+  assignTeamShirtNumbers(t, { careerP: s && t.id === s.me ? s.p : null });
+  autoAssignTeamRoles(t, { careerP: s && t.id === s.me ? s.p : null });
+  return t;
+}
+
 
 export const getFormationSlots = (t?: Team): { sp: SubRole; x: number; y: number; pos: Position }[] => {
   const raw = t?.form === 'custom' && t.cf && t.cf.length === 11 ? t.cf : FSD[t?.form || '4-4-2'] || FSD['4-4-2'];
@@ -3716,7 +3879,7 @@ export function listManagedClubsFromSaves(): ManagedClubCandidate[] {
       teamId: meTeam.id,
       name: clubName,
       tier: meTeam.tier,
-      tierLabel: TN[meTeam.tier] || `Tier ${meTeam.tier + 1}`,
+      tierLabel: getTeamLeagueName(meTeam, { includeZone: true, withFlag: true }) || TN[meTeam.tier] || `Tier ${meTeam.tier + 1}`,
       season: ms.season || 1,
       squadCount: meTeam.sq?.length || 0,
       kc: [ms.club?.c1 || meTeam.kc?.[0] || '#158049', ms.club?.c2 || meTeam.kc?.[1] || '#f5c242'],

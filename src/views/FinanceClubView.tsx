@@ -37,7 +37,8 @@ import type {
 } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS, AWAY_KIT_PAIRINGS, getTurfGradeForLevel, STADIUM_STYLE_SPECS, getStadiumStyleSpec } from '../data/crestAndKitData';
-import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES, COACH_OUTFITS } from '../data/thaiFootballData';
+import { KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES, COACH_OUTFITS } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis, getShirtNo } from '../engine/playerCore';
 import { ovTextColorClass } from '../engine/missions';
@@ -3337,7 +3338,7 @@ export const FinanceClubView = React.memo<{
                 </span>
               ) : (
                 <>
-                  <span className="text-[var(--g)] shrink-0">{TN[me.tier]} · ก่อตั้ง พ.ศ. {k.founded || 2568}</span>
+                  <span className="text-[var(--g)] shrink-0">{getTeamLeagueName(me, { includeZone: true, withFlag: true })} · ก่อตั้ง พ.ศ. {k.founded || 2568}</span>
                   {k.motto && (
                     <span className="hidden sm:inline text-[var(--mut)] font-medium italic truncate">
                       · &ldquo;{k.motto}&rdquo;

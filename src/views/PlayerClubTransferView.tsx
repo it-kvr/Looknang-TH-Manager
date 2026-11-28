@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { GameState, Player, SubRole, Team } from '../types/game';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { TN, AR_T, LINE } from '../data/thaiFootballData';
-import { getT3ZoneLabel } from '../data/leagueStructures';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import {
   ovMe,
@@ -253,11 +253,11 @@ export const PlayerClubTransferView = React.memo<{
       d.lg = dest.tier;
       assignTeamShirtNumbers(dest);
       syncMe(d);
-      pushFeed(d, 'ย้ายทีม', `🤝 ${d.p.name} ย้ายร่วมทัพ ${dest.name} (${TN[dest.tier]}) สำเร็จ!`, 'ok');
+      pushFeed(d, 'ย้ายทีม', `🤝 ${d.p.name} ย้ายร่วมทัพ ${dest.name} (${getTeamLeagueName(dest, { short: true })}) สำเร็จ!`, 'ok');
     });
     SFX.win();
     setRejectedClubs({});
-    onToast(`🎉 ยินดีด้วย! คุณย้ายร่วมทีม ${targetTeam.name} (${TN[targetTeam.tier]}) แล้ว`);
+    onToast(`🎉 ยินดีด้วย! คุณย้ายร่วมทีม ${targetTeam.name} (${getTeamLeagueName(targetTeam, { short: true })}) แล้ว`);
   };
 
   const passLabel = meTeam.pass === 0 ? 'ต่อบอลสั้น' : meTeam.pass === 2 ? 'บอลยาว' : meTeam.pass === 3 ? 'สวนกลับตรง' : 'ผสมสมดุล';
@@ -281,7 +281,7 @@ export const PlayerClubTransferView = React.memo<{
             <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate flex items-center gap-1.5 group-hover:text-[var(--g)] transition-colors">
               <span className="truncate">{meTeam.name}</span>
               <span className="text-[11px] mland:text-[9px] font-semibold text-[var(--g)] shrink-0">
-                อันดับ {clubLeaguePos}/{divisionTable.length} · {TN[meTeam.tier]}{meTeam.tier === 0 ? ` (${getT3ZoneLabel(meTeam.zone)})` : ''}
+                อันดับ {clubLeaguePos}/{divisionTable.length} · {getTeamLeagueName(meTeam, { includeZone: true, withFlag: true })}
               </span>
             </div>
             <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1.5">
@@ -546,7 +546,7 @@ export const PlayerClubTransferView = React.memo<{
                     onClick={() => { SFX.tap(); setBoardTab('division'); }}
                     className={`seg-btn text-[11px] mland:text-[9px] ${boardTab === 'division' ? 'seg-btn-active' : ''}`}
                   >
-                    🏆 ท็อป 5 {TN[meTeam.tier]}
+                    🏆 ท็อป 5 {getTeamLeagueName(meTeam, { short: true })}
                   </button>
                 </div>
                 <span className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] tabular">
@@ -602,7 +602,7 @@ export const PlayerClubTransferView = React.memo<{
                               )}
                             </div>
                             <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate tabular">
-                              {row.team.name} · {TN[row.team.tier]} · {row.apps} นัด · เรตติ้ง {row.avgRating ? row.avgRating.toFixed(2) : '-'}
+                              {row.team.name} · {getTeamLeagueName(row.team, { short: true })} · {row.apps} นัด · เรตติ้ง {row.avgRating ? row.avgRating.toFixed(2) : '-'}
                             </div>
                           </div>
                         </div>

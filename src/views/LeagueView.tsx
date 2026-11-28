@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -34,6 +34,7 @@ import {
   getRankZoneBadge,
   getSeasonCalendarMds,
   getT3ZoneLabel,
+  getTeamLeagueName,
   getWorldLeagueSpec
 } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
@@ -92,6 +93,7 @@ export const LeagueView = React.memo<{
   onToast?: (msg: string) => void;
 }>(({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, onOpenDilemma, onToast }) => {
   const me = state.teams[state.me];
+  const myLeagueName = useMemo(() => getTeamLeagueName(me, { includeZone: true, withFlag: true }), [me]);
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
   const sub = rawSub === 5 ? 2 : rawSub;
@@ -102,11 +104,31 @@ export const LeagueView = React.memo<{
   const [worldViewMode, setWorldViewMode] = useState<'table' | 'scout'>('table');
   const [worldConfed, setWorldConfed] = useState<'all' | ForeignConfed>('all');
   const [worldCountry, setWorldCountry] = useState<string>('ALL');
-  const [worldLeagueCode, setWorldLeagueCode] = useState<string>(() => WORLD_LEAGUE_SPECS[0]?.code || 'GB');
+  const [worldLeagueCode, setWorldLeagueCode] = useState<string>(() =>
+    me.tier >= 3 && me.leagueCode ? me.leagueCode : (WORLD_LEAGUE_SPECS[0]?.code || 'GB')
+  );
+
+  useEffect(() => {
+    if (me.tier >= 3 && me.leagueCode) {
+      setWorldLeagueCode(me.leagueCode);
+      setWorldConfed('all');
+      setWorldViewMode('table');
+    } else if (me.tier === 0) {
+      setT3Zone(me.zone === 1 ? 1 : 0);
+    }
+  }, [me.id, me.tier, me.leagueCode, me.zone]);
 
   const tb = useMemo(
-    () => sortTable(state.teams.filter((t) => t.tier === vt && (vt !== 0 || (t.zone ?? 0) === t3Zone))),
-    [state.teams, vt, t3Zone]
+    () =>
+      sortTable(
+        state.teams.filter((t) => {
+          if (vt >= 3) {
+            return t.tier >= 3 && (!me.leagueCode || t.leagueCode === me.leagueCode);
+          }
+          return t.tier === vt && (vt !== 0 || (t.zone ?? 0) === t3Zone);
+        })
+      ),
+    [state.teams, vt, t3Zone, me.leagueCode]
   );
   const myLeaguePos = useMemo(() => {
     const idx = tb.findIndex((t) => t.id === state.me);
@@ -1358,17 +1380,60 @@ export const LeagueView = React.memo<{
                     ทำเนียบพลัง
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
-                    else onUpdateState((d) => { d.lg = me.tier; });
-                  }}
-                  className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
-                >
-                  ↩ กลับลีกฉัน
-                </button>
+                {(() => {
+                  const isViewingMyWorldLeague =
+                    me.tier >= 3 &&
+                    worldViewMode === 'table' &&
+                    (!me.leagueCode || activeWorldSpec?.code === me.leagueCode);
+                  if (!isViewingMyWorldLeague) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          if (me.tier >= 3) {
+                            setWorldConfed('all');
+                            setWorldViewMode('table');
+                            if (me.leagueCode) setWorldLeagueCode(me.leagueCode);
+                          } else if (me.tier === 0) {
+                            setT3Zone(me.zone === 1 ? 1 : 0);
+                          }
+                          if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
+                          else onUpdateState((d) => { d.lg = me.tier; });
+                        }}
+                        className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+                      >
+                        ↩ กลับลีกฉัน
+                      </button>
+                    );
+                  }
+                  const myWorldIdx = worldLeagueTable.findIndex((t) => t.id === state.me);
+                  const myWorldRank = myWorldIdx >= 0 ? myWorldIdx + 1 : null;
+                  const worldPrize = getLeaguePrizeMoney(
+                    3,
+                    myWorldRank || 1,
+                    Math.max(1, worldLeagueTable.length),
+                    activeWorldSpec?.code
+                  );
+                  return (
+                    <div className="flex items-center gap-2 shrink-0">
+                      {myWorldRank && (
+                        <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] tabular whitespace-nowrap">
+                          อันดับของคุณ #{myWorldRank}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => { SFX.tap(); setPrizeModalTier(3); }}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[10px] mland:text-[8px] font-bold text-[var(--ink)] cursor-pointer transition-colors shadow-xs shrink-0"
+                      >
+                        <Coins className="w-3 h-3 text-[#b47b00] dark:text-[var(--lamp)] shrink-0" />
+                        <span>รางวัล</span>
+                        <span className="text-[var(--g)] font-extrabold tabular">+{fmtMoney(worldPrize)}</span>
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1486,6 +1551,7 @@ export const LeagueView = React.memo<{
                 <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
                   {worldLeagueTable.map((t, i) => {
                     const zb = getRankZoneBadge(3, i + 1, worldLeagueTable.length, { leagueCode: activeWorldSpec.code });
+                    const isMe = t.id === state.me;
                     const gd = t.gf - t.ga;
                     return (
                       <button
@@ -1496,17 +1562,20 @@ export const LeagueView = React.memo<{
                         className={`w-full min-h-[26px] sm:min-h-[28px] mland:min-h-[20px] grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1 mland:py-0.5 text-left text-[11px] sm:text-xs mland:text-[9px] leading-none transition-colors cursor-pointer ${
                           zb.tone !== 'neutral'
                             ? `${zb.rowCls} hover:brightness-95`
-                            : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
+                            : isMe
+                              ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                              : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
                         }`}
                       >
                         <span className={`text-center tabular font-bold text-[10px] mland:text-[8.5px] rounded-md mland:rounded py-0.5 mland:py-[1px] leading-none ${rankBadgeFromTone(zb.tone)}`}>
                           {i + 1}
                         </span>
                         <div className="flex items-center justify-center [&>svg]:w-[17px] [&>svg]:h-[17px] sm:[&>svg]:w-[19px] sm:[&>svg]:h-[19px] mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
-                          <ClubCrest name={t.name} size={19} team={t} club={state.club} />
+                          <ClubCrest name={t.name} size={19} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                         </div>
                         <div className="min-w-0 pr-0.5 flex items-center gap-1">
-                          <span className="truncate font-semibold text-[var(--ink)]">{t.name}</span>
+                          <span className={`truncate ${isMe ? 'font-bold text-[var(--ink)]' : 'font-semibold text-[var(--ink)]'}`}>{t.name}</span>
+                          {isMe && <MyTeamBadge size="sm" />}
                         </div>
                         <div className="flex items-center justify-center">
                           {renderFormDots(t.fm)}
@@ -1540,7 +1609,9 @@ export const LeagueView = React.memo<{
                 </div>
 
                 <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
-                  {worldClubsBundle.filtered.map(({ team, meta, st, totalVal }, idx) => (
+                  {worldClubsBundle.filtered.map(({ team, meta, st, totalVal }, idx) => {
+                    const isMe = team.id === state.me;
+                    return (
                     <button
                       key={team.id}
                       type="button"
@@ -1548,16 +1619,21 @@ export const LeagueView = React.memo<{
                         SFX.tap();
                         onInspectTeam(team.id);
                       }}
-                      className="w-full grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 text-left text-[11px] sm:text-xs mland:text-[9px] even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75 transition-colors cursor-pointer"
+                      className={`w-full grid grid-cols-[22px_20px_minmax(0,1fr)_82px_40px_64px] sm:grid-cols-[26px_24px_minmax(0,1fr)_110px_54px_76px_74px] mland:grid-cols-[20px_18px_minmax(0,1fr)_84px_38px_56px] items-center gap-1 sm:gap-1.5 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 text-left text-[11px] sm:text-xs mland:text-[9px] transition-colors cursor-pointer ${
+                        isMe ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70' : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
+                      }`}
                     >
                       <span className="text-center tabular font-bold text-[10px] mland:text-[8.5px] text-[var(--mut)]">
                         {idx + 1}
                       </span>
                       <div className="flex items-center justify-center [&>svg]:w-[18px] [&>svg]:h-[18px] mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
-                        <ClubCrest name={team.name} size={19} team={team} club={state.club} />
+                        <ClubCrest name={team.name} size={19} team={team} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                       </div>
                       <div className="min-w-0">
-                        <div className="font-bold text-[var(--ink)] truncate leading-tight">{team.name}</div>
+                        <div className="font-bold text-[var(--ink)] truncate leading-tight flex items-center gap-1 min-w-0">
+                          <span className="truncate">{team.name}</span>
+                          {isMe && <MyTeamBadge size="2xs" />}
+                        </div>
                         <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] truncate">
                           {meta ? `${CONFED_META[meta.confed].icon} ${CONFED_META[meta.confed].short}` : 'นานาชาติ'} · {team.sq.length} คน
                         </div>
@@ -1593,7 +1669,8 @@ export const LeagueView = React.memo<{
                         {fmtMoneyNum(totalVal)}
                       </div>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -1797,7 +1874,7 @@ export const LeagueView = React.memo<{
                     {rec && onOpenMatchReport ? (
                       <button
                         type="button"
-                        onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${mdNumVal}`)}
+                        onClick={() => onOpenMatchReport(rec, `${myLeagueName} · นัดที่ ${mdNumVal}`)}
                         className="min-w-0 flex-1 text-left truncate hover:underline cursor-pointer"
                         title="ดูสรุปหลังเกม"
                       >
@@ -1815,7 +1892,7 @@ export const LeagueView = React.memo<{
                               rec.h,
                               rec.a,
                               rec.highlightClips!,
-                              `${TN[me.tier]} · นัดที่ ${mdNumVal}`,
+                              `${myLeagueName} · นัดที่ ${mdNumVal}`,
                               `${state.teams[rec.h]?.name || ''} ${rec.gh} - ${rec.ga} ${state.teams[rec.a]?.name || ''}`
                             )
                           }
@@ -1838,7 +1915,7 @@ export const LeagueView = React.memo<{
                       {rec && onOpenMatchReport && (
                         <button
                           type="button"
-                          onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${mdNumVal}`)}
+                          onClick={() => onOpenMatchReport(rec, `${myLeagueName} · นัดที่ ${mdNumVal}`)}
                           className="px-1.5 py-[1px] rounded bg-[var(--surface)]/85 border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] text-[9.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors whitespace-nowrap"
                           title="ดูหน้าจบเกม"
                         >
@@ -1860,13 +1937,25 @@ export const LeagueView = React.memo<{
 
 
   const renderStatsAndAwards = () => {
-    const statsTier = vt < 3 ? vt : me.tier;
-    const ts = state.teams.filter((t) => t.tier === statsTier && (statsTier !== 0 || (t.zone ?? 0) === t3Zone));
+    const isWorldStats = vt >= 3 && Boolean(activeWorldSpec);
+    const statsTier = isWorldStats ? 3 : (vt < 3 ? vt : me.tier);
+    const ts = state.teams.filter((t) => {
+      if (isWorldStats && activeWorldSpec) {
+        return (
+          t.tier >= 3 &&
+          (t.leagueCode === activeWorldSpec.code ||
+            (!t.leagueCode && getForeignTeamCountryMeta(t.name)?.code === activeWorldSpec.code))
+        );
+      }
+      return t.tier === statsTier && (statsTier !== 0 || (t.zone ?? 0) === t3Zone);
+    });
     const tbStats = sortTable(ts);
     const ps = ts.flatMap((t) => t.sq.map((q) => ({ q, t })));
     const totalPlayedInTier = ts.reduce((s, t) => s + t.p, 0);
     const maxPlayedInTier = ts.reduce((m, t) => Math.max(m, t.p), 0);
-    const totalRounds = DOMESTIC_LEAGUE_SPECS[statsTier === 0 || statsTier === 1 || statsTier === 2 ? statsTier : 2].matchdays;
+    const totalRounds = isWorldStats && activeWorldSpec
+      ? activeWorldSpec.matchdays
+      : DOMESTIC_LEAGUE_SPECS[statsTier === 0 || statsTier === 1 || statsTier === 2 ? statsTier : 2].matchdays;
     const isSeasonDone = maxPlayedInTier >= totalRounds && totalRounds > 0;
     const teamRankMap = new Map<number, number>(tbStats.map((t, idx) => [t.id, idx]));
 
@@ -2119,7 +2208,9 @@ export const LeagueView = React.memo<{
             </span>
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
             <span className="text-xs sm:text-sm mland:text-[10.5px] font-bold text-[var(--g)] truncate">
-              {TN[statsTier]}{statsTier === 0 ? ` (${getT3ZoneLabel(t3Zone)})` : ''}
+              {isWorldStats && activeWorldSpec
+                ? `${activeWorldSpec.flag} ${getWorldLeagueDisplay(activeWorldSpec.code, activeWorldSpec.name)}`
+                : `${TN[statsTier]}${statsTier === 0 ? ` (${getT3ZoneLabel(t3Zone)})` : ''}`}
             </span>
             <span aria-hidden="true" className="hidden sm:inline text-[var(--mut)]">·</span>
             <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
@@ -2128,6 +2219,23 @@ export const LeagueView = React.memo<{
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            {isWorldStats && activeWorldSpec && (
+              <select
+                aria-label="เลือกลีกต่างประเทศ"
+                value={activeWorldSpec.code}
+                onChange={(e) => {
+                  SFX.tap();
+                  setWorldLeagueCode(e.target.value);
+                }}
+                className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)] max-w-[210px]"
+              >
+                {WORLD_LEAGUE_SPECS.map((sp) => (
+                  <option key={sp.code} value={sp.code}>
+                    {sp.flag} {getWorldLeagueDisplay(sp.code, sp.name)}
+                  </option>
+                ))}
+              </select>
+            )}
             {statsTier === 0 && (
               <div className="seg-bar">
                 {([0, 1] as const).map((zIdx) => (
@@ -2448,18 +2556,23 @@ export const LeagueView = React.memo<{
               [0, 'ไทยลีก 3'],
               [1, 'ไทยลีก 2'],
               [2, 'ไทยลีก 1'],
-              ...(sub === 0 && worldClubsBundle.total > 0 ? ([[3, '🌏 33 ลีกโลก']] as const) : [])
+              ...(worldClubsBundle.total > 0 ? ([[3, '🌏 33 ลีกโลก']] as const) : [])
             ].map(([idx, lbl]) => {
               const tierIdx = Number(idx);
-              const isMyTier = tierIdx === me.tier;
-              const active = (sub === 2 && vt >= 3 ? me.tier : vt) === tierIdx;
+              const isMyTier = tierIdx >= 3 ? me.tier >= 3 : tierIdx === me.tier;
+              const active = (vt >= 3 ? 3 : vt) === tierIdx;
+              const tabTitle = tierIdx >= 3 ? '33 ลีกโลก' : (TN[tierIdx] || String(lbl));
               return (
                 <button
                   key={tierIdx}
                   type="button"
-                  title={isMyTier ? `${TN[tierIdx]} (ลีกของคุณ)` : TN[tierIdx]}
+                  title={isMyTier ? `${tabTitle} (ลีกของคุณ)` : tabTitle}
                   onClick={() => {
                     SFX.tap();
+                    if (tierIdx >= 3 && me.tier >= 3 && me.leagueCode) {
+                      setWorldLeagueCode(me.leagueCode);
+                      setWorldConfed('all');
+                    }
                     if (onShallowPatch) onShallowPatch(() => ({ lg: tierIdx }));
                     else onUpdateState((d) => { d.lg = tierIdx; });
                   }}
@@ -2538,33 +2651,60 @@ export const LeagueView = React.memo<{
             </div>
 
             <div className="shrink-0 px-4 pt-2.5 mland:px-3 mland:pt-2">
-              <div className="seg-bar w-full grid grid-cols-3">
-                {[0, 1, 2].map((tierIdx) => (
-                  <button
-                    key={tierIdx}
-                    type="button"
-                    onClick={() => { SFX.tap(); setPrizeModalTier(tierIdx); }}
-                    className={`seg-btn py-1 mland:py-0.5 inline-flex items-center justify-center gap-1 truncate ${prizeModalTier === tierIdx ? 'seg-btn-active' : ''}`}
-                  >
-                    <span className="truncate">{TN[tierIdx]}</span>
-                    {tierIdx === me.tier && <MyTeamBadge size="2xs" />}
-                  </button>
-                ))}
+              <div className={`seg-bar w-full grid ${me.tier >= 3 || prizeModalTier === 3 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                {[0, 1, 2, ...(me.tier >= 3 || prizeModalTier === 3 ? [3] : [])].map((tierIdx) => {
+                  const isWorldTab = tierIdx === 3;
+                  const tabLabel = isWorldTab
+                    ? activeWorldSpec
+                      ? `${activeWorldSpec.flag} ${activeWorldSpec.shortName}`
+                      : '🌏 ลีกต่างแดน'
+                    : TN[tierIdx];
+                  const isMyTab = isWorldTab ? me.tier >= 3 : tierIdx === me.tier;
+                  return (
+                    <button
+                      key={tierIdx}
+                      type="button"
+                      onClick={() => { SFX.tap(); setPrizeModalTier(tierIdx); }}
+                      className={`seg-btn py-1 mland:py-0.5 inline-flex items-center justify-center gap-1 truncate ${prizeModalTier === tierIdx ? 'seg-btn-active' : ''}`}
+                    >
+                      <span className="truncate">{tabLabel}</span>
+                      {isMyTab && <MyTeamBadge size="2xs" />}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-3 grid grid-cols-2 gap-1.5 mland:gap-1 content-start">
               {(() => {
-                const modalCount = prizeModalTier === 0 ? 12 : prizeModalTier === 1 ? 18 : 16;
+                const isWorldPrize = prizeModalTier >= 3;
+                const modalCount = isWorldPrize
+                  ? (activeWorldSpec?.teamCount || Math.max(10, worldLeagueTable.length || 20))
+                  : (prizeModalTier === 0 ? 12 : prizeModalTier === 1 ? 18 : 16);
+                const myWorldRank =
+                  me.tier >= 3 && activeWorldSpec?.code === me.leagueCode
+                    ? worldLeagueTable.findIndex((t) => t.id === state.me) + 1
+                    : 0;
                 return Array.from({ length: modalCount }, (_, idx) => {
                   const rank = idx + 1;
-                  const amount = getLeaguePrizeMoney(prizeModalTier, rank, modalCount);
-                  const zb = getRankZoneBadge(prizeModalTier, rank, modalCount);
-                  const isMyCurRank =
-                    prizeModalTier === me.tier &&
-                    myLeaguePos === rank &&
-                    vt === me.tier &&
-                    (me.tier !== 0 || (me.zone ?? 0) === t3Zone);
+                  const amount = getLeaguePrizeMoney(
+                    prizeModalTier,
+                    rank,
+                    modalCount,
+                    isWorldPrize ? activeWorldSpec?.code : undefined
+                  );
+                  const zb = getRankZoneBadge(
+                    prizeModalTier,
+                    rank,
+                    modalCount,
+                    isWorldPrize ? { leagueCode: activeWorldSpec?.code } : undefined
+                  );
+                  const isMyCurRank = isWorldPrize
+                    ? me.tier >= 3 && myWorldRank === rank
+                    : prizeModalTier === me.tier &&
+                      myLeaguePos === rank &&
+                      vt === me.tier &&
+                      (me.tier !== 0 || (me.zone ?? 0) === t3Zone);
                   return (
                     <div
                       key={rank}
@@ -2614,6 +2754,7 @@ export const ScheduleCalendarView = React.memo<{
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
 }>(({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay, onOpenHighlights, onOpenMatchReport }) => {
   const me = state.teams[state.me];
+  const myLeagueName = useMemo(() => getTeamLeagueName(me, { includeZone: true, withFlag: true }), [me]);
   const totalMd = state.fx.length || 30;
   const cal = useMemo(() => getSeasonCalendarMds(totalMd), [totalMd]);
 
@@ -2714,7 +2855,7 @@ export const ScheduleCalendarView = React.memo<{
               />
               <div className="min-w-0">
                 <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate">
-                  ฤดูกาลที่ {state.season} · {TN[me.tier]}{me.tier === 0 ? ` (${getT3ZoneLabel(me.zone)})` : ''}
+                  ฤดูกาลที่ {state.season} · {myLeagueName}
                 </div>
                 <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
                   <span>แข่งแล้ว {playedCount}/{totalMd} นัด ({progressPct}%) ·</span>
@@ -2934,7 +3075,7 @@ export const ScheduleCalendarView = React.memo<{
                         {rec && onOpenMatchReport ? (
                           <button
                             type="button"
-                            onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${roundPreview + 1}`)}
+                            onClick={() => onOpenMatchReport(rec, `${myLeagueName} · นัดที่ ${roundPreview + 1}`)}
                             title="ดูหน้าสรุปหลังเกม"
                             className="px-2 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] mland:text-[9px] font-extrabold tabular inline-flex items-center gap-1 cursor-pointer transition-colors"
                           >
@@ -2954,7 +3095,7 @@ export const ScheduleCalendarView = React.memo<{
                                 rec.h,
                                 rec.a,
                                 rec.highlightClips!,
-                                `${TN[me.tier]} · นัดที่ ${roundPreview + 1}`,
+                                `${myLeagueName} · นัดที่ ${roundPreview + 1}`,
                                 `${ht.name} ${rec.gh} - ${rec.ga} ${at.name}`
                               )
                             }
@@ -3304,7 +3445,7 @@ export const ScheduleCalendarView = React.memo<{
                               rec.h,
                               rec.a,
                               rec.highlightClips!,
-                              `${TN[me.tier]} · นัดที่ ${mdNum}`,
+                              `${myLeagueName} · นัดที่ ${mdNum}`,
                               `${state.teams[rec.h]?.name || ''} ${rec.gh} - ${rec.ga} ${state.teams[rec.a]?.name || ''}`
                             )
                           }
@@ -3327,7 +3468,7 @@ export const ScheduleCalendarView = React.memo<{
                       {rec && onOpenMatchReport ? (
                         <button
                           type="button"
-                          onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${mdNum}`)}
+                          onClick={() => onOpenMatchReport(rec, `${myLeagueName} · นัดที่ ${mdNum}`)}
                           title="ดูหน้าสรุปหลังเกม"
                           className={`inline-flex items-center gap-1 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold tabular shrink-0 cursor-pointer hover:brightness-110 transition-all shadow-2xs ${resCls}`}
                         >

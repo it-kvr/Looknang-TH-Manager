@@ -3,13 +3,13 @@ import { AlertTriangle, ArrowLeft, Check, ChevronRight, Fingerprint, FolderInput
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
-import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, TIER_STANDALONE_CLUBS, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
+import { ATT, BASE, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, TIER_STANDALONE_CLUBS, SFX0, KIT_P, SIGL, AR_T, CONFED_META, type ForeignConfed } from '../data/thaiFootballData';
 import { KIT_PATTERNS } from '../data/crestAndKitData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, getTeamClubIdentity, SPW, APPEARANCE_ORIGIN_PRESETS, getPresetGroupProfile, rndVis, type AppearancePresetGroup, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, ensurePlayableWorldClubSquad, localizeForeignTeams, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, getTeamClubIdentity, SPW, APPEARANCE_ORIGIN_PRESETS, getPresetGroupProfile, rndVis, type AppearancePresetGroup, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort, getClubLevelAndGrantMeta } from '../engine/simulation';
-import { T3_ZONE_NAMES, getT3ZoneLabel } from '../data/leagueStructures';
-import { applyModToTeamsArray, getActiveMod, getGameBrandDisplay } from '../engine/mods';
+import { T3_ZONE_NAMES, WORLD_LEAGUE_SPECS, getT3ZoneLabel, getTeamLeagueName, getWorldLeagueSpec } from '../data/leagueStructures';
+import { applyModToTeamsArray, getActiveMod, getGameBrandDisplay, getWorldLeagueDisplay } from '../engine/mods';
 import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
 import { ModManagerModal } from '../modals/ModManagerModal';
@@ -223,8 +223,17 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
   return pool;
 }
 
+export interface StartManagerConfig {
+  startTier: 0 | 1 | 2 | 3;
+  startLeagueCode?: string;
+  worldPreviewTeams?: Team[];
+  pickTeamName?: string;
+  t1?: Team[];
+  t2?: Team[];
+}
+
 export const MainMenu = React.memo<{
-  onStartManager: (slot: number, names: string[][], t0: Team[], pick: number, diff: number) => void;
+  onStartManager: (slot: number, names: string[][], t0: Team[], pick: number, diff: number, config?: StartManagerConfig) => void;
   onStartPlayer: (slot: number, profile: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'> & { age?: number; diff?: number }) => void;
   onLoadSave: (mode: GameMode, slot: number, state: GameState) => void;
   onToast: (msg: string) => void;
@@ -239,7 +248,16 @@ export const MainMenu = React.memo<{
     }
   };
   const [targetSlot, setTargetSlot] = useState<number>(1);
-  const [previewClubs, setPreviewClubs] = useState<{ names: string[][]; t0: Team[] } | null>(null);
+  const [previewClubs, setPreviewClubs] = useState<{
+    names: string[][];
+    t0: Team[];
+    t1: Team[];
+    t2: Team[];
+    worldByCode: Record<string, Team[]>;
+  } | null>(null);
+  const [startLeagueTier, setStartLeagueTier] = useState<0 | 1 | 2 | 3>(0);
+  const [startWorldConfed, setStartWorldConfed] = useState<'all' | ForeignConfed>('all');
+  const [startWorldLeagueCode, setStartWorldLeagueCode] = useState<string>(() => WORLD_LEAGUE_SPECS[0]?.code || 'GB');
   const [selectedClubIdx, setSelectedClubIdx] = useState<number>(0);
   const [clubFilter, setClubFilter] = useState<'all' | 'top' | 'mid' | 'underdog'>('all');
   const [t3ZoneFilter, setT3ZoneFilter] = useState<'all' | 0 | 1>('all');
@@ -407,6 +425,65 @@ export const MainMenu = React.memo<{
     return { base, attrs, subMap };
   };
 
+  const buildWorldPreviewForCode = (code: string): Team[] => {
+    const spec = getWorldLeagueSpec(code) || WORLD_LEAGUE_SPECS[0];
+    const list = spec.clubs.map((club, idx) => {
+      const ovDiff = clamp(club.baseOvr - BASE[2] + R(-2, 2), -6, 20);
+      const t = mkTeam(club.name, 2, idx, ovDiff, {
+        foreign: true,
+        nameRegion: spec.region,
+        natCode: spec.code,
+        kcOverride: club.kc,
+        allowImport: true,
+        keepName: true,
+        squadSize: 20,
+        leagueCode: spec.code
+      });
+      t.tier = 3;
+      t.foreign = 1;
+      t.leagueCode = spec.code;
+      ensurePlayableWorldClubSquad(t);
+      return t;
+    });
+    localizeForeignTeams(list);
+    const activeMod = getActiveMod();
+    if (activeMod) {
+      applyModToTeamsArray(list, activeMod);
+    }
+    return list;
+  };
+
+  const buildDomesticPreviewBundle = () => {
+    clearNamePool();
+    const names = genClubNames();
+    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true, zone: i < 12 ? 0 : 1 }));
+    const t1 = names[1].map((n, i) => mkTeam(n, 1, t0.length + i, R(-7, 7), { keepName: true }));
+    const t2 = names[2].map((n, i) => mkTeam(n, 2, t0.length + names[1].length + i, R(-7, 7), { keepName: true }));
+    const activeMod = getActiveMod();
+    if (activeMod) {
+      applyModToTeamsArray(t0, activeMod);
+      applyModToTeamsArray(t1, activeMod);
+      applyModToTeamsArray(t2, activeMod);
+      names[0] = t0.map((tm) => tm.name);
+      names[1] = t1.map((tm) => tm.name);
+      names[2] = t2.map((tm) => tm.name);
+    }
+    return { names, t0, t1, t2 };
+  };
+
+  const ensureWorldPreviewCached = (code: string) => {
+    setPreviewClubs((prev) => {
+      if (!prev || prev.worldByCode[code]) return prev;
+      return {
+        ...prev,
+        worldByCode: {
+          ...prev.worldByCode,
+          [code]: buildWorldPreviewForCode(code)
+        }
+      };
+    });
+  };
+
   const openManagerSetup = (slot: number) => {
     if (!slot) {
       SFX.tap();
@@ -415,16 +492,17 @@ export const MainMenu = React.memo<{
       return;
     }
     SFX.tap();
-    clearNamePool();
-    const names = genClubNames();
-    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true, zone: i < 12 ? 0 : 1 }));
-    const activeMod = getActiveMod();
-    if (activeMod) {
-      applyModToTeamsArray(t0, activeMod);
-      names[0] = t0.map((tm) => tm.name);
-    }
+    const dom = buildDomesticPreviewBundle();
+    const defaultWorldCode = startWorldLeagueCode || WORLD_LEAGUE_SPECS[0]?.code || 'GB';
     setTargetSlot(slot);
-    setPreviewClubs({ names, t0 });
+    setStartLeagueTier(0);
+    setStartWorldConfed('all');
+    setPreviewClubs({
+      ...dom,
+      worldByCode: {
+        [defaultWorldCode]: buildWorldPreviewForCode(defaultWorldCode)
+      }
+    });
     setSelectedClubIdx(0);
     setClubFilter('all');
     setT3ZoneFilter('all');
@@ -433,15 +511,27 @@ export const MainMenu = React.memo<{
 
   const rerollManagerClubs = () => {
     SFX.tap();
-    clearNamePool();
-    const names = genClubNames();
-    const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true, zone: i < 12 ? 0 : 1 }));
-    const activeMod = getActiveMod();
-    if (activeMod) {
-      applyModToTeamsArray(t0, activeMod);
-      names[0] = t0.map((tm) => tm.name);
+    if (startLeagueTier === 3) {
+      const code = startWorldLeagueCode || WORLD_LEAGUE_SPECS[0]?.code || 'GB';
+      setPreviewClubs((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          worldByCode: {
+            ...prev.worldByCode,
+            [code]: buildWorldPreviewForCode(code)
+          }
+        };
+      });
+      setSelectedClubIdx(0);
+      setClubFilter('all');
+      return;
     }
-    setPreviewClubs({ names, t0 });
+    const dom = buildDomesticPreviewBundle();
+    setPreviewClubs((prev) => ({
+      ...dom,
+      worldByCode: prev?.worldByCode || {}
+    }));
     setSelectedClubIdx(0);
     setClubFilter('all');
     setT3ZoneFilter('all');
@@ -668,7 +758,11 @@ export const MainMenu = React.memo<{
               </div>
               <div className="text-[9.5px] sm:text-[10px] mland:text-[8px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
                 ซีซัน {d.season} · นัด {d.md}/{d.fx?.length || 30}
-                {!isMgr && d.p ? ` · ${d.p.pos}${meTeam ? ` · ${meTeam.name}` : ''}` : ''}
+                {!isMgr && d.p
+                  ? ` · ${d.p.pos}${meTeam ? ` · ${meTeam.name}` : ''}`
+                  : meTeam
+                    ? ` · ${getTeamLeagueName(meTeam, { short: true, withFlag: true })}`
+                    : ''}
               </div>
             </div>
 
@@ -760,7 +854,25 @@ export const MainMenu = React.memo<{
   };
 
   if (step === 'ms' && previewClubs) {
-    const clubMetaList = previewClubs.t0.map((t, idx) => {
+    const worldFilteredSpecs = WORLD_LEAGUE_SPECS.filter(
+      (w) => startWorldConfed === 'all' || w.confed === startWorldConfed
+    );
+    const activeWorldSpec =
+      (getWorldLeagueSpec(startWorldLeagueCode) &&
+      (startWorldConfed === 'all' || getWorldLeagueSpec(startWorldLeagueCode)?.confed === startWorldConfed)
+        ? getWorldLeagueSpec(startWorldLeagueCode)
+        : worldFilteredSpecs[0]) || WORLD_LEAGUE_SPECS[0];
+
+    const activeLeagueTeams =
+      startLeagueTier === 0
+        ? previewClubs.t0
+        : startLeagueTier === 1
+          ? previewClubs.t1
+          : startLeagueTier === 2
+            ? previewClubs.t2
+            : previewClubs.worldByCode[activeWorldSpec.code] || [];
+
+    const clubMetaList = activeLeagueTeams.map((t, idx) => {
       const gm = getClubLevelAndGrantMeta(t);
       const clubIdentity = getTeamClubIdentity(t);
       return {
@@ -780,10 +892,10 @@ export const MainMenu = React.memo<{
     const filteredClubs = clubMetaList.filter(
       (item) =>
         (clubFilter === 'all' || item.tierBucket === clubFilter) &&
-        (t3ZoneFilter === 'all' || (item.team.zone ?? 0) === t3ZoneFilter)
+        (startLeagueTier !== 0 || t3ZoneFilter === 'all' || (item.team.zone ?? 0) === t3ZoneFilter)
     );
-    const activeIdx = previewClubs.t0[selectedClubIdx] ? selectedClubIdx : 0;
-    const selectedTeam = previewClubs.t0[activeIdx];
+    const activeIdx = activeLeagueTeams[selectedClubIdx] ? selectedClubIdx : 0;
+    const selectedTeam = activeLeagueTeams[activeIdx] || previewClubs.t0[0];
     const selectedMeta = clubMetaList[activeIdx] || clubMetaList[0];
     const selectedClubId = selectedMeta.clubIdentity;
     const selectedXi = xi(selectedTeam);
@@ -813,21 +925,32 @@ export const MainMenu = React.memo<{
 
     const clubCount = filteredClubs.length;
     const gridLayoutCls =
-      clubCount > 16
+      clubCount > 20
         ? 'grid-cols-4 sm:grid-cols-6 grid-rows-6 sm:grid-rows-4'
-        : clubCount > 12
-          ? 'grid-cols-4 grid-rows-4'
-          : clubCount > 8
-            ? 'grid-cols-4 grid-rows-3'
-            : clubCount > 6
-              ? 'grid-cols-4 grid-rows-2'
-              : clubCount > 4
-                ? 'grid-cols-3 grid-rows-2'
-                : clubCount > 2
-                  ? 'grid-cols-2 grid-rows-2'
-                  : clubCount === 2
-                    ? 'grid-cols-2 grid-rows-1'
-                    : 'grid-cols-1 grid-rows-1';
+        : clubCount > 16
+          ? 'grid-cols-4 sm:grid-cols-5 grid-rows-5 sm:grid-rows-4'
+          : clubCount > 12
+            ? 'grid-cols-4 grid-rows-4'
+            : clubCount > 8
+              ? 'grid-cols-4 grid-rows-3'
+              : clubCount > 6
+                ? 'grid-cols-4 grid-rows-2'
+                : clubCount > 4
+                  ? 'grid-cols-3 grid-rows-2'
+                  : clubCount > 2
+                    ? 'grid-cols-2 grid-rows-2'
+                    : clubCount === 2
+                      ? 'grid-cols-2 grid-rows-1'
+                      : 'grid-cols-1 grid-rows-1';
+
+    const headerLeagueDesc =
+      startLeagueTier === 0
+        ? `ไทยลีก 3 (${previewClubs.t0.length} ทีม · 2 โซน)`
+        : startLeagueTier === 1
+          ? `ไทยลีก 2 (${previewClubs.t1.length} ทีม)`
+          : startLeagueTier === 2
+            ? `ไทยลีก 1 (${previewClubs.t2.length} ทีม)`
+            : `${activeWorldSpec.flag} ${getWorldLeagueDisplay(activeWorldSpec.code, activeWorldSpec.name)} (${activeLeagueTeams.length} ทีม)`;
 
     return (
       <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] safe-all p-1 sm:p-2 lg:p-3 mland:p-1">
@@ -848,8 +971,8 @@ export const MainMenu = React.memo<{
                   <h2 className="text-sm sm:text-lg lg:text-xl mland:text-xs font-extrabold font-display text-[var(--ink)] truncate leading-none">
                     เลือกสโมสรเริ่มต้น
                   </h2>
-                  <span className="hidden sm:inline mland:inline text-[11px] sm:text-xs mland:text-[9px] font-medium text-[var(--mut)] tabular shrink-0">
-                    ไทยลีก 3 (24 ทีม · 2 โซน) · ช่อง #{targetSlot}
+                  <span className="hidden sm:inline mland:inline text-[11px] sm:text-xs mland:text-[9px] font-medium text-[var(--mut)] tabular truncate">
+                    {headerLeagueDesc} · ช่อง #{targetSlot}
                   </span>
                 </div>
               </div>
@@ -885,37 +1008,133 @@ export const MainMenu = React.memo<{
 
           {/* Main 1-Screen Workspace (Zero Vertical Scroll) */}
           <div className="flex-1 min-h-0 w-full mx-auto px-1.5 sm:px-3 lg:px-4 mland:px-1.5 py-1.5 sm:py-2.5 lg:py-3 mland:py-1 overflow-hidden flex flex-col sm:grid mland:grid sm:grid-cols-[1.52fr_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.42fr_1fr] mland:grid-rows-[minmax(0,1fr)] gap-1.5 sm:gap-2.5 lg:gap-3.5 mland:gap-1.5">
-            {/* Left Column: Filter Bar + Full-Size Club Grid */}
-            <section className="flex-1 min-h-0 mland:h-full flex flex-col gap-1.5 sm:gap-2 mland:gap-1 overflow-hidden">
+            {/* Left Column: League Selector + Filter Bar + Full-Size Club Grid */}
+            <section className="flex-1 min-h-0 mland:h-full flex flex-col gap-1 sm:gap-1.5 mland:gap-1 overflow-hidden">
+              {/* Row 1: Starting League Switcher */}
+              <div className="shrink-0 flex flex-wrap items-center gap-1.5 min-w-0">
+                <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
+                  {(
+                    [
+                      [0, 'ไทยลีก 3'],
+                      [1, 'ไทยลีก 2'],
+                      [2, 'ไทยลีก 1'],
+                      [3, `🌐 ลีกต่างประเทศ (${WORLD_LEAGUE_SPECS.length})`]
+                    ] as const
+                  ).map(([tierId, tierLabel]) => (
+                    <button
+                      key={tierId}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setStartLeagueTier(tierId);
+                        setSelectedClubIdx(0);
+                        setClubFilter('all');
+                        setT3ZoneFilter('all');
+                        if (tierId === 3) {
+                          ensureWorldPreviewCached(activeWorldSpec.code);
+                        }
+                      }}
+                      className={`seg-btn sm:!px-2.5 sm:!py-1 sm:!text-xs whitespace-nowrap ${
+                        startLeagueTier === tierId ? 'seg-btn-active' : ''
+                      }`}
+                    >
+                      {tierLabel}
+                    </button>
+                  ))}
+                </div>
+
+                {startLeagueTier === 3 && (
+                  <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
+                    <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
+                      {(
+                        [
+                          ['all', 'ทั้งหมด'],
+                          ['asia', `${CONFED_META.asia.icon} ${CONFED_META.asia.short}`],
+                          ['europe', `${CONFED_META.europe.icon} ${CONFED_META.europe.short}`],
+                          ['americas', `${CONFED_META.americas.icon} ${CONFED_META.americas.short}`],
+                          ['africa', `${CONFED_META.africa.icon} ${CONFED_META.africa.short}`]
+                        ] as const
+                      ).map(([cid, clbl]) => (
+                        <button
+                          key={cid}
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            setStartWorldConfed(cid);
+                            setSelectedClubIdx(0);
+                            setClubFilter('all');
+                            const cur = getWorldLeagueSpec(startWorldLeagueCode);
+                            const nextSpec =
+                              cid === 'all' || cur?.confed === cid
+                                ? cur || WORLD_LEAGUE_SPECS[0]
+                                : WORLD_LEAGUE_SPECS.find((w) => w.confed === cid) || WORLD_LEAGUE_SPECS[0];
+                            setStartWorldLeagueCode(nextSpec.code);
+                            ensureWorldPreviewCached(nextSpec.code);
+                          }}
+                          className={`seg-btn sm:!px-2 sm:!py-1 sm:!text-[11px] whitespace-nowrap ${
+                            startWorldConfed === cid ? 'seg-btn-active' : ''
+                          }`}
+                        >
+                          {clbl}
+                        </button>
+                      ))}
+                    </div>
+
+                    <select
+                      aria-label="เลือกลีกต่างประเทศเริ่มต้น"
+                      value={activeWorldSpec.code}
+                      onChange={(e) => {
+                        SFX.tap();
+                        const nextCode = e.target.value;
+                        setStartWorldLeagueCode(nextCode);
+                        setSelectedClubIdx(0);
+                        setClubFilter('all');
+                        ensureWorldPreviewCached(nextCode);
+                      }}
+                      className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] sm:text-xs mland:text-[9px] font-bold text-[var(--ink)] cursor-pointer focus:outline-none focus:border-[var(--g)] max-w-[230px]"
+                    >
+                      {worldFilteredSpecs.map((sp) => (
+                        <option key={sp.code} value={sp.code}>
+                          {sp.flag} {getWorldLeagueDisplay(sp.code, sp.name)} ({sp.teamCount} ทีม · OVR {sp.baseOvr})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 2: Zone (T3 only) + Stature Filter */}
               <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5 min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                  <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
-                    {(
-                      [
-                        ['all', `ทั้งหมด (${clubMetaList.length})`],
-                        [0, `${T3_ZONE_NAMES[0].replace('โซน', '')} (${clubMetaList.filter((c) => (c.team.zone ?? 0) === 0).length})`],
-                        [1, `${T3_ZONE_NAMES[1].replace('โซน', '')} (${clubMetaList.filter((c) => (c.team.zone ?? 0) === 1).length})`]
-                      ] as const
-                    ).map(([zk, zl]) => (
-                      <button
-                        key={String(zk)}
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setT3ZoneFilter(zk);
-                          const firstMatch = clubMetaList.find(
-                            (c) => (zk === 'all' || (c.team.zone ?? 0) === zk) && (clubFilter === 'all' || c.tierBucket === clubFilter)
-                          );
-                          if (firstMatch && zk !== 'all' && (selectedTeam.zone ?? 0) !== zk) {
-                            setSelectedClubIdx(firstMatch.idx);
-                          }
-                        }}
-                        className={`seg-btn sm:!px-2.5 sm:!py-1 sm:!text-xs ${t3ZoneFilter === zk ? 'seg-btn-active' : ''}`}
-                      >
-                        {zl}
-                      </button>
-                    ))}
-                  </div>
+                  {startLeagueTier === 0 && (
+                    <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
+                      {(
+                        [
+                          ['all', `ทั้งหมด (${clubMetaList.length})`],
+                          [0, `${T3_ZONE_NAMES[0].replace('โซน', '')} (${clubMetaList.filter((c) => (c.team.zone ?? 0) === 0).length})`],
+                          [1, `${T3_ZONE_NAMES[1].replace('โซน', '')} (${clubMetaList.filter((c) => (c.team.zone ?? 0) === 1).length})`]
+                        ] as const
+                      ).map(([zk, zl]) => (
+                        <button
+                          key={String(zk)}
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            setT3ZoneFilter(zk);
+                            const firstMatch = clubMetaList.find(
+                              (c) => (zk === 'all' || (c.team.zone ?? 0) === zk) && (clubFilter === 'all' || c.tierBucket === clubFilter)
+                            );
+                            if (firstMatch && zk !== 'all' && (selectedTeam.zone ?? 0) !== zk) {
+                              setSelectedClubIdx(firstMatch.idx);
+                            }
+                          }}
+                          className={`seg-btn sm:!px-2.5 sm:!py-1 sm:!text-xs ${t3ZoneFilter === zk ? 'seg-btn-active' : ''}`}
+                        >
+                          {zl}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
                     {(
                       [
@@ -932,7 +1151,7 @@ export const MainMenu = React.memo<{
                           SFX.tap();
                           setClubFilter(fk);
                           const firstMatch = clubMetaList.find(
-                            (c) => (fk === 'all' || c.tierBucket === fk) && (t3ZoneFilter === 'all' || (c.team.zone ?? 0) === t3ZoneFilter)
+                            (c) => (fk === 'all' || c.tierBucket === fk) && (startLeagueTier !== 0 || t3ZoneFilter === 'all' || (c.team.zone ?? 0) === t3ZoneFilter)
                           );
                           if (firstMatch && fk !== 'all' && selectedMeta.tierBucket !== fk) {
                             setSelectedClubIdx(firstMatch.idx);
@@ -1105,7 +1324,7 @@ export const MainMenu = React.memo<{
                     </h3>
                     <div className="flex items-center gap-1 mt-0.5 text-[10px] sm:text-xs mland:text-[8.5px] text-[var(--mut)] truncate tabular">
                       <span className="font-semibold text-[var(--ink)]/80 shrink-0">
-                        {getT3ZoneLabel(selectedTeam.zone)}
+                        {getTeamLeagueName(selectedTeam, { includeZone: true, withFlag: true })}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span
@@ -1329,7 +1548,14 @@ export const MainMenu = React.memo<{
                   type="button"
                   onClick={() => {
                     SFX.tap();
-                    onStartManager(targetSlot, previewClubs.names, previewClubs.t0, activeIdx, diff);
+                    onStartManager(targetSlot, previewClubs.names, previewClubs.t0, activeIdx, diff, {
+                      startTier: startLeagueTier,
+                      startLeagueCode: startLeagueTier === 3 ? activeWorldSpec.code : undefined,
+                      worldPreviewTeams: startLeagueTier === 3 ? activeLeagueTeams : undefined,
+                      pickTeamName: selectedTeam.name,
+                      t1: previewClubs.t1,
+                      t2: previewClubs.t2
+                    });
                   }}
                   className="btn btn-gold btn-md lg:btn-lg mland:btn-sm w-full font-extrabold text-sm lg:text-base mland:text-xs"
                 >

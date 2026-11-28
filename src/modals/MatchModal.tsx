@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, TimelineKind, MatchTimelineItem, ArchivedStreamComment, MatchHighlightClip, MatchHighlightKind } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE, baseRoleOf } from '../data/thaiFootballData';
+import { RN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE, baseRoleOf } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
 import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
 import { useScrollTopOnChange } from '../utils/scrollReset';
@@ -12935,7 +12936,7 @@ export const MatchModal = React.memo<{
                 ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
                 : kind === 'cup'
                   ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-                  : `⚽ ${TN[homeOrig.tier]} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
+                  : `⚽ ${getTeamLeagueName(homeOrig, { short: true, withFlag: true })} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
 
   const compShortTitle =
     kind === 'nt'
@@ -12952,7 +12953,7 @@ export const MatchModal = React.memo<{
                 ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.short} · ${RN[state.dc?.r ?? 0] || `ร.${(state.dc?.r ?? 0) + 1}`}`
                 : kind === 'cup'
                   ? `🏆 ถ้วย · ${RN[state.cup.r] || `ร.${state.cup.r + 1}`}`
-                  : `⚽ ${TN[homeOrig.tier]} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
+                  : `⚽ ${getTeamLeagueName(homeOrig, { short: true, withFlag: true })} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
 
   const cycleMatchSpeed = useCallback(() => {
     const order: readonly (0.25 | 0.5 | 1 | 2 | 5)[] = [0.25, 0.5, 1, 2, 5];

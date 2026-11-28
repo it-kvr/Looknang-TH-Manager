@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { FastForward, RotateCw, Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from '../pwa.tsx';
 import type { GameMode, GameState, MainTab, Player, Team } from '../types/game';
-import { TN } from '../data/thaiFootballData';
+import { getTeamLeagueName } from '../data/leagueStructures';
 import { SFX } from '../utils/audioTheme';
 import { ovMe } from '../engine/playerCore';
 import { getActiveFavBoost } from '../engine/wellbeing';
@@ -254,7 +254,9 @@ export const AppTopHud = React.memo<{
                   <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
                 </>
               )}
-              <span className="truncate font-medium">{TN[me.tier]}</span>
+              <span className="truncate font-medium">
+                {getTeamLeagueName(me, { includeZone: true, withFlag: true })}
+              </span>
               <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
               <span className="shrink-0">ซีซั่น {state.season}</span>
               <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
