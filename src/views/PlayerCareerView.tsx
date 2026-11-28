@@ -44,6 +44,7 @@ import {
   isTeamFavoritePlayer
 } from '../engine/wellbeing';
 import { PlayerWellbeingCard } from '../components/PlayerWellbeingCard';
+import { PlayerCareerMilestones } from '../components/PlayerCareerMilestones';
 
 export const PlayerCareerView = React.memo<{
   state: GameState;
@@ -52,7 +53,7 @@ export const PlayerCareerView = React.memo<{
   onOpenSeasonStats?: (season?: number) => void;
   navIntent?: NavIntent | null;
 }>(({ state, onUpdateState, onToast, onOpenSeasonStats, navIntent }) => {
-  const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'history'>('plan');
+  const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'milestones' | 'history'>('plan');
   const [skillSubTab, setSkillSubTab] = useState<'perks' | 'traits' | 'roles' | 'sig'>('perks');
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [showAppearanceModal, setShowAppearanceModal] = useState(false);
@@ -62,6 +63,10 @@ export const PlayerCareerView = React.memo<{
     if (navIntent?.tab === 'p') {
       if (navIntent.sub === 'missions') {
         setCareerTab('missions');
+      } else if (navIntent.sub === 'milestones') {
+        setCareerTab('milestones');
+      } else if (navIntent.sub === 'history') {
+        setCareerTab('history');
       } else if (!navIntent.sub || navIntent.sub === 'plan') {
         setCareerTab('plan');
       }
@@ -237,19 +242,20 @@ export const PlayerCareerView = React.memo<{
       </div>
 
       <div className="gap-2 mland:gap-1 h-full flex flex-col min-h-0">
-        <div className="seg-bar grid grid-cols-5 w-full shrink-0">
+        <div className="seg-bar flex items-stretch w-full shrink-0 overflow-x-auto no-scrollbar">
           {([
             ['plan', '📅 แผนฝึก'],
             ['missions', '🎯 ภารกิจ'],
             ['perks', '🌟 สกิล & สไตล์'],
             ['stats', '📊 ค่าพลัง'],
+            ['milestones', '🏆 หมุดหมาย'],
             ['history', '📜 ประวัติ']
           ] as const).map(([k, lbl]) => (
             <button
               key={k}
               type="button"
               onClick={() => { SFX.tap(); setCareerTab(k); }}
-              className={`seg-btn py-1.5 mland:py-1 px-1 whitespace-nowrap ${careerTab === k ? 'seg-btn-active' : ''}`}
+              className={`seg-btn flex-1 min-w-fit py-1.5 mland:py-1 px-1.5 mland:px-1 whitespace-nowrap ${careerTab === k ? 'seg-btn-active' : ''}`}
             >
               {lbl}
             </button>
@@ -374,6 +380,14 @@ export const PlayerCareerView = React.memo<{
                   compact
                 />
               </div>
+              <PlayerCareerMilestones
+                player={fakePlayer}
+                team={meTeam}
+                state={state}
+                careerProfile={p}
+                variant="compact"
+                onOpenFull={() => setCareerTab('milestones')}
+              />
             </div>
           )}
 
@@ -737,6 +751,18 @@ export const PlayerCareerView = React.memo<{
                 state={state}
                 careerProfile={p}
                 variant="inline"
+              />
+            </div>
+          )}
+
+          {careerTab === 'milestones' && (
+            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 pb-2">
+              <PlayerCareerMilestones
+                player={fakePlayer}
+                team={meTeam}
+                state={state}
+                careerProfile={p}
+                variant="full"
               />
             </div>
           )}

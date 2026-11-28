@@ -3,7 +3,11 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import {registerPWA} from './pwa.tsx';
+import {applyTheme, getSettings} from './utils/audioTheme.ts';
+import {applyActiveModToRuntimeData} from './engine/mods.ts';
 
+applyTheme(getSettings().theme);
+applyActiveModToRuntimeData();
 registerPWA();
 
 if (typeof document !== 'undefined') {

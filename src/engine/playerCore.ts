@@ -3251,14 +3251,14 @@ export function getTeamClubIdentity(t: Team, s?: GameState | null): ClubIdentity
   const h = ([...(t.name || 'T')].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
   const icKeys = Object.keys(CREST_IC);
   const [c1, c2] = teamKits(t, s);
-  const isForeignClub = t.tier >= 3 || t.foreign === 1 || Boolean(getForeignTeamCountryMeta(t.name));
+  const isForeignClub = t.tier >= 3 || t.foreign === 1 || Boolean(getForeignTeamCountryMeta(t.origName || t.name));
   const homePat = (h >> 3) % KIT_PATTERNS.length;
   const awayPairPool = AWAY_KIT_PAIRINGS[homePat] || [0, 5, 4, 12];
   const awayPat = awayPairPool[(h >> 7) % awayPairPool.length];
   return {
     name: t.name,
     nick: '',
-    std: isForeignClub ? getForeignClubStadiumName(t.name) : 'สนาม' + t.name,
+    std: t.stadiumName || (isForeignClub ? getForeignClubStadiumName(t.origName || t.name) : 'สนาม' + t.name),
     c1,
     c2,
     shape: h % CREST_SHAPES.length,

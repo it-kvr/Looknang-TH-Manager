@@ -10,6 +10,7 @@ type HalftimeTalkTone = 'attack' | 'press' | 'balanced' | 'counter' | 'defend' |
 
 import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen, pickBestCaptain, scoreSetPieceCandidate } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance, computeMatchStreamProjection, fmtFansShort, EXTRA_CUP_META, computeTeamFacilityMatchModifiers, combineMatchStatDeltas } from '../engine/simulation';
+import { getModRealismSettings } from '../engine/mods';
 import { buildMatchEnvironment } from '../engine/matchEnv';
 import { generateLiveStreamComment, getMatchBroadcastChannel, getStreamViewerTier, type LiveCommentItem, type LiveCommentKind } from '../engine/liveStreamChat';
 import { getPlayerTalent } from '../engine/missions';
@@ -4282,10 +4283,19 @@ export const MatchModal = React.memo<{
       : 60;
     const miracleGoalScale = miracleAtt && (w.miracle?.maxDeficit ?? 2) >= 3 ? 0.24 : miracleAtt ? 0.20 : 0;
     const luckGoalBias = (attBlessed ? 0.14 : 0) + miracleGoalScale - (gkBlessed ? 0.14 : 0) - (miracleDef ? 0.10 : 0);
+    const realisticScoring = getModRealismSettings().realisticScoring;
     const goalProb =
       flightType === 'penalty'
         ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.0045 - (agentHasTrait(gk, 'penalty_saver') ? 0.06 : 0) + luckGoalBias * 0.45, 0.52, 0.94)
-        : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (flightType === 'freekick' ? 0.03 + (agentHasTrait(shooter, 'setpiece_specialist') ? 0.05 : 0) : 0) + luckGoalBias, 0.09, 0.78);
+        : clamp(
+            (realisticScoring ? 0.22 : 0.27) +
+              edge * 0.0065 +
+              (shooterScore - gkSaveScore) * 0.004 +
+              (flightType === 'freekick' ? 0.03 + (agentHasTrait(shooter, 'setpiece_specialist') ? 0.05 : 0) : 0) +
+              luckGoalBias,
+            0.08,
+            realisticScoring ? 0.62 : 0.78
+          );
 
     if (Math.random() < goalProb) {
       const gkSaveX =
@@ -8803,10 +8813,18 @@ export const MatchModal = React.memo<{
             (shooter.d.cur + (shooter.sig === 'cur' ? 8 : 0)) * 0.25 +
             (shooter.d.pw + (shooter.sig === 'pw' ? 8 : 0)) * 0.25
           : 60;
+        const realisticScoring = getModRealismSettings().realisticScoring;
         const goalProb =
           b.flightType === 'penalty'
             ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.004, 0.65, 0.9)
-            : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (b.flightType === 'freekick' ? 0.03 : 0), 0.14, 0.54);
+            : clamp(
+                (realisticScoring ? 0.22 : 0.27) +
+                  edge * 0.0065 +
+                  (shooterScore - gkSaveScore) * 0.004 +
+                  (b.flightType === 'freekick' ? 0.03 : 0),
+                0.11,
+                realisticScoring ? 0.46 : 0.54
+              );
         isGoal = Math.random() < goalProb;
       }
 
@@ -10198,6 +10216,10 @@ export const MatchModal = React.memo<{
         pushLog(curMin, `🔥 จบช่วงพายุโหมบุกปาฏิหาริย์ของ ${mTeam.name}`, 'sys');
         w.miracle = null;
       }
+    }
+
+    if (getModRealismSettings().disableSupernatural) {
+      return;
     }
 
     // 1. Miracle Comeback Surge ("โหมดปาฏิหาริย์ / พลิกนรก") — sustained comeback storm when trailing by 2+ (or 3+ hell-flip!)

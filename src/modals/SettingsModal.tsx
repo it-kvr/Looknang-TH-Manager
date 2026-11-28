@@ -12,6 +12,7 @@ import {
   Minimize2,
   Monitor,
   Moon,
+  Package,
   Plus,
   Save,
   SlidersHorizontal,
@@ -35,7 +36,9 @@ import {
 import { exportSaveCode, cleanImportJson, readSaveFileText } from '../engine/saveCodec';
 import { firstEmptySlot, getSlotCount, loadGameFromSlot, MAX_SLOTS, setSlotCount } from '../engine/playerCore';
 import { GAME_AUTO_FOLDER_NAME, saveGameToAutoFolder } from '../engine/saveFolder';
+import { applyActiveModToRuntimeData, applyModToTeamsArray, getActiveMod } from '../engine/mods';
 import { SaveFolderModal } from './SaveFolderModal';
+import { ModManagerModal } from './ModManagerModal';
 
 const MATCH_SPEED_OPTIONS = [
   { value: 0.25, short: '0.25x', label: 'ช้าละเอียด' },
@@ -114,6 +117,7 @@ export const SettingsModal: React.FC<{
   onClose: () => void;
   onExitToMenu: () => void;
   onSaveNow?: () => void;
+  onUpdateState?: (updater: (draft: GameState) => void) => void;
   onLoadSaveFile?: (loaded: GameState, targetSlot: number) => void;
   onOpenSecretBoost: () => void;
   onToast: (msg: string) => void;
@@ -125,6 +129,7 @@ export const SettingsModal: React.FC<{
   onClose,
   onExitToMenu,
   onSaveNow,
+  onUpdateState,
   onLoadSaveFile,
   onOpenSecretBoost,
   onToast,
@@ -139,6 +144,8 @@ export const SettingsModal: React.FC<{
   const [targetSlot, setTargetSlot] = useState<number>(slot);
   const [slotTick, setSlotTick] = useState(0);
   const [showFolderModal, setShowFolderModal] = useState(false);
+  const [showModModal, setShowModModal] = useState(false);
+  const [modTick, setModTick] = useState(0);
   const [folderInitialTab, setFolderInitialTab] = useState<'folder' | 'code'>('folder');
   const [savingToFolder, setSavingToFolder] = useState(false);
   const [fsActive, setFsActive] = useState<boolean>(() => Boolean(getFullscreenElement()));
@@ -162,13 +169,13 @@ export const SettingsModal: React.FC<{
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !showFolderModal) {
+      if (e.key === 'Escape' && !showFolderModal && !showModModal) {
         onClose();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, showFolderModal]);
+  }, [onClose, showFolderModal, showModModal]);
 
   const parsedImport = useMemo(() => (importRaw.trim() ? cleanImportJson(importRaw) : null), [importRaw]);
 
@@ -453,17 +460,17 @@ export const SettingsModal: React.FC<{
                   <span>หน้าจอและแอปพลิเคชัน</span>
                 </div>
                 <span className="text-[11px] mland:text-[9px] text-[var(--mut)] font-semibold">
-                  {(st.theme || '') === '' ? 'ตามระบบ' : st.theme === 'light' ? 'สว่าง' : 'มืด'}
+                  {(st.theme ?? 'light') === '' ? 'ตามระบบ' : (st.theme ?? 'light') === 'light' ? 'สว่าง' : 'มืด'}
                 </span>
               </div>
 
               <div className="grid grid-cols-3 gap-1 p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
                 {([
-                  { val: '', label: 'ตามระบบ', Icon: Monitor },
                   { val: 'light', label: 'สว่าง', Icon: Sun },
                   { val: 'dark', label: 'มืด', Icon: Moon },
+                  { val: '', label: 'ตามระบบ', Icon: Monitor },
                 ] as const).map(({ val, label, Icon }) => {
-                  const active = (st.theme || '') === val;
+                  const active = (st.theme ?? 'light') === val;
                   return (
                     <button
                       key={label}
@@ -555,6 +562,46 @@ export const SettingsModal: React.FC<{
               </button>
 
               <PWAInstallButton variant="settings" onToast={onToast} />
+
+              {(() => {
+                void modTick;
+                const activeMod = getActiveMod();
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setShowModModal(true);
+                    }}
+                    className="w-full py-2 mland:py-1.5 px-1 flex items-center justify-between gap-2.5 text-left rounded-lg hover:bg-[var(--surface-2)]/45 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
+                      <div
+                        className={`w-7.5 h-7.5 mland:w-6 mland:h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                          activeMod
+                            ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]'
+                            : 'bg-[var(--surface-2)]/75 text-[var(--mut)]'
+                        }`}
+                      >
+                        <Package className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] truncate leading-snug">
+                          จัดการ Mod ลีกและสโมสร (.json)
+                        </div>
+                        <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate leading-snug">
+                          {activeMod
+                            ? `เปิดใช้อยู่: ${activeMod.name}`
+                            : 'นำเข้าแพ็กชื่อลีก/ทีม หรือแก้ไขชื่อสโมสรและสีเสื้อ'}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="btn btn-xs btn-secondary shrink-0 whitespace-nowrap">
+                      {activeMod ? 'จัดการ Mod' : 'ตั้งค่า Mod'}
+                    </span>
+                  </button>
+                );
+              })()}
             </section>
 
             {/* Save Management */}
@@ -870,6 +917,24 @@ export const SettingsModal: React.FC<{
             setShowFolderModal(false);
           }}
           onClose={() => setShowFolderModal(false)}
+          onToast={onToast}
+        />
+      )}
+
+      {showModModal && (
+        <ModManagerModal
+          state={state}
+          onApplyModToState={(mod) => {
+            onUpdateState?.((d) => {
+              applyActiveModToRuntimeData(mod);
+              applyModToTeamsArray(d.teams, mod, d);
+            });
+            setModTick((t) => t + 1);
+          }}
+          onClose={() => {
+            setShowModModal(false);
+            setModTick((t) => t + 1);
+          }}
           onToast={onToast}
         />
       )}

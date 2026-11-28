@@ -179,6 +179,7 @@ export interface Player {
   favBoost?: number;
   careTalkMd?: number;
   carePhysMd?: number;
+  origName?: string;
 }
 
 export interface WellbeingFactor {
@@ -308,6 +309,10 @@ export interface Team {
     label?: string;
   };
   aiTalkNote?: string;
+  origName?: string;
+  origKc?: [string, string];
+  origStadium?: string;
+  stadiumName?: string;
 }
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
@@ -1252,6 +1257,43 @@ export interface AppSettings {
   subAlertFitThreshold?: number;
   subAlertFormThreshold?: number;
   autoSubMatch?: boolean;
+}
+
+export interface ModClubOverride {
+  name?: string;
+  stadium?: string;
+  c1?: string;
+  c2?: string;
+  c3?: string;
+  kit?: number;
+  awayKit?: number;
+}
+
+export interface ModRealismSettings {
+  disableSupernatural?: boolean;
+  realisticScoring?: boolean;
+  realisticFatigue?: boolean;
+}
+
+export interface GameModPack {
+  v: 1;
+  id: string;
+  name: string;
+  author?: string;
+  version?: string;
+  description?: string;
+  updatedAt?: number;
+  realism?: ModRealismSettings;
+  tierNames?: Partial<Record<0 | 1 | 2 | 3, string>>;
+  cupNames?: {
+    fa?: string;
+    leagueCup?: string;
+    divCup?: string;
+    superCup?: string;
+    asia?: string;
+  };
+  clubOverrides: Record<string, ModClubOverride>;
+  playerOverrides?: Record<string, string>;
 }
 
 export interface PlayerArchetype {

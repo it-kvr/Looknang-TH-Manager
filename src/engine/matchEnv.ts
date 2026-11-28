@@ -301,9 +301,12 @@ export function getStadiumDisplayName(
   if (kind === 'sc') {
     return 'สนามราชมังคลากีฬาสถาน (สนามกลาง)';
   }
-  const foreignMeta = homeOrig.tier >= 3 || homeOrig.foreign === 1 ? getForeignTeamCountryMeta(homeOrig.name) : null;
+  const foreignMeta = homeOrig.tier >= 3 || homeOrig.foreign === 1 ? getForeignTeamCountryMeta(homeOrig.origName || homeOrig.name) : null;
+  if (homeOrig.stadiumName?.trim()) {
+    return foreignMeta ? `${homeOrig.stadiumName.trim()} (${foreignMeta.flag} ${foreignMeta.country})` : homeOrig.stadiumName.trim();
+  }
   if (homeOrig.tier >= 3 || homeOrig.foreign === 1 || foreignMeta) {
-    const stadiumName = getForeignClubStadiumName(homeOrig.name);
+    const stadiumName = getForeignClubStadiumName(homeOrig.origName || homeOrig.name);
     return foreignMeta ? `${stadiumName} (${foreignMeta.flag} ${foreignMeta.country})` : stadiumName;
   }
   return `สนามเหย้า ${homeOrig.name}`;

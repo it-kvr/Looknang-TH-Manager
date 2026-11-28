@@ -1906,6 +1906,7 @@ export default function App() {
             flushPendingSave();
             saveGameToSlot(state, slot);
           }}
+          onUpdateState={updateState}
           onLoadSaveFile={(loaded, targetSlot) => {
             handleLoadSave(loaded.mode, targetSlot, loaded);
             setShowSettings(false);

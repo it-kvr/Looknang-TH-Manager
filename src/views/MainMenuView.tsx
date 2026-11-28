@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Check, ChevronRight, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ChevronRight, FolderInput, Minus, Package, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
@@ -8,8 +8,10 @@ import { KIT_PATTERNS } from '../data/crestAndKitData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, getTeamClubIdentity, SPW, APPEARANCE_ORIGIN_PRESETS, getPresetGroupProfile, rndVis, type AppearancePresetGroup, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort, getClubLevelAndGrantMeta } from '../engine/simulation';
+import { applyModToTeamsArray, getActiveMod } from '../engine/mods';
 import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
+import { ModManagerModal } from '../modals/ModManagerModal';
 import { ovColor, statBarColor, getPlayerTalent } from '../engine/missions';
 import { ClubCrest, KitJerseyMemo, PlayerFace } from '../components/SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
@@ -259,6 +261,11 @@ export const MainMenu = React.memo<{
     [refresh, slotCounts]
   );
   const [showImport, setShowImport] = useState(false);
+  const [showModModal, setShowModModal] = useState(false);
+  const activeModInfo = useMemo(() => {
+    void refresh;
+    return getActiveMod();
+  }, [refresh]);
   useEffect(() => {
     void migrateLocalSlotsToAutoFolderOnce(loadGameFromSlot, Math.max(getSlotCount('m'), getSlotCount('p')));
   }, []);
@@ -408,6 +415,11 @@ export const MainMenu = React.memo<{
     clearNamePool();
     const names = genClubNames();
     const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true }));
+    const activeMod = getActiveMod();
+    if (activeMod) {
+      applyModToTeamsArray(t0, activeMod);
+      names[0] = t0.map((tm) => tm.name);
+    }
     setTargetSlot(slot);
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
@@ -420,6 +432,11 @@ export const MainMenu = React.memo<{
     clearNamePool();
     const names = genClubNames();
     const t0 = names[0].map((n, i) => mkTeam(n, 0, i, R(-7, 7), { keepName: true }));
+    const activeMod = getActiveMod();
+    if (activeMod) {
+      applyModToTeamsArray(t0, activeMod);
+      names[0] = t0.map((tm) => tm.name);
+    }
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
     setClubFilter('all');
@@ -2524,6 +2541,19 @@ export const MainMenu = React.memo<{
           <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
             <button
               type="button"
+              onClick={() => { SFX.tap(); setShowModModal(true); }}
+              title={activeModInfo ? `Mod ที่เปิดอยู่: ${activeModInfo.name}` : 'จัดการ Mod ลีกและสโมสร (.json)'}
+              className={`h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg border text-[11px] sm:text-xs mland:text-[10px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.28)] transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                activeModInfo
+                  ? 'border-amber-300/60 bg-amber-500/25 hover:bg-amber-500/35 text-amber-100'
+                  : 'border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-white'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[#fad05a] shrink-0" />
+              <span className="max-w-[110px] truncate">{activeModInfo ? `Mod: ${activeModInfo.name}` : 'Mod'}</span>
+            </button>
+            <button
+              type="button"
               onClick={() => { SFX.tap(); openImportModal(); }}
               className="h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg border border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-[11px] sm:text-xs mland:text-[10px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.28)] transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
@@ -2782,6 +2812,16 @@ export const MainMenu = React.memo<{
             setSlotCounts({ m: getSlotCount('m'), p: getSlotCount('p') });
             setRefresh((x) => x + 1);
             setShowImport(false);
+          }}
+          onToast={onToast}
+        />
+      )}
+
+      {showModModal && (
+        <ModManagerModal
+          onClose={() => {
+            setShowModModal(false);
+            setRefresh((x) => x + 1);
           }}
           onToast={onToast}
         />

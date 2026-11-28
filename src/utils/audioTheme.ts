@@ -4,9 +4,13 @@ export const SET_KEY = 'lkset';
 
 export function getSettings(): AppSettings {
   try {
-    return JSON.parse(localStorage.getItem(SET_KEY) || '{}') || {};
+    const parsed = JSON.parse(localStorage.getItem(SET_KEY) || '{}') || {};
+    if (parsed && typeof parsed === 'object' && parsed.theme === undefined) {
+      return { theme: 'light', ...parsed };
+    }
+    return parsed;
   } catch {
-    return {};
+    return { theme: 'light' };
   }
 }
 
@@ -31,14 +35,14 @@ export function applyTheme(theme?: 'light' | 'dark' | '') {
     root.classList.add('dark');
     root.setAttribute('data-theme', 'dark');
     isDark = true;
-  } else if (theme === 'light') {
-    root.classList.remove('dark');
-    root.setAttribute('data-theme', 'light');
-    isDark = false;
-  } else {
+  } else if (theme === '') {
     root.removeAttribute('data-theme');
     isDark = Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     root.classList.toggle('dark', isDark);
+  } else {
+    root.classList.remove('dark');
+    root.setAttribute('data-theme', 'light');
+    isDark = false;
   }
   const themeColor = isDark ? '#0c1c14' : '#ffffff';
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', themeColor));

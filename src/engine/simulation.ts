@@ -7,6 +7,7 @@ import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlay
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
+import { applyActiveModToRuntimeData, applyModToTeamsArray, getActiveMod, getModRealismSettings } from './mods';
 import {
   evolveSeasonPersonalities,
   formatPersonalityShiftFeed,
@@ -64,12 +65,15 @@ export function rate(
     const pressLoad = 0.7 + ((t.press ?? 1) + (t.tempo ?? 1)) * 0.25;
     const minFactor = (matchMin - 60) / 30;
     const facFatMul = s ? computeTeamFacilityMatchModifiers(t, s, { isHome: Boolean(isHome) }).fatigueDrainMult : 1;
+    const realismFatigueMul = getModRealismSettings().realisticFatigue ? 1.22 : 1;
     const fatiguePenalty =
-      DL.reduce((sum, [q, D]) => {
+      (DL.reduce((sum, [q, D]) => {
         if (subsEntered?.includes(q.n)) return sum;
         const resist = clamp((D.d.sta * 0.7 + (q.fit ?? 100) * 0.3) / 100, 0.35, 1.05);
         return sum + Math.max(0, 1.05 - resist) * 5.2 * pressLoad * minFactor * facFatMul;
-      }, 0) / (DL.length || 1);
+      }, 0) /
+        (DL.length || 1)) *
+      realismFatigueMul;
     at -= fatiguePenalty;
     df -= fatiguePenalty;
   }
@@ -587,53 +591,58 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
 }
 
 export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
+  const realism = getModRealismSettings();
   const bg = !!(s && (s.pc || s.pa || (s.derby && (h.id === s.me || a.id === s.me))));
   const H = rate(h, s, bg, undefined, undefined, undefined, true);
   const G = rate(a, s, bg, undefined, undefined, undefined, false);
   // Demon intimidation aura (😈 ปีศาจ) directly shakes opponent's composure & power
-  const hDemons = Math.min(2, H.x.filter((q) => DT(q, s?.p).tr === 26).length);
-  const aDemons = Math.min(2, G.x.filter((q) => DT(q, s?.p).tr === 26).length);
-  if (hDemons > 0) {
-    G.at -= hDemons * 0.45;
-    G.df -= hDemons * 0.45;
-  }
-  if (aDemons > 0) {
-    H.at -= aDemons * 0.45;
-    H.df -= aDemons * 0.45;
+  if (!realism.disableSupernatural) {
+    const hDemons = Math.min(2, H.x.filter((q) => DT(q, s?.p).tr === 26).length);
+    const aDemons = Math.min(2, G.x.filter((q) => DT(q, s?.p).tr === 26).length);
+    if (hDemons > 0) {
+      G.at -= hDemons * 0.45;
+      G.df -= hDemons * 0.45;
+    }
+    if (aDemons > 0) {
+      H.at -= aDemons * 0.45;
+      H.df -= aDemons * 0.45;
+    }
   }
   if (h.pass === 3 && G.at > H.at) H.at += 3;
   if (a.pass === 3 && H.at > G.at) G.at += 3;
 
-  // Divine fortune / hot-streak spark ("พรสิ่งศักดิ์สิทธิ์") — underdogs/disadvantaged clubs receive blessings significantly more often
+  // Divine fortune / hot-streak spark ("พรสิ่งศักดิ์สิทธิ์") — skipped when realistic mod disables supernatural RNG
   const incidents: MatchDramaticEvent[] = [];
   let luckH = 0;
   let luckA = 0;
   let blessedHomeHero: Player | null = null;
   let blessedAwayHero: Player | null = null;
-  const powH = H.at + H.df;
-  const powA = G.at + G.df;
-  const diffH = powA - powH;
-  const blessChanceH = clamp((bg ? 0.27 : 0.20) + clamp(diffH / 16, -0.11, 0.28), 0.08, 0.50);
-  const blessChanceA = clamp((bg ? 0.27 : 0.20) + clamp(-diffH / 16, -0.11, 0.28), 0.08, 0.50);
-  if (Math.random() < blessChanceH) {
-    const gap = Math.max(0, diffH);
-    luckH = R(4, 7) + (gap > 8 ? 3 : 0);
-    H.at += luckH;
-    H.df += Math.round(luckH * 0.7);
-    blessedHomeHero = H.x.length ? P(H.x) : null;
-  }
-  if (Math.random() < blessChanceA) {
-    const gap = Math.max(0, -diffH);
-    luckA = R(4, 7) + (gap > 8 ? 3 : 0);
-    G.at += luckA;
-    G.df += Math.round(luckA * 0.7);
-    blessedAwayHero = G.x.length ? P(G.x) : null;
+  if (!realism.disableSupernatural) {
+    const powH = H.at + H.df;
+    const powA = G.at + G.df;
+    const diffH = powA - powH;
+    const blessChanceH = clamp((bg ? 0.27 : 0.20) + clamp(diffH / 16, -0.11, 0.28), 0.08, 0.50);
+    const blessChanceA = clamp((bg ? 0.27 : 0.20) + clamp(-diffH / 16, -0.11, 0.28), 0.08, 0.50);
+    if (Math.random() < blessChanceH) {
+      const gap = Math.max(0, diffH);
+      luckH = R(4, 7) + (gap > 8 ? 3 : 0);
+      H.at += luckH;
+      H.df += Math.round(luckH * 0.7);
+      blessedHomeHero = H.x.length ? P(H.x) : null;
+    }
+    if (Math.random() < blessChanceA) {
+      const gap = Math.max(0, -diffH);
+      luckA = R(4, 7) + (gap > 8 ? 3 : 0);
+      G.at += luckA;
+      G.df += Math.round(luckA * 0.7);
+      blessedAwayHero = G.x.length ? P(G.x) : null;
+    }
   }
 
-  // God Power Lightning Strike ("พลังเทพ +50") — rare sky bolt hitting a random player on pitch
+  // God Power Lightning Strike ("พลังเทพ +50") — skipped when realistic mod disables supernatural RNG
   let godStrikeHero: Player | null = null;
   let godStrikeTeam: Team | null = null;
-  if (Math.random() < 0.11) {
+  if (!realism.disableSupernatural && Math.random() < 0.11) {
     const strikeHome = Math.random() < 0.5;
     const pool = strikeHome ? H.x : G.x;
     if (pool.length) {
@@ -649,8 +658,12 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
     }
   }
 
-  const lamH = Math.min(5, 1.35 * Math.exp((H.at - G.df) / 20 + 0.1));
-  const lamA = Math.min(5, 1.35 * Math.exp((G.at - H.df) / 20 - 0.05));
+  const lamH = realism.realisticScoring
+    ? Math.min(4.2, 1.22 * Math.exp((H.at - G.df) / 17 + 0.12))
+    : Math.min(5, 1.35 * Math.exp((H.at - G.df) / 20 + 0.1));
+  const lamA = realism.realisticScoring
+    ? Math.min(4.2, 1.22 * Math.exp((G.at - H.df) / 17 - 0.06))
+    : Math.min(5, 1.35 * Math.exp((G.at - H.df) / 20 - 0.05));
   let gh = pois(lamH);
   let ga = pois(lamA);
   let evs = [...genMatchGoals(h, H.x, gh, s?.p), ...genMatchGoals(a, G.x, ga, s?.p)].sort((x, y) => x.m - y.m);
@@ -682,7 +695,7 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
 
   // Miracle rapid comeback ("ปาฏิหาริย์พลิกนรก") when trailing by 2+ goals
   const deficitAbs = Math.abs(gh - ga);
-  if (deficitAbs >= 2) {
+  if (!realism.disableSupernatural && deficitAbs >= 2) {
     const miracleChance = deficitAbs >= 3 ? (bg ? 0.17 : 0.12) : bg ? 0.115 : 0.08;
     if (Math.random() < miracleChance) {
       const trailingHome = gh < ga;
@@ -3293,7 +3306,10 @@ export function ensureAsia(s: GameState) {
     }
   });
   const existingNames = new Set(
-    s.asia.map((id) => s.teams[id]?.name).filter((n): n is string => Boolean(n))
+    s.asia.flatMap((id) => {
+      const tm = s.teams[id];
+      return tm ? [tm.name, tm.origName].filter((n): n is string => Boolean(n)) : [];
+    })
   );
   FOREIGN_CLUB_CATALOG.forEach((entry) => {
     if (existingNames.has(entry.name)) return;
@@ -3313,6 +3329,10 @@ export function ensureAsia(s: GameState) {
     existingNames.add(entry.name);
   });
   localizeForeignTeams(s.teams);
+  const activeMod = getActiveMod();
+  if (activeMod) {
+    applyModToTeamsArray(s.teams, activeMod, s);
+  }
 }
 
 export function initAsia(s: GameState) {
@@ -3626,6 +3646,19 @@ export function createNewGame(
     });
     assignTeamShirtNumbers(t);
     autoAssignTeamRoles(t, { careerP: s.p, forceAll: true });
+  }
+
+  const activeMod = getActiveMod();
+  if (activeMod) {
+    applyActiveModToRuntimeData(activeMod);
+    applyModToTeamsArray(s.teams, activeMod, s);
+    if (s.p && s.p.careerLog?.length) {
+      s.p.careerLog[0] = `🌱 เริ่มเส้นทางอาชีพกับ ${s.teams[s.me].name} (${TN[s.teams[s.me].tier]}) ในซีซั่น 1`;
+      const meSq = s.teams[s.me].sq.find((q) => q.me);
+      if (meSq && meSq.careerLog?.length) {
+        meSq.careerLog[0] = s.p.careerLog[0];
+      }
+    }
   }
 
   startSeason(s);

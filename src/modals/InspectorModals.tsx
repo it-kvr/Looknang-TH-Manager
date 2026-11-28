@@ -553,7 +553,7 @@ export const TeamInspectorModal: React.FC<{
                 <span>
                   {team.tier >= 3
                     ? (() => {
-                        const meta = getForeignTeamCountryMeta(team.name);
+                        const meta = getForeignTeamCountryMeta(team.origName || team.name);
                         return meta
                           ? `${CONFED_META[meta.confed].short} · ${meta.flag} สโมสร${meta.country}`
                           : 'สโมสรนานาชาติ';
@@ -566,7 +566,7 @@ export const TeamInspectorModal: React.FC<{
                 <span>({gd >= 0 ? `+${gd}` : gd})</span>
                 <span className="hidden sm:inline mland:inline">· แฟน {fmtFans(ensureTeamFans(team))} คน</span>
                 {team.tier >= 3 && (
-                  <span className="hidden sm:inline mland:inline">· 🏟️ {getForeignClubStadiumName(team.name)}</span>
+                  <span className="hidden sm:inline mland:inline">· 🏟️ {team.stadiumName || getForeignClubStadiumName(team.origName || team.name)}</span>
                 )}
                 <span className="hidden md:inline">· อายุเฉลี่ย {st.age} ปี</span>
               </div>

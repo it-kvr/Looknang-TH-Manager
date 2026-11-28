@@ -4,6 +4,7 @@ import type { ArchivedMatchReport, MatchHighlightClip, Player, Team, GameState, 
 import { fmtMoney } from '../utils/math';
 import { RN, TN, getForeignTeamCountryMeta } from '../data/thaiFootballData';
 import { ASIA_CUP_PRIZE, EXTRA_CUP_META, FA_CUP_PRIZE, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
+import { getCupDisplayName } from '../engine/mods';
 import { xi } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
@@ -93,6 +94,14 @@ export const CupView = React.memo<{
   }, [state.teams]);
 
   const competitions = useMemo(() => {
+    const faName = getCupDisplayName('fa', 'ถ้วยประชาชน');
+    const lcName = getCupDisplayName('leagueCup', EXTRA_CUP_META.lc.name);
+    const dcName = getCupDisplayName('divCup', EXTRA_CUP_META.dc.name);
+    const scName = getCupDisplayName('superCup', EXTRA_CUP_META.sc.name);
+    const isWorldClubSeason = (state.season ?? 1) % 2 === 0;
+    const asiaDefault = isWorldClubSeason ? 'ชิงแชมป์สโมสรโลก' : 'ชิงแชมป์สโมสรทวีป';
+    const asiaName = getCupDisplayName('asia', asiaDefault);
+
     const list: {
       id: CupTabId;
       icon: string;
@@ -109,68 +118,65 @@ export const CupView = React.memo<{
       {
         id: 'fa',
         icon: '🏆',
-        short: 'ถ้วยประชาชน',
-        title: 'ถ้วยประชาชน (16 ทีม)',
+        short: faName,
+        title: `${faName} (16 ทีม)`,
         subtitle: 'รวมสโมสรทุกระดับลีก แข่งน็อกเอาต์นัดเดียวรู้ผล',
         scheduleHint: 'นัด 6, 13, 20, 27',
         prize: FA_CUP_PRIZE,
         queued: Boolean(state.pc),
-        notStartedMsg: 'รายการถ้วยประชาชนจะเริ่มประกบคู่ในฤดูกาลนี้',
+        notStartedMsg: `รายการ${faName}จะเริ่มประกบคู่ในฤดูกาลนี้`,
         data: state.cup
       },
       {
         id: 'lc',
         icon: EXTRA_CUP_META.lc.icon,
-        short: EXTRA_CUP_META.lc.short,
-        title: `${EXTRA_CUP_META.lc.name} (16 ทีม)`,
+        short: lcName === EXTRA_CUP_META.lc.name ? EXTRA_CUP_META.lc.short : lcName,
+        title: `${lcName} (16 ทีม)`,
         subtitle: 'ศึกน็อกเอาต์สปีดเกมดุเดือด แข่งขันกลางสัปดาห์',
         scheduleHint: 'นัด 4, 11, 18, 25',
         prize: EXTRA_CUP_META.lc.prize,
         queued: Boolean(state.plc),
-        notStartedMsg: 'รายการไทยลีก คัพ จะเปิดฉากในฤดูกาลนี้',
+        notStartedMsg: `รายการ ${lcName} จะเปิดฉากในฤดูกาลนี้`,
         data: state.lc
       },
       {
         id: 'dc',
         icon: EXTRA_CUP_META.dc.icon,
-        short: EXTRA_CUP_META.dc.short,
-        title: `${EXTRA_CUP_META.dc.name} (16 ทีม)`,
+        short: dcName === EXTRA_CUP_META.dc.name ? EXTRA_CUP_META.dc.short : dcName,
+        title: `${dcName} (16 ทีม)`,
         subtitle: 'เวทีชิงโล่สำหรับสโมสรลีกจังหวัด & ลีกในประเทศ 2',
         scheduleHint: 'นัด 5, 12, 19, 26',
         prize: EXTRA_CUP_META.dc.prize,
         queued: Boolean(state.pdc),
-        notStartedMsg: 'รายการถ้วยดิวิชั่น & ภูมิภาค จะเปิดฉากในฤดูกาลนี้',
+        notStartedMsg: `รายการ ${dcName} จะเปิดฉากในฤดูกาลนี้`,
         data: state.dc
       },
       {
         id: 'sc',
         icon: EXTRA_CUP_META.sc.icon,
-        short: EXTRA_CUP_META.sc.short,
-        title: EXTRA_CUP_META.sc.name,
-        subtitle: 'แชมป์ลีกสูงสุดปะทะแชมป์ถ้วยประชาชน นัดชิงถ้วยเปิดฤดูกาล',
+        short: scName === EXTRA_CUP_META.sc.name ? EXTRA_CUP_META.sc.short : scName,
+        title: scName,
+        subtitle: `แชมป์ลีกสูงสุดปะทะแชมป์${faName} นัดชิงถ้วยเปิดฤดูกาล`,
         scheduleHint: 'นัด 2',
         prize: EXTRA_CUP_META.sc.prize,
         queued: Boolean(state.psc),
         isSingleFinal: true,
-        notStartedMsg: 'ศึกไทยแลนด์ แชมเปี้ยนส์ คัพ จะเริ่มชิงชัยในช่วงนัดที่ 2',
+        notStartedMsg: `ศึก ${scName} จะเริ่มชิงชัยในช่วงนัดที่ 2`,
         data: state.sc
       },
       {
         id: 'asia',
-        icon: (state.season ?? 1) % 2 === 0 ? '🌐' : '🌏',
-        short: (state.season ?? 1) % 2 === 0 ? 'สโมสรโลก' : 'ถ้วยทวีป',
-        title: (state.season ?? 1) % 2 === 0 ? 'ชิงแชมป์สโมสรโลก (16 ทีม)' : 'ชิงแชมป์สโมสรทวีป (16 ทีม)',
+        icon: isWorldClubSeason ? '🌐' : '🌏',
+        short: asiaName === asiaDefault ? (isWorldClubSeason ? 'สโมสรโลก' : 'ถ้วยทวีป') : asiaName,
+        title: `${asiaName} (16 ทีม)`,
         subtitle:
-          (state.season ?? 1) % 2 === 0
+          isWorldClubSeason
             ? 'ยอดทีมไทยดวลสโมสรชั้นนำจากยุโรป อเมริกา แอฟริกา และเอเชีย'
             : 'ตัวแทนลีกสูงสุดไทยดวลยอดทีมต่างแดนทั่วเอเชียและโอเชียเนีย',
         scheduleHint: 'นัด 3, 10, 17, 24',
         prize: ASIA_CUP_PRIZE,
         queued: Boolean(state.pa),
-        notStartedMsg:
-          (state.season ?? 1) % 2 === 0
-            ? 'รายการชิงแชมป์สโมสรโลกจะเปิดฉากในฤดูกาลนี้'
-            : 'รายการชิงแชมป์สโมสรทวีปจะเปิดฉากในฤดูกาลนี้',
+        notStartedMsg: `รายการ${asiaName}จะเปิดฉากในฤดูกาลนี้`,
         data: state.ac
       }
     ];
